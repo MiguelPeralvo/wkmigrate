@@ -1,4 +1,10 @@
-"""Utilities for preparing Databricks workflow artifacts."""
+"""
+This module defines a preparer for Copy activities.
+
+The preparer builds Databricks Lakeflow jobs tasks and associated artifacts needed to
+replicate the functionality of a Copy activity. This includes a notebook or pipeline task
+definition, notebook artifacts, and secrets to be created in the target workspace.
+"""
 
 from __future__ import annotations
 
@@ -6,226 +12,34 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 import autopep8  # type: ignore
+from databricks.sdk.service.jobs import NotebookTask, PipelineTask
 
-from wkmigrate.datasets import options, secrets
+from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
 from wkmigrate.datasets.data_type_mapping import parse_spark_data_type
-from wkmigrate.models.ir.activities import (
-    Activity,
-    CopyActivity,
-    DatabricksNotebookActivity,
-    ForEachActivity,
-    IfConditionActivity,
-    SparkJarActivity,
-    SparkPythonActivity,
-)
+from wkmigrate.models.ir.activities import CopyActivity
 from wkmigrate.models.ir.datasets import Dataset, DatasetProperties
-from wkmigrate.models.ir.pipeline import Pipeline
-from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedWorkflow
-from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
-
-PreparedTaskResult = tuple[list[NotebookArtifact], list[PipelineInstruction], list[SecretInstruction]]
+from wkmigrate.models.workflows.artifacts import CopyDataArtifact, NotebookArtifact
+from wkmigrate.models.workflows.instructions import SecretInstruction
 
 
-def prepare_workflow(pipeline_definition: Pipeline, files_to_delta_sinks: bool | None = None) -> PreparedWorkflow:
-    """
-    Translates a pipeline definition into notebook, pipeline, and secret artifacts.
-
-    Args:
-        pipeline_definition: Parsed pipeline IR produced by the translator.
-        files_to_delta_sinks: Overrides the inferred Files-to-Delta behavior when set.
-
-    Returns:
-        Prepared workflow containing the Databricks job payload and supporting artifacts.
-    """
-    tasks = [_activity_to_task_dict(task.activity) for task in pipeline_definition.tasks]
-    job_settings = {
-        "name": pipeline_definition.name,
-        "parameters": pipeline_definition.parameters,
-        "schedule": pipeline_definition.schedule,
-        "tags": pipeline_definition.tags,
-        "tasks": tasks,
-        "not_translatable": list(pipeline_definition.not_translatable),
-    }
-
-    notebooks, pipelines, secrets_to_collect = _prepare_tasks(tasks, files_to_delta_sinks)
-    unsupported = list(pipeline_definition.not_translatable)
-    return PreparedWorkflow(
-        job_settings=job_settings,
-        notebooks=notebooks,
-        pipelines=pipelines,
-        secrets=secrets_to_collect,
-        unsupported=unsupported,
-    )
-
-
-def _activity_to_task_dict(activity: Activity) -> dict:
-    """
-    Converts an activity IR object into a Databricks task definition.
-
-    Args:
-        activity: Activity instance emitted by the translator.
-
-    Returns:
-        dict: Databricks Jobs task configuration.
-    """
-    task = _get_base_task(activity)
-    if isinstance(activity, DatabricksNotebookActivity):
-        task["notebook_task"] = {
-            "notebook_path": activity.notebook_path,
-            "base_parameters": activity.base_parameters,
-        }
-    if isinstance(activity, SparkJarActivity):
-        task["spark_jar_task"] = {
-            "main_class_name": activity.main_class_name,
-            "parameters": activity.parameters,
-            "libraries": activity.libraries,
-        }
-    if isinstance(activity, SparkPythonActivity):
-        task["spark_python_task"] = {
-            "python_file": activity.python_file,
-            "parameters": activity.parameters,
-        }
-    if isinstance(activity, IfConditionActivity):
-        task["condition_task"] = {
-            "op": activity.op,
-            "left": activity.left,
-            "right": activity.right,
-        }
-    if isinstance(activity, ForEachActivity):
-        task["for_each_task"] = {
-            "inputs": activity.items_string,
-            "concurrency": activity.concurrency,
-            "task": [_activity_to_task_dict(inner) for inner in activity.inner_activities],
-        }
-    if isinstance(activity, CopyActivity):
-        task["copy_data_task"] = {
-            "source_dataset": activity.source_dataset,
-            "sink_dataset": activity.sink_dataset,
-            "source_properties": activity.source_properties,
-            "sink_properties": activity.sink_properties,
-            "column_mapping": [asdict(mapping) for mapping in (activity.column_mapping or [])],
-        }
-    return task
-
-
-def _get_base_task(activity: Activity) -> dict:
-    """
-    Returns the fields common to every task.
-
-    Args:
-        activity: Activity instance emitted by the translator.
-
-    Returns:
-        Dictionary containing the common task fields.
-    """
-    return {
-        "task_key": activity.task_key,
-        "type": activity.activity_type,
-        "description": activity.description,
-        "timeout_seconds": activity.timeout_seconds,
-        "max_retries": activity.max_retries,
-        "min_retry_interval_millis": activity.min_retry_interval_millis,
-        "depends_on": [asdict(dep) for dep in activity.depends_on] if activity.depends_on else None,
-        "new_cluster": activity.new_cluster,
-    }
-
-
-def _prepare_tasks(
-    tasks: list[dict],
+def prepare_copy_activity(
+    activity: CopyActivity,
     default_files_to_delta_sinks: bool | None,
-) -> PreparedTaskResult:
+) -> CopyDataArtifact:
     """
-    Analyzes the job graph and collects notebook, pipeline, and secret artifacts.
+    Builds tasks and artifacts for a Copy activity.
 
     Args:
-        tasks: List of Databricks task definitions.
-        default_files_to_delta_sinks: Optional override for DLT generation.
+        activity: Activity definition emitted by the translators
+        default_files_to_delta_sinks: Optional override for DLT generation
 
     Returns:
-        Tuple containing notebooks, pipelines, and secrets to materialize.
+        Copy preparation results including task payloads and artifacts
     """
-    output_notebooks: list[NotebookArtifact] = []
-    output_pipelines: list[PipelineInstruction] = []
-    output_secrets: list[SecretInstruction] = []
-    for task in tasks:
-        task_type = task.get("type")
-        if task_type == "Copy":
-            copy_activity_notebooks, copy_activity_pipelines, copy_activity_secrets = _prepare_copy_task(
-                task, default_files_to_delta_sinks
-            )
-            output_notebooks.extend(copy_activity_notebooks)
-            output_pipelines.extend(copy_activity_pipelines)
-            output_secrets.extend(copy_activity_secrets)
-        elif task_type == "ForEach":
-            foreach_activity_notebooks, foreach_activity_pipelines, foreach_activity_secrets = _prepare_for_each_task(
-                task, default_files_to_delta_sinks
-            )
-            output_notebooks.extend(foreach_activity_notebooks)
-            output_pipelines.extend(foreach_activity_pipelines)
-            output_secrets.extend(foreach_activity_secrets)
-    return output_notebooks, output_pipelines, output_secrets
-
-
-def _prepare_for_each_task(
-    task: dict,
-    default_files_to_delta_sinks: bool | None,
-) -> PreparedTaskResult:
-    """
-    Prepares nested tasks that belong to a ForEach activity.
-
-    Args:
-        task: Databricks task dictionary representing the parent ForEach.
-        default_files_to_delta_sinks: Optional override for DLT generation.
-
-    Returns:
-        Tuple containing notebooks, pipelines, and secrets to materialize.
-
-    Raises:
-        ValueError: If the ForEach task is not found.
-    """
-    for_each_task = task.get("for_each_task")
-    if for_each_task is None:
-        raise ValueError('No "for_each_task" value for for each task type')
-    inner_tasks = for_each_task.get("task")
-    if isinstance(inner_tasks, list):
-        return _prepare_tasks(inner_tasks, default_files_to_delta_sinks)
-    if isinstance(inner_tasks, dict):
-        return _prepare_tasks([inner_tasks], default_files_to_delta_sinks)
-    return [], [], []
-
-
-def _prepare_copy_task(
-    task: dict,
-    default_files_to_delta_sinks: bool | None,
-) -> PreparedTaskResult:
-    """
-    Prepares artifacts for a Copy activity.
-
-    Args:
-        task: Databricks task dictionary representing the copy activity.
-        default_files_to_delta_sinks: Optional override for DLT generation.
-
-    Returns:
-        Tuple containing notebooks, pipelines, and secrets to materialize.
-
-    Raises:
-        ValueError: If the copy data task is not found.
-        ValueError: If the column mapping is not found.
-    """
-    copy_data_task = task.get("copy_data_task")
-    if copy_data_task is None:
-        raise ValueError("No 'copy_data_task' found in task with type 'Copy'")
-
-    source_definition = _merge_dataset_definition(
-        copy_data_task.get("source_dataset"),
-        copy_data_task.get("source_properties"),
-    )
-    sink_definition = _merge_dataset_definition(
-        copy_data_task.get("sink_dataset"),
-        copy_data_task.get("sink_properties"),
-    )
-    column_mapping = copy_data_task.get("column_mapping")
-    if column_mapping is None:
+    source_definition = _merge_dataset_definition(activity.source_dataset, activity.source_properties)
+    sink_definition = _merge_dataset_definition(activity.sink_dataset, activity.sink_properties)
+    column_mapping = [asdict(mapping) for mapping in (activity.column_mapping or [])]
+    if not column_mapping:
         raise ValueError("No column mapping provided for copy data task")
 
     data_source_secrets = _collect_data_source_secrets(source_definition)
@@ -242,36 +56,25 @@ def _prepare_copy_task(
         column_mapping,
         files_to_delta_sinks,
     )
-    notebooks = [notebook]
-    task.pop("copy_data_task", None)
-    if not files_to_delta_sinks:
-        task["notebook_task"] = {"notebook_path": notebook_path}
-        return notebooks, [], secrets_to_collect
 
-    pipeline_name = f'{task.get("task_key")}_pipeline'
-    task["pipeline_task"] = {"pipeline_id": None}
-    pipeline_instruction = PipelineInstruction(
-        task_ref=task,
-        file_path=notebook_path,
-        name=pipeline_name,
+    if not files_to_delta_sinks:
+        return CopyDataArtifact(
+            task=NotebookTask(notebook_path=notebook_path),
+            notebook=notebook,
+            secrets=secrets_to_collect,
+            pipeline_name=None,
+        )
+
+    pipeline_name = f"{activity.task_key}_pipeline"
+    return CopyDataArtifact(
+        task=PipelineTask(pipeline_id="__PIPELINE_ID__"),
+        notebook=notebook,
+        secrets=secrets_to_collect,
+        pipeline_name=pipeline_name,
     )
-    return notebooks, [pipeline_instruction], secrets_to_collect
 
 
 def _merge_dataset_definition(dataset: Dataset | dict | None, properties: DatasetProperties | dict | None) -> dict:
-    """
-    Merges dataset metadata with parsed dataset properties.
-
-    Args:
-        dataset: Dataset IR instance or legacy dictionary.
-        properties: Dataset properties IR instance or legacy dictionary.
-
-    Returns:
-        Combined dataset definition as a ``dict`` understood by the notebook generator.
-
-    Raises:
-        ValueError: If the dataset definition or properties are missing.
-    """
     if dataset is None or properties is None:
         raise ValueError("Dataset definition or properties missing for copy task")
     dataset_dict = _dataset_to_dict(dataset)
@@ -280,15 +83,6 @@ def _merge_dataset_definition(dataset: Dataset | dict | None, properties: Datase
 
 
 def _dataset_to_dict(dataset: Dataset | dict) -> dict:
-    """
-    Converts a dataset IR object into a serializable dictionary.
-
-    Args:
-        dataset: Dataset IR instance or raw dictionary.
-
-    Returns:
-        Normalized dictionary representation as a ``dict``.
-    """
     if isinstance(dataset, dict):
         return dataset
     if is_dataclass(dataset):
@@ -307,15 +101,6 @@ def _dataset_to_dict(dataset: Dataset | dict) -> dict:
 
 
 def _dataset_properties_to_dict(properties: DatasetProperties | dict | None) -> dict:
-    """
-    Converts dataset properties IR objects into dictionaries.
-
-    Args:
-        properties: Dataset properties IR instance or raw dictionary.
-
-    Returns:
-        Normalized dictionary representation as a ``dict``.
-    """
     if properties is None:
         return {}
     if isinstance(properties, dict):
@@ -326,21 +111,12 @@ def _dataset_properties_to_dict(properties: DatasetProperties | dict | None) -> 
 
 
 def _collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
-    """
-    Converts dataset secret references into ``SecretInstruction`` objects.
-
-    Args:
-        definition: Dataset metadata merged by ``_merge_dataset_definition``.
-
-    Returns:
-        List of secrets that must exist in Databricks as a ``list[SecretInstruction]``.
-    """
     service_type = definition.get("type")
     service_name = definition.get("service_name")
     if service_type is None or service_name is None:
         return []
     collected: list[SecretInstruction] = []
-    for secret in secrets.get(service_type, []):
+    for secret in DATASET_SECRETS.get(service_type, []):
         value = definition.get(secret)
         instruction = SecretInstruction(
             scope="wkmigrate_credentials_scope",
@@ -348,7 +124,6 @@ def _collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
             service_name=service_name,
             service_type=service_type,
             provided_value=value,
-            user_input_required=value is None,
         )
         collected.append(instruction)
     return collected
@@ -357,21 +132,9 @@ def _collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
 def _create_copy_data_notebook(
     source_definition: dict,
     sink_definition: dict,
-    column_mapping: dict,
+    column_mapping: list[dict],
     files_to_delta_sinks: bool,
 ) -> tuple[str, NotebookArtifact]:
-    """
-    Generates a notebook script for a Copy activity.
-
-    Args:
-        source_definition: Resolved source dataset definition.
-        sink_definition: Resolved sink dataset definition.
-        column_mapping: Column mapping metadata.
-        files_to_delta_sinks: Whether to emit a DLT pipeline instead of a notebook task.
-
-    Returns:
-        Notebook workspace path and the artifact to upload as a ``tuple[str, NotebookArtifact]``.
-    """
     script_lines = [
         "# Databricks notebook source",
         "import pyspark.sql.types as T",
@@ -406,18 +169,7 @@ def _create_copy_data_notebook(
     return notebook_path, notebook_artifact
 
 
-def _get_dlt_definition(source_dataset: dict, sink_dataset: dict, column_mapping: dict) -> str:
-    """
-    Returns a templated DLT table definition for copy activities.
-
-    Args:
-        source_dataset: Resolved source dataset definition.
-        sink_dataset: Resolved sink dataset definition.
-        column_mapping: Column mapping metadata.
-
-    Returns:
-        Templated DLT table definition as a ``str``.
-    """
+def _get_dlt_definition(source_dataset: dict, sink_dataset: dict, column_mapping: list[dict]) -> str:
     source_name = source_dataset.get("dataset_name")
     sink_name = sink_dataset.get("dataset_name")
     return f"""@dlt.table(
@@ -432,19 +184,12 @@ def _get_dlt_definition(source_dataset: dict, sink_dataset: dict, column_mapping
                 """
 
 
-def _get_mapping(source_dataset: dict, sink_dataset: dict, column_mapping: dict, cast_column_types: bool) -> str:
-    """
-    Returns the SQL expression that performs column mapping between datasets.
-
-    Args:
-        source_dataset: Resolved source dataset definition.
-        sink_dataset: Resolved sink dataset definition.
-        column_mapping: Column mapping metadata.
-        cast_column_types: Whether to cast column types.
-
-    Returns:
-        SQL expression that performs column mapping between datasets as a ``str``.
-    """
+def _get_mapping(
+    source_dataset: dict,
+    sink_dataset: dict,
+    column_mapping: list[dict],
+    cast_column_types: bool,
+) -> str:
     source_name = source_dataset.get("dataset_name")
     sink_name = sink_dataset.get("dataset_name")
     expressions = []
@@ -461,18 +206,6 @@ def _get_mapping(source_dataset: dict, sink_dataset: dict, column_mapping: dict,
 
 
 def _get_write_expression(sink_definition: dict) -> str:
-    """
-    Returns the PySpark expression that writes the transformed DataFrame.
-
-    Args:
-        sink_definition: Resolved sink dataset definition.
-
-    Returns:
-        PySpark expression that writes the transformed DataFrame as a ``str``.
-
-    Raises:
-        ValueError: If the sink dataset type is not supported.
-    """
     sink_name = sink_definition.get("dataset_name")
     sink_type = sink_definition.get("type")
     if sink_type == "avro":
@@ -535,18 +268,6 @@ def _get_write_expression(sink_definition: dict) -> str:
 
 
 def _get_read_expression(source_definition: dict) -> str:
-    """
-    Returns the PySpark expression that reads the source dataset.
-
-    Args:
-        source_definition: Resolved source dataset definition.
-
-    Returns:
-        PySpark expression that reads the source dataset as a ``str``.
-
-    Raises:
-        ValueError: If the source dataset type is not supported.
-    """
     source_name = source_definition.get("dataset_name")
     source_type = source_definition.get("type")
     if source_type == "avro":
@@ -616,15 +337,6 @@ def _get_read_expression(source_definition: dict) -> str:
 
 
 def _get_option_expressions(dataset_definition: dict) -> list[str]:
-    """
-    Returns notebook snippets that configure dataset-specific Spark options.
-
-    Args:
-        dataset_definition: Resolved dataset definition.
-
-    Returns:
-        List of notebook snippets as a ``list[str]``.
-    """
     dataset_type = dataset_definition.get("type")
     if dataset_type in {"avro", "csv", "json", "orc", "parquet"}:
         return _get_file_options(dataset_definition, dataset_type)
@@ -634,21 +346,11 @@ def _get_option_expressions(dataset_definition: dict) -> list[str]:
 
 
 def _get_file_options(dataset_definition: dict, file_type: str) -> list[str]:
-    """
-    Returns Spark configuration snippets for file-based datasets.
-
-    Args:
-        dataset_definition: Resolved dataset definition.
-        file_type: File type.
-
-    Returns:
-        List of Spark configuration snippets as a ``list[str]``.
-    """
     dataset_name = dataset_definition.get("dataset_name")
     service_name = dataset_definition.get("service_name")
     config_lines = [
         rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
-        for option in options.get(file_type, [])
+        for option in DATASET_OPTIONS.get(file_type, [])
         if dataset_definition.get(option)
     ]
     if "records_per_file" in dataset_definition:
@@ -668,16 +370,6 @@ def _get_file_options(dataset_definition: dict, file_type: str) -> list[str]:
 
 
 def _get_database_options(dataset_definition: dict, database_type: str) -> list[str]:
-    """
-    Returns Spark configuration snippets for JDBC datasets.
-
-    Args:
-        dataset_definition: Resolved dataset definition.
-        database_type: Database type.
-
-    Returns:
-        List of Spark configuration snippets as a ``list[str]``.
-    """
     dataset_name = dataset_definition.get("dataset_name")
     service_name = dataset_definition.get("service_name")
     secrets_lines = [
@@ -686,25 +378,16 @@ def _get_database_options(dataset_definition: dict, database_type: str) -> list[
                 key="{service_name}_{secret}"
             )
             """
-        for secret in secrets[database_type]
+        for secret in DATASET_SECRETS[database_type]
     ]
     options_lines = [
         f"""{dataset_name}_options["{option}"] = '{dataset_definition.get(option)}'"""
-        for option in options[database_type]
+        for option in DATASET_OPTIONS[database_type]
     ]
     return [f"{dataset_name}_options = {{}}", *secrets_lines, *options_lines]
 
 
 def _filter_none_dict(values: dict[str, Any] | None) -> dict[str, Any]:
-    """
-    Removes ``None`` values from a dictionary.
-
-    Args:
-        values: Dictionary to filter.
-
-    Returns:
-        Dictionary with ``None`` values removed as a ``dict[str, Any]``.
-    """
     if values is None:
         return {}
     return {key: value for key, value in values.items() if value is not None}

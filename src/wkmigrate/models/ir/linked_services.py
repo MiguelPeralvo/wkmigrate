@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass
+@dataclass(slots=True)
 class LinkedService:
     """
     Base class representing a translated linked service.
@@ -26,7 +26,7 @@ class LinkedService:
     service_type: str
 
 
-@dataclass
+@dataclass(slots=True)
 class SqlLinkedService(LinkedService):
     """
     Linked-service metadata for SQL/JDBC connections to a relational database.
@@ -44,7 +44,7 @@ class SqlLinkedService(LinkedService):
     authentication_type: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class AbfsLinkedService(LinkedService):
     """
     Linked-service metadata for ABFS/ADLS storage accounts.
@@ -58,7 +58,7 @@ class AbfsLinkedService(LinkedService):
     url: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class DatabricksClusterLinkedService(LinkedService):
     """
     Linked-service metadata describing a Databricks workspace/cluster.

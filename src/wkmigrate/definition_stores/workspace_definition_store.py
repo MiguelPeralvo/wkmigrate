@@ -23,9 +23,17 @@ import os
 import warnings
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass, field
+import dataclasses
+import yaml
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.jobs import CronSchedule, Job, Task
+from databricks.sdk.service.jobs import (
+    CronSchedule,
+    Job,
+    JobParameterDefinition,
+    NotebookTask,
+    PipelineTask,
+    Task,
+)
 from databricks.sdk.service.pipelines import NotebookLibrary, PipelineLibrary
 from databricks.sdk.service.workspace import ImportFormat, Language
 from typing_extensions import deprecated
@@ -35,10 +43,10 @@ from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.models.workflows.artifacts import NotebookArtifact
 from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
 from wkmigrate.models.workflows.artifacts import PreparedWorkflow
-from wkmigrate.workflows.preparer import prepare_workflow
+from wkmigrate.preparers.preparer import prepare_workflow
 
 
-@dataclass
+@dataclasses.dataclass(slots=True)
 class WorkspaceDefinitionStore(DefinitionStore):
     """
     Definition store implementation that lists, describes, and updates objects in a Databricks workspace.
@@ -67,7 +75,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
     client_id: str | None = None
     client_secret: str | None = None
     files_to_delta_sinks: bool | None = None
-    workspace_client: WorkspaceClient | None = field(init=False, default=None)
+    workspace_client: WorkspaceClient | None = dataclasses.field(init=False, default=None)
     _valid_authentication_types = ["pat", "basic", "azure-client-secret"]
 
     def __post_init__(self) -> None:
@@ -85,26 +93,12 @@ class WorkspaceDefinitionStore(DefinitionStore):
             raise ValueError('"host_name" must be provided when creating a WorkspaceDefinitionStore')
         self.workspace_client = self._login_workspace_client()
 
-    def load(self, pipeline_name: str) -> dict:
-        """
-        Fetches a Databricks job definition by name.
-
-        Args:
-            pipeline_name: Job name inside the target workspace.
-
-        Returns:
-            dict: Job settings returned by the Jobs API.
-        """
-        client = self._get_workspace_client()
-        job = self._find_job_by_name(client, pipeline_name)
-        return job.as_dict()
-
-    def to_pipeline(self, pipeline_definition: dict) -> int | None:
+    def to_job(self, pipeline_definition: Pipeline) -> int | None:
         """
         Uploads artifacts and creates a Databricks job.
 
         Args:
-            pipeline_definition: Serialized ``Pipeline`` dataclass payload as a ``dict``.
+            pipeline_definition: ``Pipeline`` dataclass.
 
         Returns:
             Optional job identifier registered in the workspace.
@@ -112,12 +106,16 @@ class WorkspaceDefinitionStore(DefinitionStore):
         Raises:
             ValueError: If the job cannot be created.
         """
-        prepared = self._prepare_workflow(Pipeline(**pipeline_definition))
+        prepared = self._prepare_workflow(pipeline_definition)
         client = self._get_workspace_client()
-        self._upload_notebooks(client, prepared.notebooks)
-        self._materialize_secrets(client, prepared.secrets)
-        self._materialize_pipelines(client, prepared.pipelines)
+        self._upload_notebooks(client, prepared.notebooks or [])
+        self._materialize_secrets(client, prepared.secrets or [])
+        self._materialize_pipelines(client, prepared.pipelines or [])
         self._ensure_notebook_dependencies(client, prepared.job_settings.get("tasks", []))
+        inner_jobs = prepared.job_settings.get("inner_jobs", [])
+        inner_job_ids = self._create_inner_jobs(client, inner_jobs)
+        if inner_job_ids:
+            self._assign_inner_job_ids(prepared.job_settings.get("tasks", []), inner_job_ids)
         job_payload = self._build_job_payload_for_api(prepared.job_settings)
         response = client.jobs.create(**job_payload)
         job_id = response.job_id
@@ -125,10 +123,10 @@ class WorkspaceDefinitionStore(DefinitionStore):
             raise ValueError("Failed to create workflow")
         return job_id
 
-    @deprecated("Use 'to_pipeline' as of wkmigrate 0.0.3")
-    def dump(self, pipeline_definition: dict) -> int | None:
+    @deprecated("Use 'to_job' as of wkmigrate 0.0.3")
+    def dump(self, pipeline_definition: Pipeline) -> int | None:
         """
-        This method is deprecated. Use ``to_pipeline`` instead. Uploads artifacts and creates a Databricks job.
+        This method is deprecated. Use ``to_job`` instead. Uploads artifacts and creates a Databricks job.
 
         Args:
             pipeline_definition: Serialized ``Pipeline`` dataclass payload as a ``dict``.
@@ -139,7 +137,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
         Raises:
             ValueError: If the job cannot be created.
         """
-        return self.to_pipeline(pipeline_definition)
+        return self.to_job(pipeline_definition)
 
     def to_local_files(self, pipeline_definition: Pipeline, local_directory: str) -> None:
         """
@@ -150,9 +148,27 @@ class WorkspaceDefinitionStore(DefinitionStore):
             local_directory: Destination directory for generated artifacts.
         """
         prepared = self._prepare_workflow(pipeline_definition)
-        for instruction in prepared.pipelines:
-            instruction.task_ref["pipeline_task"] = {"pipeline_id": instruction.local_identifier}
+        for instruction in prepared.pipelines or []:
+            pipeline_task = instruction.task_ref.get("pipeline_task")
+            if isinstance(pipeline_task, PipelineTask):
+                instruction.task_ref["pipeline_task"] = PipelineTask(pipeline_id=instruction.local_identifier)
+            else:
+                instruction.task_ref["pipeline_task"] = {"pipeline_id": instruction.local_identifier}
         self._write_local_artifacts(prepared, local_directory)
+
+    def to_asset_bundle(self, pipeline_definition: Pipeline | dict, bundle_directory: str) -> None:
+        """
+        Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
+
+        Args:
+            pipeline_definition: Prepared pipeline as a ``Pipeline`` or raw dictionary payload.
+            bundle_directory: Destination directory for the bundle artifacts.
+        """
+        pipeline_ir = (
+            pipeline_definition if isinstance(pipeline_definition, Pipeline) else Pipeline(**pipeline_definition)
+        )
+        prepared = self._prepare_workflow(pipeline_ir)
+        self._write_asset_bundle(prepared, bundle_directory)
 
     def _prepare_workflow(self, pipeline_definition: Pipeline) -> PreparedWorkflow:
         """
@@ -169,7 +185,8 @@ class WorkspaceDefinitionStore(DefinitionStore):
             files_to_delta_sinks=self.files_to_delta_sinks,
         )
 
-    def _upload_notebooks(self, client: WorkspaceClient, notebooks: Iterable[NotebookArtifact]) -> None:
+    @staticmethod
+    def _upload_notebooks(client: WorkspaceClient, notebooks: Iterable[NotebookArtifact]) -> None:
         """
         Uploads generated notebooks to the workspace.
 
@@ -188,8 +205,8 @@ class WorkspaceDefinitionStore(DefinitionStore):
                 path=notebook.file_path,
             )
 
+    @staticmethod
     def _materialize_pipelines(
-        self,
         client: WorkspaceClient,
         pipelines: Iterable[PipelineInstruction],
     ) -> None:
@@ -219,10 +236,14 @@ class WorkspaceDefinitionStore(DefinitionStore):
             pipeline_id = response.pipeline_id
             if pipeline_id is None:
                 raise ValueError("Created pipeline ID cannot be None")
-            instruction.task_ref["pipeline_task"] = {"pipeline_id": pipeline_id}
+            pipeline_task = instruction.task_ref.get("pipeline_task")
+            if isinstance(pipeline_task, PipelineTask):
+                instruction.task_ref["pipeline_task"] = PipelineTask(pipeline_id=pipeline_id)
+            else:
+                instruction.task_ref["pipeline_task"] = {"pipeline_id": pipeline_id}
 
+    @staticmethod
     def _materialize_secrets(
-        self,
         client: WorkspaceClient,
         secrets_to_create: Iterable[SecretInstruction],
     ) -> None:
@@ -255,13 +276,15 @@ class WorkspaceDefinitionStore(DefinitionStore):
             tasks: Job tasks to verify.
         """
         for task in tasks:
-            if task.get("type") == "DatabricksNotebook":
+            if task.get("activity_type") == "DatabricksNotebook":
                 self._ensure_notebook_exists(client, task)
-            if task.get("type") == "ForEach":
+            if task.get("activity_type") == "ForEach":
                 for_each_task = task.get("for_each_task")
                 if for_each_task is None:
                     continue
                 inner_task = for_each_task.get("task")
+                if inner_task is None:
+                    continue
                 inner_task_list = inner_task if isinstance(inner_task, list) else [inner_task]
                 self._ensure_notebook_dependencies(client, inner_task_list)
 
@@ -281,7 +304,10 @@ class WorkspaceDefinitionStore(DefinitionStore):
         notebook_task = task.get("notebook_task")
         if notebook_task is None:
             raise ValueError('No "notebook_task" found in task')
-        notebook_path_value = notebook_task.get("notebook_path")
+        if isinstance(notebook_task, NotebookTask):
+            notebook_path_value = notebook_task.notebook_path
+        else:
+            notebook_path_value = notebook_task.get("notebook_path")
         if notebook_path_value is None:
             raise ValueError('No "notebook_path" found in notebook_task')
         notebook_path = f"/Workspace{notebook_path_value}"
@@ -300,9 +326,54 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         os.makedirs(output_dir, exist_ok=True)
         self._write_workflow_definition(prepared.job_settings, output_dir)
-        self._write_notebooks(prepared.notebooks, output_dir)
-        self._write_secrets(prepared.secrets, output_dir)
-        self._write_unsupported(prepared.unsupported, output_dir)
+        self._write_notebooks(prepared.notebooks or [], os.path.join(output_dir, "notebooks"))
+        self._write_secrets(prepared.secrets or [], output_dir)
+        self._write_unsupported(prepared.unsupported or [], output_dir)
+
+    def _write_asset_bundle(self, prepared: PreparedWorkflow, bundle_dir: str) -> None:
+        """
+        Writes an asset bundle layout containing job configuration and related artifacts.
+
+        Args:
+            prepared: Prepared workflow artifacts.
+            bundle_dir: Destination directory for the bundle.
+        """
+        os.makedirs(bundle_dir, exist_ok=True)
+        bundle_name = prepared.job_settings.get("name") or "workflow"
+        resources_dir = os.path.join(bundle_dir, "resources")
+        jobs_dir = os.path.join(resources_dir, "jobs")
+        pipelines_dir = os.path.join(resources_dir, "pipelines")
+        notebooks_dir = os.path.join(resources_dir, "notebooks")
+
+        os.makedirs(jobs_dir, exist_ok=True)
+        os.makedirs(pipelines_dir, exist_ok=True)
+        os.makedirs(notebooks_dir, exist_ok=True)
+
+        job_file = os.path.join(jobs_dir, f"{bundle_name}.yml")
+        job_settings = self._strip_inner_job_settings(dict(prepared.job_settings))
+        job_settings.pop("not_translatable", None)
+        inner_jobs = prepared.job_settings.get("inner_jobs", [])
+        if inner_jobs:
+            self._assign_inner_job_refs(job_settings.get("tasks", []))
+        job_resource = {"resources": {"jobs": {bundle_name: self._serialize_for_json(job_settings)}}}
+        with open(job_file, "w", encoding="utf-8") as job_handle:
+            yaml.safe_dump(job_resource, job_handle, sort_keys=False)
+
+        for inner_job in inner_jobs:
+            inner_name = inner_job.get("name") or "inner_job"
+            inner_job_file = os.path.join(jobs_dir, f"{inner_name}.yml")
+            inner_payload = self._strip_inner_job_settings(dict(inner_job))
+            inner_payload.pop("not_translatable", None)
+            self._assign_inner_job_refs(inner_payload.get("tasks", []))
+            inner_resource = {"resources": {"jobs": {inner_name: self._serialize_for_json(inner_payload)}}}
+            with open(inner_job_file, "w", encoding="utf-8") as inner_handle:
+                yaml.safe_dump(inner_resource, inner_handle, sort_keys=False)
+
+        self._write_notebooks(prepared.notebooks or [], notebooks_dir)
+        self._write_pipeline_resources(prepared.pipelines or [], pipelines_dir)
+        self._write_secrets(prepared.secrets or [], bundle_dir)
+        self._write_unsupported(prepared.unsupported or [], bundle_dir)
+        self._write_bundle_manifest(bundle_name, job_file, prepared.pipelines or [], bundle_dir, inner_jobs)
 
     def _write_workflow_definition(self, job_settings: dict, output_dir: str) -> None:
         """
@@ -327,14 +398,125 @@ class WorkspaceDefinitionStore(DefinitionStore):
             notebooks: Notebook artifacts produced during translation as a ``list[NotebookArtifact]``.
             output_dir: Destination directory for the ``notebooks`` folder.
         """
-        notebooks_dir = os.path.join(output_dir, "notebooks")
-        os.makedirs(notebooks_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
         for notebook in notebooks:
-            file_path = os.path.join(notebooks_dir, notebook.file_path)
+            file_path = os.path.join(output_dir, notebook.file_path.lstrip("/"))
             with open(file_path, "w", encoding="utf-8") as notebook_file:
                 notebook_file.write(notebook.content)
 
-    def _write_secrets(self, secrets_to_write: Iterable[SecretInstruction], output_dir: str) -> None:
+    def _write_pipeline_resources(self, pipelines: Iterable[PipelineInstruction], pipelines_dir: str) -> None:
+        """
+        Writes pipeline resource definitions used by copy-data activities.
+
+        Args:
+            pipelines: Pipeline instructions to materialize.
+            pipelines_dir: Destination directory for pipeline JSON files.
+        """
+        os.makedirs(pipelines_dir, exist_ok=True)
+        for instruction in pipelines:
+            pipeline_payload = {
+                "resources": {
+                    "pipelines": {
+                        instruction.name: {
+                            "name": instruction.name,
+                            "allow_duplicate_names": True,
+                            "channel": "CURRENT",
+                            "development": False,
+                            "continuous": False,
+                            "photon": True,
+                            "serverless": True,
+                            "target": "wkmigrate",
+                            "libraries": [{"notebook": {"path": instruction.file_path}}],
+                        }
+                    }
+                }
+            }
+            pipeline_file = os.path.join(pipelines_dir, f"{instruction.name}.yml")
+            with open(pipeline_file, "w", encoding="utf-8") as pipeline_handle:
+                yaml.safe_dump(pipeline_payload, pipeline_handle, sort_keys=False)
+
+    def _write_bundle_manifest(
+        self,
+        bundle_name: str,
+        job_file: str,
+        pipelines: Iterable[PipelineInstruction],
+        bundle_dir: str,
+        inner_jobs: Iterable[dict] | None = None,
+    ) -> None:
+        """
+        Writes a minimal Databricks asset bundle manifest (databricks.yml).
+
+        Args:
+            bundle_name: Name for the bundle and job resource.
+            job_file: Path to the job definition JSON.
+            pipelines: Pipeline instructions to include.
+            bundle_dir: Destination directory for the manifest.
+            inner_jobs: Additional job settings included in the bundle.
+        """
+        pipeline_resources = [os.path.join("resources", "pipelines", f"{pipeline.name}.yml") for pipeline in pipelines]
+        job_resources = [os.path.relpath(job_file, bundle_dir)]
+        if inner_jobs:
+            for inner_job in inner_jobs:
+                inner_name = inner_job.get("name")
+                if inner_name:
+                    job_resources.append(os.path.join("resources", "jobs", f"{inner_name}.yml"))
+        bundle_resources = job_resources + pipeline_resources
+        manifest = {
+            "bundle": {"name": bundle_name},
+            "targets": {
+                "default": {
+                    "workspace": {
+                        "host": self.host_name,
+                    }
+                }
+            },
+            "include": bundle_resources,
+        }
+        manifest_path = os.path.join(bundle_dir, "databricks.yml")
+        with open(manifest_path, "w", encoding="utf-8") as manifest_handle:
+            yaml.safe_dump(manifest, manifest_handle, sort_keys=False)
+
+    _NEW_CLUSTER_EXCLUDED_KEYS = {"service_name", "service_type", "host_name"}
+
+    def _serialize_for_json(self, obj, parent_key: str | None = None):
+        """
+        Recursively converts dataclasses and other non-JSON-native objects into serializable structures.
+        """
+        if hasattr(obj, "as_dict"):
+            items = obj.as_dict().items()
+            if parent_key == "new_cluster":
+                return {
+                    k: self._serialize_for_json(v, k)
+                    for k, v in items
+                    if v is not None and k not in self._NEW_CLUSTER_EXCLUDED_KEYS
+                }
+            return {k: self._serialize_for_json(v, k) for k, v in items if v is not None}
+        if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+            items = dataclasses.asdict(obj).items()
+            if parent_key == "new_cluster":
+                return {
+                    k: self._serialize_for_json(v, k)
+                    for k, v in items
+                    if v is not None and k not in self._NEW_CLUSTER_EXCLUDED_KEYS
+                }
+            return {k: self._serialize_for_json(v, k) for k, v in items if v is not None}
+        if isinstance(obj, dict):
+            if parent_key == "new_cluster":
+                return {
+                    k: self._serialize_for_json(v, k)
+                    for k, v in obj.items()
+                    if v is not None and k not in self._NEW_CLUSTER_EXCLUDED_KEYS
+                }
+            return {k: self._serialize_for_json(v, k) for k, v in obj.items() if v is not None}
+        if isinstance(obj, list):
+            return [self._serialize_for_json(v) for v in obj if v is not None]
+        if isinstance(obj, tuple):
+            return tuple(self._serialize_for_json(v) for v in obj if v is not None)
+        return obj
+
+    @staticmethod
+    def _write_secrets(secrets_to_write: Iterable[SecretInstruction], output_dir: str) -> None:
         """
         Writes resolved secret metadata to a ``secrets.json`` file in the output directory.
 
@@ -350,7 +532,6 @@ class WorkspaceDefinitionStore(DefinitionStore):
                 "linked_service_name": secret.service_name,
                 "linked_service_type": secret.service_type,
                 "provided_value": secret.provided_value,
-                "user_input_required": secret.user_input_required,
             }
             for secret in secrets_to_write
         ]
@@ -486,7 +667,8 @@ class WorkspaceDefinitionStore(DefinitionStore):
             raise ValueError("workspace_client is not initialized")
         return self.workspace_client
 
-    def _find_job_by_name(self, client: WorkspaceClient, job_name: str) -> Job:
+    @staticmethod
+    def _find_job_by_name(client: WorkspaceClient, job_name: str) -> Job:
         """
         Fetches a job definition from the workspace.
 
@@ -523,12 +705,112 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         payload = deepcopy(job_settings)
         payload.pop("not_translatable", None)
-        tasks = payload.get("tasks") or []
-        payload["tasks"] = [Task.from_dict(task) for task in tasks]
+        tasks = self._normalize_job_tasks(payload.get("tasks") or [])
+        payload["tasks"] = [
+            task if isinstance(task, Task) else Task.from_dict(self._serialize_for_json(task)) for task in tasks
+        ]
+        parameters = payload.get("parameters")
+        if parameters:
+            payload["parameters"] = [
+                param if isinstance(param, JobParameterDefinition) else JobParameterDefinition.from_dict(param)
+                for param in parameters
+            ]
         schedule = payload.get("schedule")
         if schedule is not None:
-            payload["schedule"] = CronSchedule.from_dict(schedule)
+            payload["schedule"] = schedule if isinstance(schedule, CronSchedule) else CronSchedule.from_dict(schedule)
+        else:
+            payload.pop("schedule", None)
         return payload
+
+    def _create_inner_jobs(self, client: WorkspaceClient, inner_jobs: Iterable[dict]) -> dict[str, int]:
+        """
+        Creates additional jobs required for nested ForEach tasks and returns their IDs.
+        """
+        job_ids: dict[str, int] = {}
+        for inner_job in inner_jobs:
+            inner_payload = self._build_job_payload_for_api(inner_job)
+            response = client.jobs.create(**inner_payload)
+            job_id = response.job_id
+            if job_id is None:
+                raise ValueError("Failed to create inner job")
+            inner_name = inner_job.get("name")
+            if inner_name:
+                job_ids[inner_name] = job_id
+        return job_ids
+
+    def _assign_inner_job_ids(self, tasks: Iterable[dict], job_id_map: dict[str, int]) -> None:
+        """
+        Replaces placeholder run_job_task job IDs with created inner job IDs.
+        """
+        for task in tasks:
+            run_job_task = task.get("run_job_task")
+            if (
+                run_job_task
+                and isinstance(run_job_task.get("job_id"), str)
+                and run_job_task.get("job_id").startswith("__INNER_JOB__:")
+            ):
+                job_id_value = run_job_task.get("job_id").split(":", 1)[1]
+                if job_id_value in job_id_map:
+                    run_job_task["job_id"] = job_id_map[job_id_value]
+            for_each_task = task.get("for_each_task")
+            if for_each_task:
+                nested_task = for_each_task.get("task")
+                if isinstance(nested_task, dict):
+                    self._assign_inner_job_ids([nested_task], job_id_map)
+                elif isinstance(nested_task, list):
+                    self._assign_inner_job_ids(nested_task, job_id_map)
+
+    def _assign_inner_job_refs(self, tasks: Iterable[dict]) -> None:
+        """
+        Replaces placeholder run_job_task job IDs with bundle resource references.
+        """
+        for task in tasks:
+            run_job_task = task.get("run_job_task")
+            if run_job_task:
+                if isinstance(run_job_task, str) and run_job_task.startswith("__INNER_JOB__:"):
+                    job_name = run_job_task.split(":", 1)[1]
+                    task["run_job_task"] = {"job_id": f"${{resources.jobs.{job_name}.id}}"}
+            job_id = task.get("job_id")
+            if job_id and isinstance(job_id, str):
+                task["job_id"] = f"${{resources.jobs.{job_id}.id}}"
+            for_each_task = task.get("for_each_task")
+            if for_each_task:
+                nested_task = for_each_task.get("task")
+                if isinstance(nested_task, dict):
+                    self._assign_inner_job_refs([nested_task])
+                elif isinstance(nested_task, list):
+                    self._assign_inner_job_refs(nested_task)
+
+    @staticmethod
+    def _strip_inner_job_settings(job_settings: dict) -> dict:
+        """
+        Removes internal inner_job_settings metadata from tasks before export.
+        """
+        cleaned = deepcopy(job_settings)
+        cleaned.pop("inner_jobs", None)
+        tasks = cleaned.get("tasks") or []
+        for task in tasks:
+            task.pop("inner_job_settings", None)
+            for_each_task = task.get("for_each_task")
+            if for_each_task:
+                nested_task = for_each_task.get("task")
+                if isinstance(nested_task, dict):
+                    nested_task.pop("inner_job_settings", None)
+        cleaned["tasks"] = tasks
+        return cleaned
+
+    @staticmethod
+    def _normalize_job_tasks(tasks: Iterable) -> list:
+        """
+        Flattens any accidental nested task lists to avoid Task.from_dict failures.
+        """
+        normalized: list = []
+        for task in tasks:
+            if isinstance(task, list):
+                normalized.extend(task)
+            else:
+                normalized.append(task)
+        return normalized
 
     @staticmethod
     def _format_unsupported_entries(warning_entries: Iterable[dict]) -> list[dict]:

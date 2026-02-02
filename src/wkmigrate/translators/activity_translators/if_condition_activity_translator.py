@@ -40,6 +40,18 @@ def translate_if_condition_activity(
     if isinstance(expression, UnsupportedValue):
         return UnsupportedValue(value=activity, message=expression.message)
 
+    parsed_op = expression.get("op")
+    if not parsed_op:
+        return UnsupportedValue(value=activity, message="Missing field 'op' in if condition expression")
+
+    parsed_left = expression.get("left")
+    if not parsed_left:
+        return UnsupportedValue(value=activity, message="Missing field 'left' in if condition expression")
+
+    parsed_right = expression.get("parsed_right")
+    if not parsed_right:
+        return UnsupportedValue(value=activity, message="Missing field 'right' in if condition expression")
+
     child_activities: list[Activity] = []
     parent_task_name = activity.get("name")
     if parent_task_name is None:
@@ -64,9 +76,9 @@ def translate_if_condition_activity(
         )
     return IfConditionActivity(
         **base_kwargs,
-        op=expression.get("op"),
-        left=expression.get("left"),
-        right=expression.get("right"),
+        op=parsed_op,
+        left=parsed_left,
+        right=parsed_right,
         child_activities=child_activities,
     )
 
@@ -87,12 +99,12 @@ def _parse_child_activities(
     Returns:
         List of translated child activities with dependency wiring applied as a ``list[Activity]``.
     """
-    translated: list[Activity] = []
+    translated = []
     for activity in child_activities:
         depends_on = activity.setdefault("depends_on", [])
         depends_on.append({"activity": parent_task_name, "outcome": parent_task_outcome})
         activity_translator = importlib.import_module("wkmigrate.activity_translators.activity_translator")
-        result = activity_translator.translate_activity(activity)
+        result = activity_translator.translate_activity(activity, is_conditional_task=True)
         if isinstance(result, tuple):
             translated.append(result[0])
             translated.extend(result[1])

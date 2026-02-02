@@ -4,10 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(slots=True)
 class PipelineInstruction:
     """
-    Represents a workflow pipeline that must be created.
+    Represents a declarative pipeline that must be created.
 
     Attributes:
         task_ref: Reference to the Databricks task dictionary that will consume the pipeline.
@@ -26,7 +26,7 @@ class PipelineInstruction:
         return f"{base}_local_pipeline"
 
 
-@dataclass
+@dataclass(slots=True)
 class SecretInstruction:
     """
     Represents a secret value that must exist in Databricks.
@@ -37,7 +37,6 @@ class SecretInstruction:
         service_name: Logical source system or service associated with the secret.
         service_type: Type of backing service (for example ``sqlserver`` or ``csv``).
         provided_value: Secret value obtained from source metadata, if available.
-        user_input_required: ``True`` when the user must provide the secret value interactively.
     """
 
     scope: str
@@ -45,4 +44,3 @@ class SecretInstruction:
     service_name: str | None
     service_type: str | None
     provided_value: str | None
-    user_input_required: bool

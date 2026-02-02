@@ -6,9 +6,10 @@ and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
 from wkmigrate.models.ir.activities import SparkJarActivity
+from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
-def translate_spark_jar_activity(activity: dict, base_kwargs: dict) -> SparkJarActivity:
+def translate_spark_jar_activity(activity: dict, base_kwargs: dict) -> SparkJarActivity | UnsupportedValue:
     """
     Translates an ADF Databricks Spark JAR activity into a ``SparkJarActivity`` object.
 
@@ -19,9 +20,12 @@ def translate_spark_jar_activity(activity: dict, base_kwargs: dict) -> SparkJarA
     Returns:
         ``SparkJarActivity`` representation of the Spark JAR task.
     """
+    main_class_name = activity.get("main_class_name")
+    if not main_class_name:
+        return UnsupportedValue(activity, "Missing field 'main_class_name' for Spark Python activity")
     return SparkJarActivity(
         **base_kwargs,
-        main_class_name=activity.get("main_class_name"),
+        main_class_name=main_class_name,
         parameters=activity.get("parameters"),
         libraries=activity.get("libraries"),
     )

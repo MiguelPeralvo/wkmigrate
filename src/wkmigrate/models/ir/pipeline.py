@@ -8,23 +8,10 @@ representations that can be used to generate Databricks Lakeflow jobs.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
 from wkmigrate.models.ir.activities import Activity
 
 
-@dataclass
-class PipelineTask:
-    """
-    Wrapper associating an ``Activity`` with a workflow task slot.
-
-    Attributes:
-        activity: Translated activity instance that will be executed as a Databricks task.
-    """
-
-    activity: Activity
-
-
-@dataclass
+@dataclass(slots=True)
 class Pipeline:
     """
     Pipeline IR object produced by the translator.
@@ -41,6 +28,6 @@ class Pipeline:
     name: str
     parameters: list[dict] | None
     schedule: dict | None
-    tasks: list[PipelineTask]
+    tasks: list[Activity]
     tags: dict
     not_translatable: list[dict] = field(default_factory=list)

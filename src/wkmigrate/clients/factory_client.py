@@ -12,7 +12,7 @@ from azure.identity import ClientSecretCredential
 from azure.mgmt.datafactory import DataFactoryManagementClient
 
 
-@dataclass
+@dataclass(slots=True)
 class FactoryClient:
     """
     Data Factory management client for retrieving pipelines, datasets, linked services, and triggers.

@@ -7,10 +7,11 @@ and emit ``UnsupportedValue`` objects for any unparsable inputs.
 
 import warnings
 from wkmigrate.models.ir.activities import DatabricksNotebookActivity
+from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
 
 
-def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity:
+def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:
     """
     Translates an ADF Databricks Notebook activity into a ``DatabricksNotebookActivity`` object.
 
@@ -21,9 +22,12 @@ def translate_notebook_activity(activity: dict, base_kwargs: dict) -> Databricks
     Returns:
         ``DatabricksNotebookActivity`` representation of the notebook task.
     """
+    notebook_path = activity.get("notebook_path")
+    if not notebook_path:
+        return UnsupportedValue(activity, "Missing field 'notebook_path' for Spark Python activity")
     return DatabricksNotebookActivity(
         **base_kwargs,
-        notebook_path=activity.get("notebook_path"),
+        notebook_path=notebook_path,
         base_parameters=_parse_notebook_parameters(activity.get("base_parameters")),
         linked_service_definition=activity.get("linked_service_definition"),
     )

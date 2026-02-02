@@ -8,7 +8,7 @@ and warnings so that callers can surface translation diagnostics alongside the g
 import warnings
 
 from wkmigrate.translators.activity_translators.activity_translator import translate_activities
-from wkmigrate.models.ir.pipeline import Pipeline, PipelineTask
+from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.translators.pipeline_translators.parameter_translator import translate_parameters
 from wkmigrate.translators.trigger_translators.schedule_trigger_translator import translate_schedule_trigger
@@ -39,7 +39,7 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
             name=pipeline.get("name", "UNNAMED_WORKFLOW"),
             parameters=translate_parameters(pipeline.get("parameters")),
             schedule=translate_schedule_trigger(pipeline["trigger"]) if pipeline.get("trigger") is not None else None,
-            tasks=[PipelineTask(activity=task) for task in translated_tasks or []],
+            tasks=translated_tasks or [],
             tags=append_system_tags(pipeline.get("tags")),
         )
 

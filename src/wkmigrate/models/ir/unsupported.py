@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass
+@dataclass(slots=True)
 class UnsupportedValue:
     """
     Represents a value that cannot be translated into a supported internal representation.

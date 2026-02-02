@@ -21,14 +21,15 @@ Example:
     ```
 """
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from collections.abc import Callable
 from wkmigrate.clients.factory_client import FactoryClient
 from wkmigrate.definition_stores.definition_store import DefinitionStore
+from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.translators.pipeline_translators.pipeline_translator import translate_pipeline
 
 
-@dataclass
+@dataclass(slots=True)
 class FactoryDefinitionStore(DefinitionStore):
     """
     Definition store implementation backed by an Azure Data Factory instance.
@@ -87,15 +88,15 @@ class FactoryDefinitionStore(DefinitionStore):
             factory_name=self.factory_name,
         )
 
-    def load(self, pipeline_name: str) -> dict:
+    def load(self, pipeline_name: str) -> Pipeline:
         """
-        Returns a dictionary representation of a Data Factory pipeline.
+        Returns an internal ``Pipeline`` representation of a Data Factory pipeline.
 
         Args:
             pipeline_name: Name of the pipeline to load as a ``str``.
 
         Returns:
-            Pipeline definition decorated with linked resources as a ``dict``.
+            Pipeline definition decorated with linked resources as a ``Pipeline`` dataclass.
 
         Raises:
             ValueError: If the factory client is not initialized.
@@ -109,20 +110,7 @@ class FactoryDefinitionStore(DefinitionStore):
             pipeline["activities"] = [self._append_objects(activity) for activity in activities]
         else:
             pipeline["activities"] = []
-        return asdict(translate_pipeline(pipeline))
-
-    def dump(self, pipeline_definition: dict) -> None:
-        """
-        Note:
-            Saving pipeline definitions to Azure Data Factory is not currently supported.
-
-        Args:
-            pipeline_definition: Pipeline definition to dump as a ``dict``.
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError(f"Dump of pipeline {pipeline_definition} to FactoryDefinitionStore not supported.")
+        return translate_pipeline(pipeline)
 
     def _append_objects(self, activity: dict) -> dict:
         """
@@ -186,32 +174,25 @@ class FactoryDefinitionStore(DefinitionStore):
         Raises:
             ValueError: If the factory client is not initialized.
         """
-        # Get the linked service reference name:
         linked_service_reference = activity.get("linked_service_name")
         if linked_service_reference is not None:
             linked_service_name = linked_service_reference.get("reference_name")
             if self.factory_client is None:
                 raise ValueError("factory_client is not initialized")
-            # Get the linked service details from data factory:
-            linked_service = self.factory_client.get_linked_service(linked_service_name)
-            if linked_service["type"] == "AzureDatabricks":
-                activity["linked_service_definition"] = self.factory_client.get_linked_service(linked_service_name)
+            activity["linked_service_definition"] = self.factory_client.get_linked_service(linked_service_name)
 
-        # Check the nested "if false" activities:
         if_false_activities = activity.get("if_false_activities")
         if if_false_activities is not None:
             activity["if_false_activities"] = [
                 self._append_linked_service(if_false_activity) for if_false_activity in if_false_activities
             ]
 
-        # Check the nested "if true" activities:
         if_true_activities = activity.get("if_true_activities")
         if if_true_activities is not None:
             activity["if_true_activities"] = [
                 self._append_linked_service(if_true_activity) for if_true_activity in if_true_activities
             ]
 
-        # Check the nested "for each" activities:
         activities = activity.get("activities")
         if activities is not None:
             activity["activities"] = [self._append_linked_service(activity) for activity in activities]

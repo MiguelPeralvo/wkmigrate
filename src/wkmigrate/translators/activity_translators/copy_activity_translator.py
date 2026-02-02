@@ -25,8 +25,8 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     * Unsupported dataset format settings
 
     Args:
-        activity: Copy activity definition as a ``dict``.
-        base_kwargs: Common activity metadata from ``_build_base_activity_kwargs``.
+        activity: Copy activity definition as a ``dict``
+        base_kwargs: Common activity metadata from ``_build_base_activity_kwargs``
 
     Returns:
         ``CopyActivity`` representation of the Copy task.

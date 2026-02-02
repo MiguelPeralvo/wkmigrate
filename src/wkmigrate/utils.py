@@ -6,6 +6,7 @@ metadata (e.g. appending system tags).
 """
 
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
 from wkmigrate.models.ir.activities import Activity, DatabricksNotebookActivity
@@ -55,6 +56,36 @@ def append_system_tags(tags: dict | None) -> dict:
 
     tags["CREATED_BY_WKMIGRATE"] = ""
     return tags
+
+
+def parse_activity_timeout_string(timeout_string: str) -> int:
+    """
+    Parses a timeout string in the format ``d.hh:mm:ss`` into seconds.
+
+    Args:
+        timeout_string: Timeout string from the activity policy.
+
+    Returns:
+        Total seconds represented by the timeout.
+    """
+    if timeout_string[:2] == "0.":
+        # Parse the timeout string to HH:MM:SS format:
+        timeout_string = timeout_string[2:]
+        time_format = "%H:%M:%S"
+        date_time = datetime.strptime(timeout_string, time_format)
+        time_delta = timedelta(hours=date_time.hour, minutes=date_time.minute, seconds=date_time.second)
+    else:
+        # Parse the timeout string to DD.HH:MM:SS format:
+        timeout_string = timeout_string.zfill(11)
+        time_format = "%d.%H:%M:%S"
+        date_time = datetime.strptime(timeout_string, time_format)
+        time_delta = timedelta(
+            days=date_time.day,
+            hours=date_time.hour,
+            minutes=date_time.minute,
+            seconds=date_time.second,
+        )
+    return int(time_delta.total_seconds())
 
 
 def parse_expression(expression: str) -> str:

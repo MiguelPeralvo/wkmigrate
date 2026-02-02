@@ -6,14 +6,13 @@ payloads into internal representations that can be used to generate Databricks L
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any
-
+import wkmigrate
 from wkmigrate.models.ir.datasets import Dataset
 
 
-@dataclass
+@dataclass(slots=True)
 class Activity:
     """
     Base class for translated pipeline activities.
@@ -21,27 +20,27 @@ class Activity:
     Attributes:
         name: Logical name of the activity as defined in ADF.
         task_key: Unique identifier used to reference this task within a workflow.
-        activity_type: Original ADF activity type string (for example ``DatabricksNotebook``).
         description: Free-form description of what the activity does.
         timeout_seconds: Maximum allowed execution time in seconds before the task is cancelled.
         max_retries: Maximum number of retry attempts on failure.
         min_retry_interval_millis: Minimum delay between retry attempts in milliseconds.
         depends_on: List of upstream task dependencies that must complete before this task runs.
         new_cluster: Cluster configuration dictionary for tasks that provision a new cluster.
+        libraries: List of library dependencies (e.g. JARs or Python wheels) used by the activity.
     """
 
     name: str
     task_key: str
-    activity_type: str
     description: str | None = None
     timeout_seconds: int | None = None
     max_retries: int | None = None
     min_retry_interval_millis: int | None = None
     depends_on: list["Dependency"] | None = None
     new_cluster: dict | None = None
+    libraries: list[dict[str, Any]] | None = None
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class DatabricksNotebookActivity(Activity):
     """
     Databricks notebook activity metadata.
@@ -52,12 +51,12 @@ class DatabricksNotebookActivity(Activity):
         linked_service_definition: Raw ADF linked-service dictionary used to configure the cluster.
     """
 
-    notebook_path: str | None = None
+    notebook_path: str
     base_parameters: dict[str, str] | None = None
     linked_service_definition: dict | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class CopyActivity(Activity):
     """
     Copy activity metadata including datasets and mappings.
@@ -77,23 +76,39 @@ class CopyActivity(Activity):
     column_mapping: list[ColumnMapping] | None = None
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class ForEachActivity(Activity):
     """
     ForEach activity metadata including inner activities.
 
     Attributes:
         items_string: Serialized iterable expression that drives the loop.
-        inner_activities: List of activities to execute for each item.
+        for_each_task: Task to execute for each item.
         concurrency: Maximum number of loop iterations to run in parallel.
     """
 
-    items_string: str | None = None
-    inner_activities: list[Activity] = field(default_factory=list)
+    items_string: str
+    for_each_task: Activity
     concurrency: int | None = None
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
+class RunJobActivity(Activity):
+    """
+    Run Job activity metadata.
+
+    Attributes:
+        name: Name of the job to run.
+        pipeline: Pipeline to run, if no existing job ID is provided.
+        existing_job_id: ID of the existing job to run.
+    """
+
+    name: str
+    pipeline: wkmigrate.models.ir.pipeline.Pipeline | None = None
+    existing_job_id: str | None = None
+
+
+@dataclass(slots=True, kw_only=True)
 class SparkJarActivity(Activity):
     """
     Spark JAR activity metadata.
@@ -104,12 +119,12 @@ class SparkJarActivity(Activity):
         libraries: Additional library descriptors attached to the task.
     """
 
-    main_class_name: str | None = None
+    main_class_name: str
     parameters: list[str] | None = None
     libraries: list[dict[str, Any]] | None = None
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class SparkPythonActivity(Activity):
     """
     Spark Python activity metadata.
@@ -119,11 +134,11 @@ class SparkPythonActivity(Activity):
         parameters: List of string arguments passed to the Python entry point.
     """
 
-    python_file: str | None = None
+    python_file: str
     parameters: list[str] | None = None
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class IfConditionActivity(Activity):
     """
     If Condition activity metadata.
@@ -135,13 +150,13 @@ class IfConditionActivity(Activity):
         child_activities: Activities that form the body of the conditional branch.
     """
 
-    op: str | None = None
-    left: str | None = None
-    right: str | None = None
+    op: str
+    left: str
+    right: str
     child_activities: list[Activity] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(slots=True)
 class ColumnMapping:
     """
     Represents a column-level mapping between datasets.
@@ -157,7 +172,7 @@ class ColumnMapping:
     sink_column_type: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Dependency:
     """
     Represents a dependency on another task.
@@ -167,5 +182,5 @@ class Dependency:
         outcome: Required outcome of the upstream task (for example ``Succeeded``) for this dependency.
     """
 
-    task_key: str | None
-    outcome: str | None
+    task_key: str
+    outcome: str | None = None

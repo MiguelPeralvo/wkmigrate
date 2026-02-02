@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass
+@dataclass(slots=True)
 class Dataset:
     """
     Base class representing a parsed dataset.
@@ -28,7 +28,7 @@ class Dataset:
     service_name: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class FileDataset(Dataset):
     """
     Dataset definition for file-based sources and sinks in an ABFS/ADLS storage account.
@@ -50,7 +50,7 @@ class FileDataset(Dataset):
     records_per_file: int | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class DeltaTableDataset(Dataset):
     """
     Dataset definition for Delta tables accessible from a Databricks cluster.
@@ -66,7 +66,7 @@ class DeltaTableDataset(Dataset):
     catalog_name: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class SqlTableDataset(Dataset):
     """
     Dataset definition for JDBC-accessible tables in a relational database.
@@ -92,7 +92,7 @@ class SqlTableDataset(Dataset):
     connection_options: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class DatasetProperties:
     """
     Container for dataset property metadata produced during parsing.

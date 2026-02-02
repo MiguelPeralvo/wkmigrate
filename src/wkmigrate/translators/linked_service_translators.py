@@ -63,13 +63,12 @@ def translate_databricks_cluster_spec(cluster_spec: dict) -> DatabricksClusterLi
 
     properties = cluster_spec.get("properties", {})
 
-    autoscale = _parse_autoscale_policy(properties.get("new_cluster_num_of_worker"))
-    if isinstance(autoscale, UnsupportedValue):
-        return UnsupportedValue(value=cluster_spec, message=autoscale.message)
-
     num_workers = _parse_number_of_workers(properties.get("new_cluster_num_of_worker"))
     if isinstance(num_workers, UnsupportedValue):
         return UnsupportedValue(value=cluster_spec, message=num_workers.message)
+
+    autoscale_size = num_workers if isinstance(num_workers, dict) else None
+    fixed_size = num_workers if isinstance(num_workers, int) else None
 
     return DatabricksClusterLinkedService(
         service_name=cluster_spec.get("name", str(uuid4())),
@@ -83,8 +82,8 @@ def translate_databricks_cluster_spec(cluster_spec: dict) -> DatabricksClusterLi
         spark_env_vars=properties.get("new_cluster_spark_env_vars"),
         init_scripts=_parse_init_scripts(properties.get("new_cluster_init_scripts", [])),
         cluster_log_conf=_parse_log_conf(properties.get("new_cluster_log_destination")),
-        autoscale=autoscale,
-        num_workers=num_workers,
+        autoscale=autoscale_size,
+        num_workers=fixed_size,
         pat=properties.get("pat"),
     )
 
@@ -128,7 +127,7 @@ def _parse_log_conf(cluster_log_destination: str | None) -> dict | None:
     return {"dbfs": {"destination": cluster_log_destination}}
 
 
-def _parse_number_of_workers(num_workers: str | None) -> int | UnsupportedValue | None:
+def _parse_number_of_workers(num_workers: str | None) -> int | dict[str, int] | UnsupportedValue | None:
     """
     Parses a static cluster size from the linked-service payload into an integer.
 
@@ -138,34 +137,17 @@ def _parse_number_of_workers(num_workers: str | None) -> int | UnsupportedValue 
     Returns:
         Parsed worker count as an ``int``, or ``None`` if autoscaling is used.
     """
-    if num_workers is None or ":" in num_workers:
+    if num_workers is None:
         return None
     try:
+        if ":" in num_workers:
+            return {
+                "min_workers": int(num_workers.split(":")[0]),
+                "max_workers": int(num_workers.split(":")[1]),
+            }
         return int(num_workers)
     except ValueError:
         return UnsupportedValue(value=num_workers, message=f"Invalid number of workers '{num_workers}'")
-
-
-def _parse_autoscale_policy(autoscale_policy: str | None) -> dict | UnsupportedValue | None:
-    """
-    Parses a Databricks autoscaling policy (e.g., ``"1:4"``) into a dictionary of worker counts.
-
-    Args:
-        autoscale_policy: Autoscaling range encoded as ``"min:max"``.
-
-    Returns:
-        Dictionary with ``min_workers`` / ``max_workers`` as a ``dict``.
-    """
-    if autoscale_policy is None:
-        return None
-    try:
-        autoscale_num_workers = autoscale_policy.split(":")
-        return {
-            "min_workers": int(autoscale_num_workers[0]),
-            "max_workers": int(autoscale_num_workers[1]),
-        }
-    except ValueError:
-        return UnsupportedValue(value=autoscale_policy, message=f"Invalid autoscale policy '{autoscale_policy}'")
 
 
 def _parse_init_scripts(init_scripts: list[str] | None) -> list[dict] | None:
@@ -178,7 +160,7 @@ def _parse_init_scripts(init_scripts: list[str] | None) -> list[dict] | None:
     Returns:
         List of init script definitions as a ``list[dict]``.
     """
-    if init_scripts is None:
+    if not init_scripts:
         return None
     return [
         {_get_init_script_type(init_script_path=init_script): {"destination": init_script}}

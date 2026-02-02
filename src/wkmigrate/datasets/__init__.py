@@ -2,7 +2,7 @@ FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
 SQL_DATASET_TYPES = {"AzureSqlTable"}
 DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 
-secrets = {
+DATASET_SECRETS = {
     "avro": ["storage_account_key"],
     "csv": ["storage_account_key"],
     "delta": [],
@@ -13,7 +13,7 @@ secrets = {
 }
 
 
-options = {
+DATASET_OPTIONS = {
     "csv": [
         "header",
         "sep",

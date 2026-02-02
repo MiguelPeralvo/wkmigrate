@@ -9,7 +9,7 @@ import ast
 import importlib
 import re
 import warnings
-from wkmigrate.models.ir.activities import Activity, ForEachActivity
+from wkmigrate.models.ir.activities import Activity, ForEachActivity, RunJobActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
@@ -41,36 +41,42 @@ def translate_for_each_activity(activity: dict, base_kwargs: dict) -> ForEachAct
     if isinstance(items_string, UnsupportedValue):
         return items_string
 
+    inner_activity_defs = activity.get("activities") or []
+    if not inner_activity_defs:
+        return UnsupportedValue(value=activity, message="ForEach activity requires at least one inner activity")
+
+    if len(inner_activity_defs) == 1:
+        inner_activity = _parse_for_each_task(inner_activity_defs[0])
+        if isinstance(inner_activity, tuple):
+            inner_activity = inner_activity[0]
+        if isinstance(inner_activity, UnsupportedValue):
+            return inner_activity
+        for_each_task = inner_activity
+    else:
+        activity_name = activity.get("name") or "FOR_EACH"
+        inner_job_name = f"{activity_name}_inner_activities"
+        pipeline_translator = importlib.import_module("wkmigrate.translators.pipeline_translators.pipeline_translator")
+        inner_pipeline = pipeline_translator.translate_pipeline(
+            {
+                "name": inner_job_name,
+                "activities": inner_activity_defs,
+                "parameters": None,
+                "trigger": None,
+                "tags": {},
+            }
+        )
+        for_each_task = RunJobActivity(
+            name=inner_job_name,
+            task_key=inner_job_name,
+            pipeline=inner_pipeline,
+        )
+
     return ForEachActivity(
         **base_kwargs,
         items_string=items_string,
-        inner_activities=_parse_for_each_tasks(activity.get("activities")) or [],
+        for_each_task=for_each_task,
         concurrency=activity.get("batch_count"),
     )
-
-
-def _parse_for_each_tasks(tasks: list[dict] | None) -> list[Activity]:
-    """
-    Parses multiple task definitions within a ForEach task.
-
-    Args:
-        tasks: List of nested activity definitions.
-
-    Returns:
-        Translated activities as ``Activity`` objects.
-    """
-    if tasks is None:
-        return []
-    parsed: list[Activity] = []
-    for task in tasks:
-        result = _parse_for_each_task(task)
-        if isinstance(result, tuple):
-            parsed.append(result[0])
-            parsed.extend(result[1])
-            continue
-        if isinstance(result, Activity):
-            parsed.append(result)
-    return parsed
 
 
 def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
@@ -89,7 +95,7 @@ def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
     if value is None:
         return UnsupportedValue(value=items, message="Missing property 'value' in ForEach activity 'items'")
     # TODO: Move all dynamic function patterns to a common enum list
-    array_pattern = r"@array\('(.+)'\)"
+    array_pattern = r"@array\(\[(.+)\]\)"
     match = re.match(string=value, pattern=array_pattern)
     if match:
         matched_item = match.group(1)
@@ -117,7 +123,7 @@ def _parse_array_string(array_string: str) -> str:
     """
     double_quote_character = '"'
     single_quote_character = "'"
-    test = f"""["{'","'.join([f'{element.replace(single_quote_character, "").replace(double_quote_character, "")}' for element in array_string.split(',')])}"]"""
+    test = f'["{'","'.join([f'{element.replace(single_quote_character, "").replace(double_quote_character, "")}' for element in array_string.split(',')])}"]'
     return test
 
 
@@ -136,7 +142,7 @@ def _parse_for_each_task(task: dict) -> Activity | tuple[Activity, list[Activity
         # Fall back to translating the original task; translate_activity will normalize
         # any unsupported results into placeholder activities.
         task_with_filtered_parameters = task
-    activity_translator = importlib.import_module("wkmigrate.activity_translators.activity_translator")
+    activity_translator = importlib.import_module("wkmigrate.translators.activity_translators.activity_translator")
     return activity_translator.translate_activity(task_with_filtered_parameters)
 
 
