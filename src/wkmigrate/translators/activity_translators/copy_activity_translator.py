@@ -6,7 +6,7 @@ properties, and column mappings.Translators should emit ``UnsupportedValue`` obj
 inputs.
 """
 
-from wkmigrate.models.ir.activities import ColumnMapping, CopyActivity
+from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.dataset_parsers import parse_format_options

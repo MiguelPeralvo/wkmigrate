@@ -7,29 +7,38 @@ and nested activity tasks and artifacts.
 """
 
 from __future__ import annotations
-
-from typing import Any
-
-from wkmigrate.models.ir.activities import ForEachActivity
+from importlib import import_module
+from wkmigrate.models.ir.pipeline import ForEachActivity
+from wkmigrate.models.workflows.artifacts import PreparedActivity, PreparedWorkflow
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
 
 def prepare_for_each_activity(
     activity: ForEachActivity,
-    inner_task: dict[str, Any],
-) -> dict[str, Any]:
+    default_files_to_delta_sinks: bool | None,
+) -> tuple[PreparedActivity, PreparedWorkflow | None]:
     """
     Builds the task payload for a ForEach activity.
 
     Args:
         activity: Activity definition emitted by the translators
-        inner_task: Prepared task payload for the inner activity
+        default_files_to_delta_sinks: Optional override for DLT generation
 
     Returns:
-        Dictionary containing the ForEach task configuration.
+        Prepared activity and workflow containing the ForEach task configuration.
     """
-    result: dict[str, Any] = {"task": inner_task}
-    if activity.items_string is not None:
-        result["inputs"] = activity.items_string
-    if activity.concurrency is not None:
-        result["concurrency"] = activity.concurrency
-    return result
+
+    preparer = import_module("wkmigrate.preparers.preparer")
+    inner_prepared, inner_workflow = preparer.prepare_activity(
+        activity.for_each_task,
+        default_files_to_delta_sinks,
+    )
+
+    for_each_task = {
+        "task": inner_prepared.task,
+        "inputs": activity.items_string,
+        "concurrency": activity.concurrency,
+    }
+    task = PreparedActivity(task=prune_nones({**get_base_task(activity), "for_each_task": for_each_task}))
+
+    return task, inner_workflow

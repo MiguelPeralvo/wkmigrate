@@ -30,7 +30,7 @@ The activity translator currently recognizes the following ADF activity types:
 | Copy Data activities                      | `CopyActivity`                | Combines source dataset + properties, sink dataset + properties, and column-level mappings.                                                                               |
 
 <Admonition type="warning" title="Unsupported activities">
-When calling `to_pipeline` or `to_local_files`, unsupported activities are translated into placeholder notebook tasks 
+When calling `to_job` or `to_asset_bundle`, unsupported activities are translated into placeholder notebook tasks 
 with `/UNSUPPORTED_ADF_ACTIVITY` as the notebook path. The original ADF definition and prescriptive messages are attached 
 to the pipeline’s `not_translatable` metadata.
 </Admonition>
@@ -50,7 +50,7 @@ Datasets are translated from the ADF dataset properties and linked service defin
 | Azure SQL Database tables                 | `SqlTableDataset`       | Captures server host, database, schema, table name, and connection options such as timeout and isolation.       |
 
 <Admonition type="warning" title="Unsupported dataset types">
-When calling `to_pipeline` or `to_local_files`, unsupported datasets will not generate valid code or job configuration. A
+When calling `to_job` or `to_asset_bundle`, unsupported datasets will not generate valid code or job configuration. A
 `NotTranslatableWarning` will be raised and a prescriptive message will be added to the pipeline's `not_translatable` metadata.
 </Admonition>
 
@@ -68,7 +68,7 @@ The following linked services are supported:
 | Azure SQL Server                  | `SqlLinkedService`               | Captures host name, database, and authentication details (for example user name and authentication type); used when translating Azure SQL datasets.                    |
 
 <Admonition type="warning" title="Unsupported linked services">
-When calling `to_pipeline` or `to_local_files`, unsupported datasets will not generate valid code or job configuration. A
+When calling `to_job` or `to_asset_bundle`, unsupported datasets will not generate valid code or job configuration. A
 `NotTranslatableWarning` will be raised and a prescriptive message will be added to the pipeline's `not_translatable` metadata.
 </Admonition>
 

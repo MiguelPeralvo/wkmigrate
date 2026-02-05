@@ -5,7 +5,7 @@ representations. Each translator must validate required fields, parse the activi
 and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
-from wkmigrate.models.ir.activities import SparkPythonActivity
+from wkmigrate.models.ir.pipeline import SparkPythonActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 

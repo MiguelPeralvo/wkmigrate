@@ -6,7 +6,7 @@ and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
 import warnings
-from wkmigrate.models.ir.activities import DatabricksNotebookActivity
+from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
 

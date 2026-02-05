@@ -12,6 +12,77 @@ from wkmigrate.definition_stores import factory_definition_store, workspace_defi
 
 JSON_PATH = os.path.join(os.path.dirname(__file__), "resources", "json")
 YAML_PATH = os.path.join(os.path.dirname(__file__), "resources", "yaml")
+ACTIVITIES_PATH = os.path.join(os.path.dirname(__file__), "resources", "activities")
+
+
+def load_fixtures(filename: str) -> list[dict[str, Any]]:
+    """Load test fixtures from a JSON file in the activities directory."""
+    filepath = os.path.join(ACTIVITIES_PATH, filename)
+    with open(filepath, "rb") as f:
+        return json.load(f)
+
+
+def get_base_kwargs(activity: dict) -> dict[str, Any]:
+    """Build base kwargs for activity translators."""
+    return {
+        "name": activity.get("name", "UNNAMED_TASK"),
+        "task_key": activity.get("name", "UNNAMED_TASK"),
+        "description": activity.get("description"),
+        "timeout_seconds": None,
+        "max_retries": None,
+        "min_retry_interval_millis": None,
+        "depends_on": None,
+        "new_cluster": None,
+        "libraries": activity.get("libraries"),
+    }
+
+
+@pytest.fixture
+def notebook_activity_fixtures() -> list[dict]:
+    """Load notebook activity test fixtures."""
+    return load_fixtures("notebook_activities.json")
+
+
+@pytest.fixture
+def spark_jar_activity_fixtures() -> list[dict]:
+    """Load Spark JAR activity test fixtures."""
+    return load_fixtures("spark_jar_activities.json")
+
+
+@pytest.fixture
+def spark_python_activity_fixtures() -> list[dict]:
+    """Load Spark Python activity test fixtures."""
+    return load_fixtures("spark_python_activities.json")
+
+
+@pytest.fixture
+def for_each_activity_fixtures() -> list[dict]:
+    """Load ForEach activity test fixtures."""
+    return load_fixtures("for_each_activities.json")
+
+
+@pytest.fixture
+def if_condition_activity_fixtures() -> list[dict]:
+    """Load IfCondition activity test fixtures."""
+    return load_fixtures("if_condition_activities.json")
+
+
+@pytest.fixture
+def unsupported_activity_fixtures() -> list[dict]:
+    """Load unsupported activity test fixtures."""
+    return load_fixtures("unsupported_activities.json")
+
+
+@pytest.fixture
+def linked_service_fixtures() -> list[dict]:
+    """Load linked service test fixtures."""
+    return load_fixtures("linked_services.json")
+
+
+@pytest.fixture
+def complex_pipeline_fixtures() -> list[dict]:
+    """Load complex pipeline test fixtures."""
+    return load_fixtures("pipelines.json")
 
 
 @dataclass

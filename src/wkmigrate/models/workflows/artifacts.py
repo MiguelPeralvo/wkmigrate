@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
+from typing import Any
 from databricks.sdk.service.jobs import NotebookTask, PipelineTask
-
 from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
 
 
@@ -55,9 +55,29 @@ class PreparedWorkflow:
         inner_jobs: Additional job settings created for nested ForEach tasks.
     """
 
-    job_settings: dict
-    notebooks: list[NotebookArtifact] | None
-    pipelines: list[PipelineInstruction] | None
-    secrets: list[SecretInstruction] | None
-    unsupported: list[dict] | None
-    inner_jobs: list[dict] | None
+    job_settings: dict[str, Any]
+    notebooks: list[NotebookArtifact] | None = None
+    pipelines: list[PipelineInstruction] | None = None
+    secrets: list[SecretInstruction] | None = None
+    unsupported: list[dict] | None = None
+    inner_jobs: list[dict] | None = None
+
+
+@dataclass(slots=True)
+class PreparedActivity:
+    """
+    Artifacts generated while preparing a workflow task.
+
+    Attributes:
+        task: Task configuration as a dictionary.
+        notebooks: List of ``NotebookArtifact`` objects to upload.
+        pipelines: List of ``PipelineInstruction`` objects describing DLT pipelines to create.
+        secrets: List of ``SecretInstruction`` objects describing secrets to materialize.
+        inner_jobs: Additional job settings created for nested ForEach tasks.
+    """
+
+    task: dict[str, Any]
+    notebooks: list[NotebookArtifact] | None = None
+    pipelines: list[PipelineInstruction] | None = None
+    secrets: list[SecretInstruction] | None = None
+    inner_jobs: list[dict] | None = None

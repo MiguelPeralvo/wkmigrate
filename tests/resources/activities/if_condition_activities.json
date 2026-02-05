@@ -1,0 +1,278 @@
+[
+  {
+    "description": "IfCondition activity with equals expression and both branches",
+    "input": {
+      "name": "check_status",
+      "type": "IfCondition",
+      "description": "Check if status is success",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@equals('success', 'success')"
+      },
+      "if_true_activities": [
+        {
+          "name": "process_success",
+          "type": "DatabricksNotebook",
+          "description": "Handle success case",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.01:00:00",
+            "retry": 0,
+            "retry_interval_in_seconds": 30
+          },
+          "notebook_path": "/Workspace/notebooks/success_handler"
+        }
+      ],
+      "if_false_activities": [
+        {
+          "name": "process_failure",
+          "type": "DatabricksNotebook",
+          "description": "Handle failure case",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.01:00:00",
+            "retry": 0,
+            "retry_interval_in_seconds": 30
+          },
+          "notebook_path": "/Workspace/notebooks/failure_handler"
+        }
+      ]
+    },
+    "expected": {
+      "name": "check_status",
+      "task_key": "check_status",
+      "activity_type": "IfCondition",
+      "description": "Check if status is success",
+      "op": "EQUAL_TO",
+      "left": "success",
+      "right": "success",
+      "child_activities_count": 2
+    }
+  },
+  {
+    "description": "IfCondition activity with only if_true branch",
+    "input": {
+      "name": "check_mode",
+      "type": "IfCondition",
+      "description": "Check processing mode",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@equals('batch', 'batch')"
+      },
+      "if_true_activities": [
+        {
+          "name": "batch_process",
+          "type": "DatabricksNotebook",
+          "description": "Run batch processing",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.02:00:00"
+          },
+          "notebook_path": "/Workspace/notebooks/batch_process"
+        }
+      ]
+    },
+    "expected": {
+      "name": "check_mode",
+      "task_key": "check_mode",
+      "activity_type": "IfCondition",
+      "op": "EQUAL_TO",
+      "left": "batch",
+      "right": "batch",
+      "child_activities_count": 1
+    }
+  },
+  {
+    "description": "IfCondition activity with greater than expression",
+    "input": {
+      "name": "check_threshold",
+      "type": "IfCondition",
+      "description": "Check if value exceeds threshold",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@greater(100, 50)"
+      },
+      "if_true_activities": [
+        {
+          "name": "high_volume_process",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/Workspace/notebooks/high_volume",
+          "depends_on": [],
+          "policy": {"timeout": "0.01:00:00"}
+        }
+      ],
+      "if_false_activities": [
+        {
+          "name": "low_volume_process",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/Workspace/notebooks/low_volume",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:30:00"}
+        }
+      ]
+    },
+    "expected": {
+      "name": "check_threshold",
+      "task_key": "check_threshold",
+      "activity_type": "IfCondition",
+      "op": "GREATER_THAN",
+      "left": "100",
+      "right": "50",
+      "child_activities_count": 2
+    }
+  },
+  {
+    "description": "IfCondition activity with nested ForEach in false branch",
+    "input": {
+      "name": "conditional_foreach",
+      "type": "IfCondition",
+      "description": "Conditionally run foreach",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@equals('single', 'batch')"
+      },
+      "if_true_activities": [
+        {
+          "name": "single_process",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/Workspace/notebooks/single",
+          "depends_on": [],
+          "policy": {"timeout": "0.01:00:00"}
+        }
+      ],
+      "if_false_activities": [
+        {
+          "name": "batch_foreach",
+          "type": "ForEach",
+          "depends_on": [],
+          "batch_count": 5,
+          "items": {
+            "type": "Expression",
+            "value": "@array(['a', 'b', 'c'])"
+          },
+          "activities": [
+            {
+              "name": "batch_item",
+              "type": "DatabricksNotebook",
+              "notebook_path": "/Workspace/notebooks/batch_item",
+              "depends_on": [],
+              "policy": {"timeout": "0.00:30:00"},
+              "base_parameters": {
+                "item": {"value": "@item()", "type": "Expression"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "expected": {
+      "name": "conditional_foreach",
+      "task_key": "conditional_foreach",
+      "activity_type": "IfCondition",
+      "op": "EQUAL_TO",
+      "left": "single",
+      "right": "batch",
+      "child_activities_count": 2
+    }
+  },
+  {
+    "description": "IfCondition activity with less than expression",
+    "input": {
+      "name": "check_count",
+      "type": "IfCondition",
+      "description": "Check record count",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@less(10, 100)"
+      },
+      "if_true_activities": [
+        {
+          "name": "small_dataset",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/Workspace/notebooks/small",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:15:00"}
+        }
+      ]
+    },
+    "expected": {
+      "name": "check_count",
+      "task_key": "check_count",
+      "activity_type": "IfCondition",
+      "op": "LESS_THAN",
+      "left": "10",
+      "right": "100",
+      "child_activities_count": 1
+    }
+  },
+  {
+    "description": "IfCondition activity missing expression (should return UnsupportedValue)",
+    "input": {
+      "name": "invalid_condition",
+      "type": "IfCondition",
+      "description": "Missing expression",
+      "depends_on": [],
+      "if_true_activities": [
+        {
+          "name": "task",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/test"
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing property 'expression'"
+  },
+  {
+    "description": "IfCondition activity with unsupported expression",
+    "input": {
+      "name": "unsupported_condition",
+      "type": "IfCondition",
+      "description": "Unsupported expression type",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@and(true, false)"
+      },
+      "if_true_activities": [
+        {
+          "name": "task",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/test",
+          "depends_on": [],
+          "policy": {"timeout": "0.01:00:00"}
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "Unsupported conditional expression"
+  },
+  {
+    "description": "IfCondition activity with no child activities (should warn)",
+    "input": {
+      "name": "empty_condition",
+      "type": "IfCondition",
+      "description": "No child activities",
+      "depends_on": [],
+      "expression": {
+        "type": "Expression",
+        "value": "@equals('a', 'b')"
+      }
+    },
+    "expected": {
+      "name": "empty_condition",
+      "task_key": "empty_condition",
+      "activity_type": "IfCondition",
+      "op": "EQUAL_TO",
+      "left": "a",
+      "right": "b",
+      "child_activities_count": 0
+    },
+    "expects_warnings": true
+  }
+]

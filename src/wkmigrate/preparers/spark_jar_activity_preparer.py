@@ -4,12 +4,13 @@ JAR task definition from the translated Spark JAR activity.
 """
 
 from __future__ import annotations
-from databricks.sdk.service.jobs import SparkJarTask
 
-from wkmigrate.models.ir.activities import SparkJarActivity
+from wkmigrate.models.ir.pipeline import SparkJarActivity
+from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
 
-def prepare_spark_jar_activity(activity: SparkJarActivity) -> SparkJarTask:
+def prepare_spark_jar_activity(activity: SparkJarActivity) -> PreparedActivity:
     """
     Builds the task payload for a Spark JAR activity.
 
@@ -17,9 +18,15 @@ def prepare_spark_jar_activity(activity: SparkJarActivity) -> SparkJarTask:
         activity: Activity definition emitted by the translators
 
     Returns:
-        Dictionary Spark JAR task configuration
+        Spark JAR task configuration
     """
-    return SparkJarTask(
-        main_class_name=activity.main_class_name,
-        parameters=activity.parameters,
+    task = prune_nones(
+        {
+            **get_base_task(activity),
+            "spark_jar_task": {
+                "main_class_name": activity.main_class_name,
+                "parameters": activity.parameters,
+            },
+        }
     )
+    return PreparedActivity(task=task)

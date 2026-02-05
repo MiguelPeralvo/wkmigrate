@@ -1,0 +1,133 @@
+[
+  {
+    "description": "Basic Spark Python activity with minimal configuration",
+    "input": {
+      "name": "run_basic_python",
+      "type": "DatabricksSparkPython",
+      "description": "Execute a basic Python script",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00",
+        "retry": 0,
+        "retry_interval_in_seconds": 30
+      },
+      "python_file": "dbfs:/scripts/basic_script.py"
+    },
+    "expected": {
+      "name": "run_basic_python",
+      "task_key": "run_basic_python",
+      "activity_type": "DatabricksSparkPython",
+      "description": "Execute a basic Python script",
+      "timeout_seconds": 3600,
+      "max_retries": 0,
+      "min_retry_interval_millis": 30000,
+      "python_file": "dbfs:/scripts/basic_script.py",
+      "parameters": null
+    }
+  },
+  {
+    "description": "Spark Python activity with parameters",
+    "input": {
+      "name": "run_parameterized_python",
+      "type": "DatabricksSparkPython",
+      "description": "Execute Python script with arguments",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.02:00:00",
+        "retry": 2,
+        "retry_interval_in_seconds": 60
+      },
+      "python_file": "dbfs:/scripts/etl_script.py",
+      "parameters": [
+        "--input", "/data/raw",
+        "--output", "/data/processed",
+        "--partitions", "100"
+      ]
+    },
+    "expected": {
+      "name": "run_parameterized_python",
+      "task_key": "run_parameterized_python",
+      "activity_type": "DatabricksSparkPython",
+      "description": "Execute Python script with arguments",
+      "timeout_seconds": 7200,
+      "max_retries": 2,
+      "min_retry_interval_millis": 60000,
+      "python_file": "dbfs:/scripts/etl_script.py",
+      "parameters": ["--input", "/data/raw", "--output", "/data/processed", "--partitions", "100"]
+    }
+  },
+  {
+    "description": "Spark Python activity with dependency",
+    "input": {
+      "name": "run_dependent_python",
+      "type": "DatabricksSparkPython",
+      "description": "Execute Python script after data ingestion",
+      "depends_on": [
+        {
+          "activity": "ingest_data",
+          "dependency_conditions": ["Succeeded"]
+        }
+      ],
+      "policy": {
+        "timeout": "0.00:45:00",
+        "retry": 1,
+        "retry_interval_in_seconds": 30
+      },
+      "python_file": "dbfs:/scripts/transform_data.py",
+      "parameters": ["--mode", "incremental"]
+    },
+    "expected": {
+      "name": "run_dependent_python",
+      "task_key": "run_dependent_python",
+      "activity_type": "DatabricksSparkPython",
+      "description": "Execute Python script after data ingestion",
+      "timeout_seconds": 2700,
+      "max_retries": 1,
+      "min_retry_interval_millis": 30000,
+      "python_file": "dbfs:/scripts/transform_data.py",
+      "parameters": ["--mode", "incremental"],
+      "depends_on": [{"task_key": "ingest_data", "outcome": null}]
+    }
+  },
+  {
+    "description": "Spark Python activity with workspace file path",
+    "input": {
+      "name": "run_workspace_python",
+      "type": "DatabricksSparkPython",
+      "description": "Execute Python script from workspace",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:30:00",
+        "retry": 0,
+        "retry_interval_in_seconds": 30
+      },
+      "python_file": "/Workspace/scripts/analytics.py",
+      "parameters": ["--date", "2024-01-01"]
+    },
+    "expected": {
+      "name": "run_workspace_python",
+      "task_key": "run_workspace_python",
+      "activity_type": "DatabricksSparkPython",
+      "description": "Execute Python script from workspace",
+      "timeout_seconds": 5400,
+      "max_retries": 0,
+      "min_retry_interval_millis": 30000,
+      "python_file": "/Workspace/scripts/analytics.py",
+      "parameters": ["--date", "2024-01-01"]
+    }
+  },
+  {
+    "description": "Spark Python activity missing python_file (should return UnsupportedValue)",
+    "input": {
+      "name": "invalid_python",
+      "type": "DatabricksSparkPython",
+      "description": "Missing Python file path",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing field 'python_file'"
+  }
+]

@@ -1,0 +1,189 @@
+[
+  {
+    "description": "Unsupported activity type creates placeholder notebook",
+    "input": {
+      "name": "web_activity",
+      "type": "WebActivity",
+      "description": "Call external API",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00",
+        "retry": 3,
+        "retry_interval_in_seconds": 30
+      },
+      "method": "POST",
+      "url": "https://api.example.com/webhook"
+    },
+    "expected": {
+      "name": "web_activity",
+      "task_key": "web_activity",
+      "activity_type": "WebActivity",
+      "timeout_seconds": 600,
+      "max_retries": 3,
+      "min_retry_interval_millis": 30000,
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
+    }
+  },
+  {
+    "description": "Set Variable activity creates placeholder",
+    "input": {
+      "name": "set_variable",
+      "type": "SetVariable",
+      "description": "Set pipeline variable",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:05:00"
+      },
+      "variable_name": "current_date",
+      "value": "2024-01-01"
+    },
+    "expected": {
+      "name": "set_variable",
+      "task_key": "set_variable",
+      "activity_type": "SetVariable",
+      "timeout_seconds": 300,
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
+    }
+  },
+  {
+    "description": "Execute Pipeline activity creates placeholder",
+    "input": {
+      "name": "call_child_pipeline",
+      "type": "ExecutePipeline",
+      "description": "Execute child pipeline",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00"
+      },
+      "pipeline": {
+        "reference_name": "child_pipeline",
+        "type": "PipelineReference"
+      }
+    },
+    "expected": {
+      "name": "call_child_pipeline",
+      "task_key": "call_child_pipeline",
+      "activity_type": "ExecutePipeline",
+      "timeout_seconds": 3600,
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
+    }
+  },
+  {
+    "description": "Lookup activity creates placeholder",
+    "input": {
+      "name": "lookup_data",
+      "type": "Lookup",
+      "description": "Lookup configuration data",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:30:00",
+        "retry": 2,
+        "retry_interval_in_seconds": 60
+      },
+      "source": {
+        "type": "AzureSqlSource"
+      }
+    },
+    "expected": {
+      "name": "lookup_data",
+      "task_key": "lookup_data",
+      "activity_type": "Lookup",
+      "timeout_seconds": 1800,
+      "max_retries": 2,
+      "min_retry_interval_millis": 60000,
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
+    }
+  },
+  {
+    "description": "Wait activity creates placeholder",
+    "input": {
+      "name": "wait_task",
+      "type": "Wait",
+      "description": "Wait before proceeding",
+      "depends_on": [
+        {
+          "activity": "previous_task",
+          "dependency_conditions": ["Succeeded"]
+        }
+      ],
+      "wait_time_in_seconds": 300
+    },
+    "expected": {
+      "name": "wait_task",
+      "task_key": "wait_task",
+      "activity_type": "Wait",
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY",
+      "depends_on": [{"task_key": "previous_task", "outcome": null}]
+    }
+  },
+  {
+    "description": "Activity with no name gets default name",
+    "input": {
+      "type": "CustomActivity",
+      "description": "Custom activity without name"
+    },
+    "expected": {
+      "name": "UNNAMED_TASK",
+      "task_key": "UNNAMED_TASK",
+      "activity_type": "CustomActivity",
+      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
+    }
+  },
+  {
+    "description": "Activity with dependency on failed task creates UnsupportedValue",
+    "input": {
+      "name": "failure_handler",
+      "type": "DatabricksNotebook",
+      "description": "Handle upstream failure",
+      "depends_on": [
+        {
+          "activity": "upstream_task",
+          "dependency_conditions": ["Failed"]
+        }
+      ],
+      "notebook_path": "/Workspace/notebooks/error_handler",
+      "policy": {
+        "timeout": "0.00:30:00"
+      }
+    },
+    "expected_dependency_unsupported": true
+  },
+  {
+    "description": "Activity with dependency on skipped task creates UnsupportedValue",
+    "input": {
+      "name": "skip_handler",
+      "type": "DatabricksNotebook",
+      "description": "Handle upstream skip",
+      "depends_on": [
+        {
+          "activity": "upstream_task",
+          "dependency_conditions": ["Skipped"]
+        }
+      ],
+      "notebook_path": "/Workspace/notebooks/skip_handler",
+      "policy": {
+        "timeout": "0.00:30:00"
+      }
+    },
+    "expected_dependency_unsupported": true
+  },
+  {
+    "description": "Activity with multiple dependency conditions creates UnsupportedValue",
+    "input": {
+      "name": "multi_condition",
+      "type": "DatabricksNotebook",
+      "description": "Multiple conditions",
+      "depends_on": [
+        {
+          "activity": "upstream_task",
+          "dependency_conditions": ["Succeeded", "Failed"]
+        }
+      ],
+      "notebook_path": "/Workspace/notebooks/handler",
+      "policy": {
+        "timeout": "0.00:30:00"
+      }
+    },
+    "expected_dependency_unsupported": true
+  }
+]

@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
-from wkmigrate.models.ir.activities import Activity, DatabricksNotebookActivity
+from wkmigrate.models.ir.pipeline import Activity, DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 

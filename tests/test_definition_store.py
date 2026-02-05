@@ -3,6 +3,7 @@ import pytest
 from wkmigrate.definition_stores.definition_store import DefinitionStore
 from wkmigrate.definition_stores.factory_definition_store import FactoryDefinitionStore
 from wkmigrate.definition_stores.workspace_definition_store import WorkspaceDefinitionStore
+from wkmigrate.models.ir.pipeline import Pipeline
 
 
 class TestDefinitionStoreContracts:
@@ -46,7 +47,8 @@ class TestDefinitionStoreContracts:
 
         assert isinstance(store, DefinitionStore)
         pipeline = store.load("TEST_PIPELINE_NAME")
-        assert isinstance(pipeline, dict)
+        assert isinstance(pipeline, Pipeline)
+        assert pipeline.name == "TEST_PIPELINE_NAME"
 
     def test_workspace_definition_store_uses_definition_store_interface(
         self,
@@ -62,6 +64,7 @@ class TestDefinitionStoreContracts:
         )
 
         assert isinstance(store, DefinitionStore)
-        # The mocked jobs API starts empty; loading a non-existent workflow should raise a ValueError.
-        with pytest.raises(ValueError):
-            store.load("WORKFLOW")
+        # WorkspaceDefinitionStore no longer has load method - it is a sink for pipelines
+        # Verify that to_job and to_asset_bundle methods are available
+        assert hasattr(store, "to_job")
+        assert hasattr(store, "to_asset_bundle")

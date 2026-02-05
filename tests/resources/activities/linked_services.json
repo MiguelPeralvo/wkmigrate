@@ -1,0 +1,206 @@
+[
+  {
+    "description": "Azure Databricks linked service with autoscaling cluster",
+    "input": {
+      "name": "databricks-autoscale-cluster",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "AzureDatabricks",
+        "description": "Databricks cluster with autoscaling",
+        "domain": "https://adb-123456789.1.azuredatabricks.net",
+        "new_cluster_node_type": "Standard_DS3_v2",
+        "new_cluster_version": "13.3.x-scala2.12",
+        "new_cluster_num_of_worker": "2:10",
+        "new_cluster_custom_tags": {
+          "environment": "production",
+          "team": "data-engineering"
+        },
+        "new_cluster_driver_node_type": "Standard_DS4_v2",
+        "new_cluster_spark_conf": {
+          "spark.sql.shuffle.partitions": "400",
+          "spark.databricks.delta.preview.enabled": "true"
+        },
+        "new_cluster_spark_env_vars": {
+          "PYSPARK_PYTHON": "/databricks/python3/bin/python3",
+          "ENV": "prod"
+        },
+        "new_cluster_init_scripts": [
+          "/Users/admin@company.com/init_scripts/setup.sh",
+          "dbfs:/FileStore/scripts/common_init.sh",
+          "/Volumes/main/scripts/volume_init.sh"
+        ],
+        "new_cluster_log_destination": "dbfs:/cluster-logs/production"
+      }
+    },
+    "expected": {
+      "service_name": "databricks-autoscale-cluster",
+      "service_type": "databricks",
+      "host_name": "https://adb-123456789.1.azuredatabricks.net",
+      "node_type_id": "Standard_DS3_v2",
+      "spark_version": "13.3.x-scala2.12",
+      "driver_node_type_id": "Standard_DS4_v2",
+      "autoscale": {"min_workers": 2, "max_workers": 10},
+      "custom_tags": {
+        "environment": "production",
+        "team": "data-engineering",
+        "CREATED_BY_WKMIGRATE": ""
+      },
+      "spark_conf": {
+        "spark.sql.shuffle.partitions": "400",
+        "spark.databricks.delta.preview.enabled": "true"
+      },
+      "spark_env_vars": {
+        "PYSPARK_PYTHON": "/databricks/python3/bin/python3",
+        "ENV": "prod"
+      },
+      "init_scripts": [
+        {"workspace": {"destination": "/Users/admin@company.com/init_scripts/setup.sh"}},
+        {"dbfs": {"destination": "dbfs:/FileStore/scripts/common_init.sh"}},
+        {"volumes": {"destination": "/Volumes/main/scripts/volume_init.sh"}}
+      ],
+      "cluster_log_conf": {"dbfs": {"destination": "dbfs:/cluster-logs/production"}}
+    }
+  },
+  {
+    "description": "Azure Databricks linked service with fixed cluster size",
+    "input": {
+      "name": "databricks-fixed-cluster",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "AzureDatabricks",
+        "domain": "https://adb-987654321.2.azuredatabricks.net",
+        "new_cluster_node_type": "Standard_D4s_v3",
+        "new_cluster_version": "14.0.x-scala2.12",
+        "new_cluster_num_of_worker": "4"
+      }
+    },
+    "expected": {
+      "service_name": "databricks-fixed-cluster",
+      "service_type": "databricks",
+      "host_name": "https://adb-987654321.2.azuredatabricks.net",
+      "node_type_id": "Standard_D4s_v3",
+      "spark_version": "14.0.x-scala2.12",
+      "num_workers": 4,
+      "custom_tags": {"CREATED_BY_WKMIGRATE": ""}
+    }
+  },
+  {
+    "description": "Azure Databricks linked service - minimal configuration",
+    "input": {
+      "name": "databricks-minimal",
+      "properties": {
+        "domain": "https://adb-111111111.3.azuredatabricks.net",
+        "new_cluster_node_type": "Standard_DS3_v2",
+        "new_cluster_version": "12.2.x-scala2.12"
+      }
+    },
+    "expected": {
+      "service_name": "databricks-minimal",
+      "service_type": "databricks",
+      "host_name": "https://adb-111111111.3.azuredatabricks.net",
+      "node_type_id": "Standard_DS3_v2",
+      "spark_version": "12.2.x-scala2.12",
+      "custom_tags": {"CREATED_BY_WKMIGRATE": ""}
+    }
+  },
+  {
+    "description": "Azure Databricks linked service with invalid worker count",
+    "input": {
+      "name": "databricks-invalid-workers",
+      "properties": {
+        "domain": "https://adb-222222222.4.azuredatabricks.net",
+        "new_cluster_node_type": "Standard_DS3_v2",
+        "new_cluster_version": "13.3.x-scala2.12",
+        "new_cluster_num_of_worker": "invalid"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Invalid number of workers"
+  },
+  {
+    "description": "Empty/null Databricks linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing Databricks linked service definition"
+  },
+  {
+    "description": "SQL Server linked service - full configuration",
+    "input": {
+      "name": "sql-server-production",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "SqlServer",
+        "server": "sql-server-001.database.windows.net",
+        "database": "production_db",
+        "user_name": "admin_user",
+        "authentication_type": "SQL Authentication"
+      }
+    },
+    "expected": {
+      "service_name": "sql-server-production",
+      "service_type": "sqlserver",
+      "host": "sql-server-001.database.windows.net",
+      "database": "production_db",
+      "user_name": "admin_user",
+      "authentication_type": "SQL Authentication"
+    }
+  },
+  {
+    "description": "SQL Server linked service - minimal configuration",
+    "input": {
+      "name": "sql-server-minimal",
+      "properties": {
+        "server": "sql-server-002.database.windows.net",
+        "database": "test_db"
+      }
+    },
+    "expected": {
+      "service_name": "sql-server-minimal",
+      "service_type": "sqlserver",
+      "host": "sql-server-002.database.windows.net",
+      "database": "test_db"
+    }
+  },
+  {
+    "description": "Empty/null SQL Server linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing SQL Server linked service definition"
+  },
+  {
+    "description": "ABFS linked service - full configuration",
+    "input": {
+      "name": "abfs-storage-account",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "AzureBlobFS",
+        "url": "DefaultEndpointsProtocol=https;AccountName=mystorageaccount;EndpointSuffix=core.windows.net;",
+        "storage_account_name": "DefaultEndpointsProtocol=https;AccountName=mystorageaccount;EndpointSuffix=core.windows.net;"
+      }
+    },
+    "expected": {
+      "service_name": "abfs-storage-account",
+      "service_type": "abfs",
+      "url": "https://mystorageaccount.blob.core.windows.net/",
+      "storage_account_name": "mystorageaccount"
+    }
+  },
+  {
+    "description": "ABFS linked service - invalid connection string",
+    "input": {
+      "name": "abfs-invalid",
+      "properties": {
+        "url": "invalid-connection-string",
+        "storage_account_name": "invalid"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Could not parse"
+  },
+  {
+    "description": "Empty/null ABFS linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing ABFS linked service definition"
+  }
+]

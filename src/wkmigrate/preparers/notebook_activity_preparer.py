@@ -4,12 +4,12 @@ task definition from the translated notebook activity.
 """
 
 from __future__ import annotations
-from databricks.sdk.service.jobs import NotebookTask
+from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
+from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
-from wkmigrate.models.ir.activities import DatabricksNotebookActivity
 
-
-def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> NotebookTask:
+def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> PreparedActivity:
     """
     Builds the task payload for a Databricks notebook activity.
 
@@ -18,7 +18,13 @@ def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> NotebookT
     Returns:
         Databricks notebook task configuration
     """
-    return NotebookTask(
-        notebook_path=activity.notebook_path,
-        base_parameters=activity.base_parameters,
+    task = prune_nones(
+        {
+            **get_base_task(activity),
+            "notebook_task": {
+                "notebook_path": activity.notebook_path,
+                "base_parameters": activity.base_parameters,
+            },
+        }
     )
+    return PreparedActivity(task=task)

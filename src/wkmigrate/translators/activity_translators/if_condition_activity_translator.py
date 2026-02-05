@@ -10,7 +10,7 @@ import re
 import warnings
 
 from wkmigrate.enums.condition_operation_pattern import ConditionOperationPattern
-from wkmigrate.models.ir.activities import Activity, IfConditionActivity
+from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
@@ -48,7 +48,7 @@ def translate_if_condition_activity(
     if not parsed_left:
         return UnsupportedValue(value=activity, message="Missing field 'left' in if condition expression")
 
-    parsed_right = expression.get("parsed_right")
+    parsed_right = expression.get("right")
     if not parsed_right:
         return UnsupportedValue(value=activity, message="Missing field 'right' in if condition expression")
 
@@ -103,7 +103,7 @@ def _parse_child_activities(
     for activity in child_activities:
         depends_on = activity.setdefault("depends_on", [])
         depends_on.append({"activity": parent_task_name, "outcome": parent_task_outcome})
-        activity_translator = importlib.import_module("wkmigrate.activity_translators.activity_translator")
+        activity_translator = importlib.import_module("wkmigrate.translators.activity_translators.activity_translator")
         result = activity_translator.translate_activity(activity, is_conditional_task=True)
         if isinstance(result, tuple):
             translated.append(result[0])

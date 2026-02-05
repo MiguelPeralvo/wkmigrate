@@ -12,20 +12,20 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 import autopep8  # type: ignore
-from databricks.sdk.service.jobs import NotebookTask, PipelineTask
 
 from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
 from wkmigrate.datasets.data_type_mapping import parse_spark_data_type
-from wkmigrate.models.ir.activities import CopyActivity
+from wkmigrate.models.ir.pipeline import CopyActivity
 from wkmigrate.models.ir.datasets import Dataset, DatasetProperties
-from wkmigrate.models.workflows.artifacts import CopyDataArtifact, NotebookArtifact
-from wkmigrate.models.workflows.instructions import SecretInstruction
+from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
+from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
 
 def prepare_copy_activity(
     activity: CopyActivity,
     default_files_to_delta_sinks: bool | None,
-) -> CopyDataArtifact:
+) -> PreparedActivity:
     """
     Builds tasks and artifacts for a Copy activity.
 
@@ -34,7 +34,7 @@ def prepare_copy_activity(
         default_files_to_delta_sinks: Optional override for DLT generation
 
     Returns:
-        Copy preparation results including task payloads and artifacts
+        PreparedActivity containing task configuration and artifacts
     """
     source_definition = _merge_dataset_definition(activity.source_dataset, activity.source_properties)
     sink_definition = _merge_dataset_definition(activity.sink_dataset, activity.sink_properties)
@@ -57,20 +57,41 @@ def prepare_copy_activity(
         files_to_delta_sinks,
     )
 
+    base_task = get_base_task(activity)
+
     if not files_to_delta_sinks:
-        return CopyDataArtifact(
-            task=NotebookTask(notebook_path=notebook_path),
-            notebook=notebook,
-            secrets=secrets_to_collect,
-            pipeline_name=None,
+        # Standard notebook execution
+        task = prune_nones(
+            {
+                **base_task,
+                "notebook_task": {"notebook_path": notebook_path},
+            }
+        )
+        return PreparedActivity(
+            task=task,
+            notebooks=[notebook],
+            secrets=secrets_to_collect if secrets_to_collect else None,
         )
 
+    # DLT pipeline execution - pipeline_id will be resolved later
     pipeline_name = f"{activity.task_key}_pipeline"
-    return CopyDataArtifact(
-        task=PipelineTask(pipeline_id="__PIPELINE_ID__"),
-        notebook=notebook,
-        secrets=secrets_to_collect,
-        pipeline_name=pipeline_name,
+    task = prune_nones(
+        {
+            **base_task,
+            "pipeline_task": {"pipeline_id": "__PIPELINE_ID__"},
+        }
+    )
+    return PreparedActivity(
+        task=task,
+        notebooks=[notebook],
+        secrets=secrets_to_collect if secrets_to_collect else None,
+        pipelines=[
+            PipelineInstruction(
+                task_ref=task,
+                file_path=notebook.file_path,
+                name=pipeline_name,
+            )
+        ],
     )
 
 

@@ -20,7 +20,7 @@ from wkmigrate.translators.activity_translators.spark_python_activity_translator
 from wkmigrate.translators.activity_translators.if_condition_activity_translator import translate_if_condition_activity
 from wkmigrate.translators.activity_translators.for_each_activity_translator import translate_for_each_activity
 from wkmigrate.translators.activity_translators.copy_activity_translator import translate_copy_activity
-from wkmigrate.models.ir.activities import Activity, Dependency, IfConditionActivity
+from wkmigrate.models.ir.pipeline import Activity, Dependency, IfConditionActivity
 from wkmigrate.models.ir.translator_result import ActivityTranslatorResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
@@ -220,6 +220,16 @@ def _parse_dependencies(
 
 
 def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> Dependency | UnsupportedValue:
+    """
+    Parses an individual dependency from a dictionary.
+
+    Args:
+        dependency: Dependency definition as a ``dict``
+        is_conditional_task: Whether the task is a conditional task
+
+    Returns:
+        Dependency object describing the upstream relationship.
+    """
     conditions = dependency.get("dependency_conditions", [])
     if len(conditions) > 1:
         return UnsupportedValue(value=dependency, message="Dependencies with multiple conditions are not supported.")

@@ -35,7 +35,7 @@ from databricks.sdk.service.jobs import (
     Task,
 )
 from databricks.sdk.service.pipelines import NotebookLibrary, PipelineLibrary
-from databricks.sdk.service.workspace import ImportFormat, Language
+from databricks.sdk.service.workspace import ExportFormat, ImportFormat, Language
 from typing_extensions import deprecated
 
 from wkmigrate.definition_stores.definition_store import DefinitionStore
@@ -139,36 +139,36 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         return self.to_job(pipeline_definition)
 
+    @deprecated("Use 'to_asset_bundle' as of wkmigrate 0.0.3")
     def to_local_files(self, pipeline_definition: Pipeline, local_directory: str) -> None:
         """
-        Materializes notebooks, workflows definitions, secret definitions, and unsupported nodes as files in a local directory.
+        Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
 
         Args:
             pipeline_definition: Prepared pipeline as a ``Pipeline``.
             local_directory: Destination directory for generated artifacts.
         """
-        prepared = self._prepare_workflow(pipeline_definition)
-        for instruction in prepared.pipelines or []:
-            pipeline_task = instruction.task_ref.get("pipeline_task")
-            if isinstance(pipeline_task, PipelineTask):
-                instruction.task_ref["pipeline_task"] = PipelineTask(pipeline_id=instruction.local_identifier)
-            else:
-                instruction.task_ref["pipeline_task"] = {"pipeline_id": instruction.local_identifier}
-        self._write_local_artifacts(prepared, local_directory)
+        self.to_asset_bundle(pipeline_definition, local_directory, download_notebooks=True)
 
-    def to_asset_bundle(self, pipeline_definition: Pipeline | dict, bundle_directory: str) -> None:
+    def to_asset_bundle(
+        self,
+        pipeline_definition: Pipeline | dict,
+        bundle_directory: str,
+        download_notebooks: bool = True,
+    ) -> None:
         """
         Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
 
         Args:
             pipeline_definition: Prepared pipeline as a ``Pipeline`` or raw dictionary payload.
             bundle_directory: Destination directory for the bundle artifacts.
+            download_notebooks: If True, downloads referenced notebooks from the workspace to the bundle.
         """
         pipeline_ir = (
             pipeline_definition if isinstance(pipeline_definition, Pipeline) else Pipeline(**pipeline_definition)
         )
         prepared = self._prepare_workflow(pipeline_ir)
-        self._write_asset_bundle(prepared, bundle_directory)
+        self._write_asset_bundle(prepared, bundle_directory, download_notebooks=download_notebooks)
 
     def _prepare_workflow(self, pipeline_definition: Pipeline) -> PreparedWorkflow:
         """
@@ -181,7 +181,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
             PreparedWorkflow: Artifacts required to create the job.
         """
         return prepare_workflow(
-            pipeline_definition=pipeline_definition,
+            pipeline=pipeline_definition,
             files_to_delta_sinks=self.files_to_delta_sinks,
         )
 
@@ -330,31 +330,51 @@ class WorkspaceDefinitionStore(DefinitionStore):
         self._write_secrets(prepared.secrets or [], output_dir)
         self._write_unsupported(prepared.unsupported or [], output_dir)
 
-    def _write_asset_bundle(self, prepared: PreparedWorkflow, bundle_dir: str) -> None:
+    def _write_asset_bundle(
+        self,
+        prepared: PreparedWorkflow,
+        bundle_dir: str,
+        download_notebooks: bool = False,
+    ) -> None:
         """
         Writes an asset bundle layout containing job configuration and related artifacts.
 
         Args:
             prepared: Prepared workflow artifacts.
             bundle_dir: Destination directory for the bundle.
+            download_notebooks: If True, downloads referenced notebooks from the workspace.
         """
         os.makedirs(bundle_dir, exist_ok=True)
         bundle_name = prepared.job_settings.get("name") or "workflow"
         resources_dir = os.path.join(bundle_dir, "resources")
         jobs_dir = os.path.join(resources_dir, "jobs")
         pipelines_dir = os.path.join(resources_dir, "pipelines")
-        notebooks_dir = os.path.join(resources_dir, "notebooks")
+        notebooks_dir = os.path.join(bundle_dir, "notebooks")
 
         os.makedirs(jobs_dir, exist_ok=True)
         os.makedirs(pipelines_dir, exist_ok=True)
         os.makedirs(notebooks_dir, exist_ok=True)
 
-        job_file = os.path.join(jobs_dir, f"{bundle_name}.yml")
         job_settings = self._strip_inner_job_settings(dict(prepared.job_settings))
         job_settings.pop("not_translatable", None)
         inner_jobs = prepared.job_settings.get("inner_jobs", [])
+
+        if download_notebooks:
+            all_tasks = list(job_settings.get("tasks", []))
+            for inner_job in inner_jobs:
+                all_tasks.extend(inner_job.get("tasks", []))
+            workspace_paths = self._extract_workspace_notebook_paths(all_tasks)
+            workspace_paths = {p for p in workspace_paths if not p.startswith("/wkmigrate/")}
+            if workspace_paths:
+                path_mapping = self._download_workspace_notebooks(workspace_paths, notebooks_dir)
+                self._update_notebook_paths_for_bundle(job_settings.get("tasks", []), path_mapping)
+                for inner_job in inner_jobs:
+                    self._update_notebook_paths_for_bundle(inner_job.get("tasks", []), path_mapping)
+
         if inner_jobs:
             self._assign_inner_job_refs(job_settings.get("tasks", []))
+
+        job_file = os.path.join(jobs_dir, f"{bundle_name}.yml")
         job_resource = {"resources": {"jobs": {bundle_name: self._serialize_for_json(job_settings)}}}
         with open(job_file, "w", encoding="utf-8") as job_handle:
             yaml.safe_dump(job_resource, job_handle, sort_keys=False)
@@ -399,11 +419,138 @@ class WorkspaceDefinitionStore(DefinitionStore):
             output_dir: Destination directory for the ``notebooks`` folder.
         """
         os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(output_dir, exist_ok=True)
         for notebook in notebooks:
             file_path = os.path.join(output_dir, notebook.file_path.lstrip("/"))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as notebook_file:
                 notebook_file.write(notebook.content)
+
+    def _extract_workspace_notebook_paths(self, tasks: Iterable[dict]) -> set[str]:
+        """
+        Recursively extracts notebook paths referenced in notebook tasks.
+
+        Args:
+            tasks: Job tasks to scan for notebook paths.
+
+        Returns:
+            Set of unique workspace notebook paths.
+        """
+        paths: set[str] = set()
+        for task in tasks:
+            notebook_task = task.get("notebook_task")
+            if notebook_task:
+                path = notebook_task.get("notebook_path")
+                if path:
+                    paths.add(path)
+            for_each_task = task.get("for_each_task")
+            if for_each_task:
+                nested_task = for_each_task.get("task")
+                if isinstance(nested_task, dict):
+                    paths.update(self._extract_workspace_notebook_paths([nested_task]))
+                elif isinstance(nested_task, list):
+                    paths.update(self._extract_workspace_notebook_paths(nested_task))
+        return paths
+
+    def _download_workspace_notebooks(
+        self,
+        notebook_paths: Iterable[str],
+        notebooks_dir: str,
+    ) -> dict[str, str]:
+        """
+        Downloads notebooks from the workspace and saves them locally.
+
+        Args:
+            notebook_paths: Workspace paths to notebooks to download.
+            notebooks_dir: Local directory to save the notebooks.
+
+        Returns:
+            Mapping of original workspace paths to bundle-relative paths.
+        """
+        client = self._get_workspace_client()
+        os.makedirs(notebooks_dir, exist_ok=True)
+        path_mapping: dict[str, str] = {}
+
+        for workspace_path in notebook_paths:
+            result = self._download_single_notebook(client, workspace_path, notebooks_dir)
+            if result:
+                path_mapping[workspace_path] = result
+
+        return path_mapping
+
+    def _download_single_notebook(
+        self,
+        client: WorkspaceClient,
+        workspace_path: str,
+        notebooks_dir: str,
+    ) -> str | None:
+        """
+        Downloads a single notebook from the workspace.
+
+        Args:
+            client: Authenticated workspace client.
+            workspace_path: Workspace path to the notebook.
+            notebooks_dir: Local directory to save the notebook.
+
+        Returns:
+            Bundle-relative path if successful, None otherwise.
+        """
+        try:
+            return self._download_notebook_content(client, workspace_path, notebooks_dir)
+        except Exception as e:
+            warnings.warn(f"Failed to download notebook {workspace_path}: {e}", stacklevel=2)
+            return None
+
+    def _download_notebook_content(
+        self, client: WorkspaceClient, workspace_path: str, notebooks_dir: str
+    ) -> str | None:
+        """
+        Downloads the content of a notebook from the workspace.
+
+        Args:
+            client: Authenticated workspace client.
+            workspace_path: Workspace path to the notebook.
+            notebooks_dir: Local directory to save the notebook.
+
+        Returns:
+            Content of the notebook as a string.
+        """
+        export_response = client.workspace.export(path=workspace_path, format=ExportFormat.SOURCE)
+        content = export_response.content
+        if content is None:
+            warnings.warn(f"Notebook {workspace_path} has no content", stacklevel=2)
+            return None
+
+        file_name = os.path.basename(workspace_path)
+        if not file_name.endswith(".py"):
+            file_name += ".py"
+        local_full_path = os.path.join(notebooks_dir, file_name)
+        os.makedirs(os.path.dirname(local_full_path), exist_ok=True)
+
+        with open(local_full_path, "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(content).decode("utf-8"))
+        return f"./notebooks/{file_name}"
+
+    def _update_notebook_paths_for_bundle(self, tasks: list[dict], path_mapping: dict[str, str]) -> None:
+        """
+        Updates notebook paths in tasks to use local bundle paths.
+
+        Args:
+            tasks: Job tasks to update.
+            path_mapping: Mapping of workspace paths to local paths.
+        """
+        for task in tasks:
+            notebook_task = task.get("notebook_task")
+            if notebook_task:
+                original_path = notebook_task.get("notebook_path")
+                if original_path and original_path in path_mapping:
+                    notebook_task["notebook_path"] = path_mapping[original_path]
+            for_each_task = task.get("for_each_task")
+            if for_each_task:
+                nested_task = for_each_task.get("task")
+                if isinstance(nested_task, dict):
+                    self._update_notebook_paths_for_bundle([nested_task], path_mapping)
+                elif isinstance(nested_task, list):
+                    self._update_notebook_paths_for_bundle(nested_task, path_mapping)
 
     def _write_pipeline_resources(self, pipelines: Iterable[PipelineInstruction], pipelines_dir: str) -> None:
         """
@@ -705,6 +852,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         payload = deepcopy(job_settings)
         payload.pop("not_translatable", None)
+        payload.pop("inner_jobs", None)
         tasks = self._normalize_job_tasks(payload.get("tasks") or [])
         payload["tasks"] = [
             task if isinstance(task, Task) else Task.from_dict(self._serialize_for_json(task)) for task in tasks
@@ -744,14 +892,10 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         for task in tasks:
             run_job_task = task.get("run_job_task")
-            if (
-                run_job_task
-                and isinstance(run_job_task.get("job_id"), str)
-                and run_job_task.get("job_id").startswith("__INNER_JOB__:")
-            ):
-                job_id_value = run_job_task.get("job_id").split(":", 1)[1]
-                if job_id_value in job_id_map:
-                    run_job_task["job_id"] = job_id_map[job_id_value]
+            if run_job_task and isinstance(run_job_task, str) and run_job_task.startswith("__INNER_JOB__:"):
+                job_name = run_job_task.split(":", 1)[1]
+                if job_name in job_id_map:
+                    task["run_job_task"] = {"job_id": job_id_map[job_name]}
             for_each_task = task.get("for_each_task")
             if for_each_task:
                 nested_task = for_each_task.get("task")

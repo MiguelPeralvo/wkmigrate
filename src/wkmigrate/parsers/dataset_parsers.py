@@ -13,7 +13,8 @@ from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 def parse_format_options(dataset: dict) -> dict | UnsupportedValue:
     """
-    Parses the format options from a dataset definition. Parsing format options for dataset types which are not supported will return an ``UnsupportedValue`` object.
+    Parses the format options from a dataset definition. Parsing format options for dataset types which are not
+    supported will return an ``UnsupportedValue`` object.
 
     Args:
         dataset: Raw dataset definition from Azure Data Factory.
@@ -168,7 +169,9 @@ def _parse_sql_server_format_options(dataset: dict) -> dict | UnsupportedValue:
 
 def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
     """
-    Parses a dataset type from an Azure Data Factory source or sink dataset (e.g. 'DeltaSource') into a Spark data source or sink format (e.g. 'delta'). Any datasets which are not supported will return an ``UnsupportedValue`` object.
+    Parses a dataset type from an Azure Data Factory source or sink dataset (e.g. 'DeltaSource') into a Spark data
+    source or sink format (e.g. 'delta'). Any datasets which are not supported will return an ``UnsupportedValue``
+    object.
 
     Args:
         dataset_type: Dataset type string from the Azure Data Factory source or sink dataset.
@@ -200,7 +203,8 @@ def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
 
 def _parse_sql_write_behavior(write_mode: str) -> str | UnsupportedValue:
     """
-    Parses an ADF write mode into a Spark output mode. Any SQL write modes which are not translatable will return an ``UnsupportedValue`` object.
+    Parses an ADF write mode into a Spark output mode. Any SQL write modes which are not translatable will return an
+    ``UnsupportedValue`` object.
 
     Args:
         write_mode: ADF write mode expression.
@@ -215,7 +219,8 @@ def _parse_sql_write_behavior(write_mode: str) -> str | UnsupportedValue:
 
 def _parse_query_timeout_seconds(properties: dict | None) -> int | UnsupportedValue:
     """
-    Parses the query timeout from dataset properties. Any query timeout strings which are not translatable into an integer number of secondswill return an ``UnsupportedValue`` object.
+    Parses the query timeout from dataset properties. Any query timeout strings which are not translatable into an
+    integer number of seconds will return an ``UnsupportedValue`` object.
 
     Args:
         properties: Optional properties dictionary.

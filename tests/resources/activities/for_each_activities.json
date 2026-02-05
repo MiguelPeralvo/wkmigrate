@@ -1,0 +1,252 @@
+[
+  {
+    "description": "ForEach activity with single inner notebook activity",
+    "input": {
+      "name": "process_each_file",
+      "type": "ForEach",
+      "description": "Process each file in array",
+      "depends_on": [],
+      "is_sequential": false,
+      "batch_count": 4,
+      "items": {
+        "type": "Expression",
+        "value": "@array(['file1.csv', 'file2.csv', 'file3.csv'])"
+      },
+      "activities": [
+        {
+          "name": "process_file",
+          "type": "DatabricksNotebook",
+          "description": "Process single file",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.01:00:00",
+            "retry": 1,
+            "retry_interval_in_seconds": 30
+          },
+          "notebook_path": "/Workspace/notebooks/process_file",
+          "base_parameters": {
+            "file_path": {
+              "value": "@item()",
+              "type": "Expression"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "process_each_file",
+      "task_key": "process_each_file",
+      "activity_type": "ForEach",
+      "description": "Process each file in array",
+      "items_string": "[\"file1.csv\",\" file2.csv\",\" file3.csv\"]",
+      "concurrency": 4,
+      "for_each_task_type": "DatabricksNotebookActivity"
+    }
+  },
+  {
+    "description": "ForEach activity with createArray expression",
+    "input": {
+      "name": "process_regions",
+      "type": "ForEach",
+      "description": "Process each region",
+      "depends_on": [],
+      "is_sequential": true,
+      "batch_count": 1,
+      "items": {
+        "type": "Expression",
+        "value": "@createArray('US', 'EU', 'APAC')"
+      },
+      "activities": [
+        {
+          "name": "process_region",
+          "type": "DatabricksNotebook",
+          "description": "Process single region",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.02:00:00",
+            "retry": 0,
+            "retry_interval_in_seconds": 30
+          },
+          "notebook_path": "/Workspace/notebooks/process_region",
+          "base_parameters": {
+            "region": {
+              "value": "@item()",
+              "type": "Expression"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "process_regions",
+      "task_key": "process_regions",
+      "activity_type": "ForEach",
+      "description": "Process each region",
+      "items_string": "[\"US\",\"EU\",\"APAC\"]",
+      "concurrency": 1,
+      "for_each_task_type": "DatabricksNotebookActivity"
+    }
+  },
+  {
+    "description": "ForEach activity with multiple inner activities (becomes RunJobActivity)",
+    "input": {
+      "name": "complex_foreach",
+      "type": "ForEach",
+      "description": "Complex processing pipeline",
+      "depends_on": [],
+      "is_sequential": false,
+      "batch_count": 2,
+      "items": {
+        "type": "Expression",
+        "value": "@array(['batch1', 'batch2'])"
+      },
+      "activities": [
+        {
+          "name": "prepare_data",
+          "type": "DatabricksNotebook",
+          "description": "Prepare batch data",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.01:00:00",
+            "retry": 0,
+            "retry_interval_in_seconds": 30
+          },
+          "notebook_path": "/Workspace/notebooks/prepare",
+          "base_parameters": {
+            "batch": {
+              "value": "@item()",
+              "type": "Expression"
+            }
+          }
+        },
+        {
+          "name": "process_data",
+          "type": "DatabricksNotebook",
+          "description": "Process batch data",
+          "depends_on": [
+            {
+              "activity": "prepare_data",
+              "dependency_conditions": ["Succeeded"]
+            }
+          ],
+          "policy": {
+            "timeout": "0.02:00:00",
+            "retry": 1,
+            "retry_interval_in_seconds": 60
+          },
+          "notebook_path": "/Workspace/notebooks/process",
+          "base_parameters": {
+            "batch": {
+              "value": "@item()",
+              "type": "Expression"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "complex_foreach",
+      "task_key": "complex_foreach",
+      "activity_type": "ForEach",
+      "description": "Complex processing pipeline",
+      "items_string": "[\"batch1\",\" batch2\"]",
+      "concurrency": 2,
+      "for_each_task_type": "RunJobActivity",
+      "inner_pipeline_name": "complex_foreach_inner_activities"
+    }
+  },
+  {
+    "description": "ForEach activity with Spark JAR inner activity",
+    "input": {
+      "name": "run_jars_foreach",
+      "type": "ForEach",
+      "description": "Run JAR for each configuration",
+      "depends_on": [],
+      "batch_count": 3,
+      "items": {
+        "type": "Expression",
+        "value": "@array(['config1', 'config2', 'config3'])"
+      },
+      "activities": [
+        {
+          "name": "run_jar",
+          "type": "DatabricksSparkJar",
+          "description": "Run JAR with config",
+          "depends_on": [],
+          "policy": {
+            "timeout": "0.01:00:00",
+            "retry": 0,
+            "retry_interval_in_seconds": 30
+          },
+          "main_class_name": "com.example.BatchProcessor",
+          "parameters": ["--config", "@item()"]
+        }
+      ]
+    },
+    "expected": {
+      "name": "run_jars_foreach",
+      "task_key": "run_jars_foreach",
+      "activity_type": "ForEach",
+      "items_string": "[\"config1\",\" config2\",\" config3\"]",
+      "concurrency": 3,
+      "for_each_task_type": "SparkJarActivity"
+    }
+  },
+  {
+    "description": "ForEach activity missing items (should return UnsupportedValue)",
+    "input": {
+      "name": "invalid_foreach",
+      "type": "ForEach",
+      "description": "Missing items expression",
+      "depends_on": [],
+      "activities": [
+        {
+          "name": "task",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/test"
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing property 'items'"
+  },
+  {
+    "description": "ForEach activity with empty activities (should return UnsupportedValue)",
+    "input": {
+      "name": "empty_foreach",
+      "type": "ForEach",
+      "description": "Empty activities array",
+      "depends_on": [],
+      "items": {
+        "type": "Expression",
+        "value": "@array(['a', 'b'])"
+      },
+      "activities": []
+    },
+    "expected_unsupported": true,
+    "expected_message": "ForEach activity requires at least one inner activity"
+  },
+  {
+    "description": "ForEach activity with unsupported items expression",
+    "input": {
+      "name": "unsupported_foreach",
+      "type": "ForEach",
+      "description": "Unsupported items expression",
+      "depends_on": [],
+      "items": {
+        "type": "Expression",
+        "value": "@pipeline().parameters.dynamicArray"
+      },
+      "activities": [
+        {
+          "name": "task",
+          "type": "DatabricksNotebook",
+          "notebook_path": "/test",
+          "base_parameters": {}
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "Unsupported array expression"
+  }
+]

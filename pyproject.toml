@@ -86,7 +86,7 @@ markdown = { header_level_by_type = { Method = 3, Function = 3, Class = 2, Modul
 
 [tool.mypy]
 mypy_path = "src"
-exclude = ['venv', '.venv', 'tests/*', 'examples/*']
+exclude = ['venv', '.venv', 'tests/*', 'examples/*', 'sandbox/*']
 
 [[tool.mypy.overrides]]
 module = ["google", "google.*"]  # Google libraries are not type annotated
@@ -101,13 +101,13 @@ filterwarnings = ["ignore::DeprecationWarning"]
 target-version = ["py312"]
 line-length = 120
 skip-string-normalization = true
-extend-exclude = 'demos/|tests/e2e/notebooks'
+extend-exclude = 'demos/|tests/e2e/notebooks|sandbox/'
 
 [tool.ruff]
 cache-dir = ".venv/ruff-cache"
 target-version = "py312"
 line-length = 120
-exclude = ["demos/*", "tests/e2e/notebooks", "ui/*"]
+exclude = ["demos/*", "tests/e2e/notebooks", "ui/*", "sandbox/*"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["databricks.labs.dqx"]

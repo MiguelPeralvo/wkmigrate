@@ -9,7 +9,7 @@ import ast
 import importlib
 import re
 import warnings
-from wkmigrate.models.ir.activities import Activity, ForEachActivity, RunJobActivity
+from wkmigrate.models.ir.pipeline import Activity, ForEachActivity, RunJobActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 

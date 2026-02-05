@@ -88,45 +88,40 @@ workspace_definition_store = WorkspaceDefinitionStore(**workspace_options)
 The credentials you provide must have permission to create jobs, upload notebooks, and manage secrets in the target Databricks workspace.
 </Admonition>
 
-## Translate pipelines to Databricks jobs
+## Translate pipelines to Databricks Lakeflow Jobs
 
-The `WorkspaceDefinitionStore` materializes Databricks jobs either by creating job artifacts (e.g. job definitions in JSON files) or directly calling Databricks APIs to create jobs. 
+The `WorkspaceDefinitionStore` materializes Databricks Lakeflow Jobs either by creating Databricks Asset Bundles or directly calling Databricks APIs to create jobs. 
 
-### Create job artifacts
-If you want to inspect or customize the translated workflow before deploying it to Databricks, use ``to_local_files`` to write all artifacts to a local directory. This will:
-
-- Generate Databricks notebooks for Copy Data and other activities.
-- Emit workflow JSON and helper files that mirror what would be created via the API.
-- Emit any untranslated activities, linked services, or properties for manual follow-up.
+### Create Databricks Asset Bundles
+If you want to inspect or customize the translated workflow before deploying it to Databricks, use ``to_asset_bundle`` to create a deployable [Databricks Asset Bundle](https://docs.databricks.com/aws/en/dev-tools/bundles/).
 
 ```python
 from pathlib import Path
 from wkmigrate.models.ir.pipeline import Pipeline
 
 # Directory where generated notebooks, job definitions, and other metadata will be written
-local_dir = Path("out/wkmigrate_pipeline")
+local_dir = Path("/wkmigrate_pipeline/bundle")
 local_dir.mkdir(parents=True, exist_ok=True)
 
 # Create job artifacts from the pipeline's internal representation
-pipeline_model = Pipeline(**pipeline_ir)
-workspace_definition_store.to_local_files(pipeline_model, local_directory=str(local_dir))
+workspace_definition_store.to_asset_bundle(pipeline_ir, bundle_directory=str(local_dir))
 ```
 
-### Create Databricks jobs directly
+### Create Databricks Lakeflow Jobs directly
 
-Once you're ready to deploy, use `to_pipeline` to create a Databricks workflow directly from the translated pipeline. This will:
+Once you're ready to deploy, use `to_job` to create a Databricks Lakeflow Job directly from the translated pipeline. This will:
 
 1. Upload any required notebooks into your workspace.
 2. Create any required Delta Live Table pipelines.
 3. Calls `WorkspaceClient.jobs.create(...)` to register the job using properties translated from Azure Data Factory.
 
 ```python
-# Create a Databricks job (workflow) from the translated pipeline
-job_id = workspace_definition_store.to_pipeline(pipeline_ir)
+# Create a Databricks Lakeflow Job (workflow) from the translated pipeline
+job_id = workspace_definition_store.to_job(pipeline_ir)
 
 print(f"Created Databricks job with ID: {job_id}")
 ```
 
 <Admonition type="warning" title="Idempotency and naming">
-Repeatedly calling `to_pipeline` may create multiple identical jobs unless you implement your own idempotency strategy. Consider cleaning up test jobs manually while you iterate.
+Repeatedly calling `to_job` may create multiple identical jobs unless you implement your own idempotency strategy. Consider cleaning up test jobs manually while you iterate.
 </Admonition>

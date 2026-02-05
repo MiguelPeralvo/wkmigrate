@@ -7,12 +7,13 @@ task definition and any nested activity tasks or artifacts.
 """
 
 from __future__ import annotations
-from databricks.sdk.service.jobs import ConditionTask, ConditionTaskOp
+from databricks.sdk.service.jobs import ConditionTaskOp
+from wkmigrate.models.ir.pipeline import IfConditionActivity
+from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
-from wkmigrate.models.ir.activities import IfConditionActivity
 
-
-def prepare_if_condition_activity(activity: IfConditionActivity) -> ConditionTask:
+def prepare_if_condition_activity(activity: IfConditionActivity) -> PreparedActivity:
     """
     Builds the task payload for an If Condition activity.
 
@@ -22,8 +23,14 @@ def prepare_if_condition_activity(activity: IfConditionActivity) -> ConditionTas
     Returns:
         Databricks condition task configuration
     """
-    return ConditionTask(
-        op=ConditionTaskOp(activity.op),
-        left=activity.left,
-        right=activity.right,
+    task = prune_nones(
+        {
+            **get_base_task(activity),
+            "condition_task": {
+                "op": ConditionTaskOp(activity.op),
+                "left": activity.left,
+                "right": activity.right,
+            },
+        }
     )
+    return PreparedActivity(task=task)

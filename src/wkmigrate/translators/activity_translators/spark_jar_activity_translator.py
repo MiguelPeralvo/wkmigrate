@@ -5,7 +5,7 @@ representations. Each translator must validate required fields, parse the activi
 and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
-from wkmigrate.models.ir.activities import SparkJarActivity
+from wkmigrate.models.ir.pipeline import SparkJarActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
@@ -23,8 +23,10 @@ def translate_spark_jar_activity(activity: dict, base_kwargs: dict) -> SparkJarA
     main_class_name = activity.get("main_class_name")
     if not main_class_name:
         return UnsupportedValue(activity, "Missing field 'main_class_name' for Spark Python activity")
+    # Remove libraries from base_kwargs since SparkJarActivity handles it explicitly
+    kwargs = {k: v for k, v in base_kwargs.items() if k != "libraries"}
     return SparkJarActivity(
-        **base_kwargs,
+        **kwargs,
         main_class_name=main_class_name,
         parameters=activity.get("parameters"),
         libraries=activity.get("libraries"),

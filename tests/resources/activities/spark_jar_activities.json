@@ -1,0 +1,153 @@
+[
+  {
+    "description": "Basic Spark JAR activity with minimal configuration",
+    "input": {
+      "name": "run_basic_jar",
+      "type": "DatabricksSparkJar",
+      "description": "Execute a basic JAR file",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.02:00:00",
+        "retry": 1,
+        "retry_interval_in_seconds": 60
+      },
+      "main_class_name": "com.example.MainClass"
+    },
+    "expected": {
+      "name": "run_basic_jar",
+      "task_key": "run_basic_jar",
+      "activity_type": "DatabricksSparkJar",
+      "description": "Execute a basic JAR file",
+      "timeout_seconds": 7200,
+      "max_retries": 1,
+      "min_retry_interval_millis": 60000,
+      "main_class_name": "com.example.MainClass",
+      "parameters": null,
+      "libraries": null
+    }
+  },
+  {
+    "description": "Spark JAR activity with parameters",
+    "input": {
+      "name": "run_parameterized_jar",
+      "type": "DatabricksSparkJar",
+      "description": "Execute JAR with command line arguments",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.03:00:00",
+        "retry": 2,
+        "retry_interval_in_seconds": 120
+      },
+      "main_class_name": "com.example.ETLJob",
+      "parameters": [
+        "--input", "/data/input",
+        "--output", "/data/output",
+        "--date", "2024-01-01"
+      ]
+    },
+    "expected": {
+      "name": "run_parameterized_jar",
+      "task_key": "run_parameterized_jar",
+      "activity_type": "DatabricksSparkJar",
+      "description": "Execute JAR with command line arguments",
+      "timeout_seconds": 10800,
+      "max_retries": 2,
+      "min_retry_interval_millis": 120000,
+      "main_class_name": "com.example.ETLJob",
+      "parameters": ["--input", "/data/input", "--output", "/data/output", "--date", "2024-01-01"],
+      "libraries": null
+    }
+  },
+  {
+    "description": "Spark JAR activity with libraries",
+    "input": {
+      "name": "run_jar_with_libraries",
+      "type": "DatabricksSparkJar",
+      "description": "Execute JAR with additional libraries",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.04:00:00",
+        "retry": 3,
+        "retry_interval_in_seconds": 30
+      },
+      "main_class_name": "com.example.DataProcessor",
+      "parameters": ["arg1", "arg2"],
+      "libraries": [
+        {"jar": "dbfs:/FileStore/jars/main-library.jar"},
+        {"jar": "dbfs:/FileStore/jars/dependency.jar"},
+        {"maven": {"coordinates": "org.apache.spark:spark-sql_2.12:3.4.0"}},
+        {"pypi": {"package": "pandas==1.5.0"}},
+        {"whl": "dbfs:/FileStore/wheels/custom-wheel.whl"},
+        {"egg": "dbfs:/FileStore/eggs/legacy-egg.egg"},
+        {"cran": {"package": "ggplot2"}}
+      ]
+    },
+    "expected": {
+      "name": "run_jar_with_libraries",
+      "task_key": "run_jar_with_libraries",
+      "activity_type": "DatabricksSparkJar",
+      "description": "Execute JAR with additional libraries",
+      "timeout_seconds": 14400,
+      "max_retries": 3,
+      "min_retry_interval_millis": 30000,
+      "main_class_name": "com.example.DataProcessor",
+      "parameters": ["arg1", "arg2"],
+      "libraries": [
+        {"jar": "dbfs:/FileStore/jars/main-library.jar"},
+        {"jar": "dbfs:/FileStore/jars/dependency.jar"},
+        {"maven": {"coordinates": "org.apache.spark:spark-sql_2.12:3.4.0"}},
+        {"pypi": {"package": "pandas==1.5.0"}},
+        {"whl": "dbfs:/FileStore/wheels/custom-wheel.whl"},
+        {"egg": "dbfs:/FileStore/eggs/legacy-egg.egg"},
+        {"cran": {"package": "ggplot2"}}
+      ]
+    }
+  },
+  {
+    "description": "Spark JAR activity with dependency on upstream task",
+    "input": {
+      "name": "run_dependent_jar",
+      "type": "DatabricksSparkJar",
+      "description": "Execute JAR after data preparation",
+      "depends_on": [
+        {
+          "activity": "prepare_data",
+          "dependency_conditions": ["Succeeded"]
+        }
+      ],
+      "policy": {
+        "timeout": "0.01:30:00",
+        "retry": 0,
+        "retry_interval_in_seconds": 30
+      },
+      "main_class_name": "com.example.ProcessData"
+    },
+    "expected": {
+      "name": "run_dependent_jar",
+      "task_key": "run_dependent_jar",
+      "activity_type": "DatabricksSparkJar",
+      "description": "Execute JAR after data preparation",
+      "timeout_seconds": 5400,
+      "max_retries": 0,
+      "min_retry_interval_millis": 30000,
+      "main_class_name": "com.example.ProcessData",
+      "parameters": null,
+      "libraries": null,
+      "depends_on": [{"task_key": "prepare_data", "outcome": null}]
+    }
+  },
+  {
+    "description": "Spark JAR activity missing main_class_name (should return UnsupportedValue)",
+    "input": {
+      "name": "invalid_jar",
+      "type": "DatabricksSparkJar",
+      "description": "Missing main class",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing field 'main_class_name'"
+  }
+]

@@ -4,12 +4,12 @@ Python task definition from the translated Spark Python activity.
 """
 
 from __future__ import annotations
-from databricks.sdk.service.jobs import SparkPythonTask
+from wkmigrate.models.ir.pipeline import SparkPythonActivity
+from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.preparers.utils import get_base_task, prune_nones
 
-from wkmigrate.models.ir.activities import SparkPythonActivity
 
-
-def prepare_spark_python_activity(activity: SparkPythonActivity) -> SparkPythonTask:
+def prepare_spark_python_activity(activity: SparkPythonActivity) -> PreparedActivity:
     """
     Builds the task payload for a Spark Python activity.
 
@@ -19,7 +19,13 @@ def prepare_spark_python_activity(activity: SparkPythonActivity) -> SparkPythonT
     Returns:
         Spark Python task configuration
     """
-    return SparkPythonTask(
-        python_file=activity.python_file,
-        parameters=activity.parameters,
+    task = prune_nones(
+        {
+            **get_base_task(activity),
+            "spark_python_task": {
+                "python_file": activity.python_file,
+                "parameters": activity.parameters,
+            },
+        }
     )
+    return PreparedActivity(task=task)

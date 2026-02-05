@@ -1,0 +1,393 @@
+[
+  {
+    "description": "ETL pipeline with sequential notebook activities",
+    "input": {
+      "name": "etl_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "extract_data",
+          "type": "DatabricksNotebook",
+          "description": "Extract data from source",
+          "depends_on": [],
+          "policy": {"timeout": "0.02:00:00", "retry": 2, "retry_interval_in_seconds": 60},
+          "notebook_path": "/Workspace/notebooks/extract"
+        },
+        {
+          "name": "transform_data",
+          "type": "DatabricksNotebook",
+          "description": "Transform extracted data",
+          "depends_on": [
+            {"activity": "extract_data", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.03:00:00", "retry": 1, "retry_interval_in_seconds": 120},
+          "notebook_path": "/Workspace/notebooks/transform"
+        },
+        {
+          "name": "load_data",
+          "type": "DatabricksNotebook",
+          "description": "Load data to destination",
+          "depends_on": [
+            {"activity": "transform_data", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.01:00:00", "retry": 3, "retry_interval_in_seconds": 30},
+          "notebook_path": "/Workspace/notebooks/load"
+        }
+      ],
+      "parameters": {
+        "source_path": {"type": "string", "default_value": "/data/raw"},
+        "target_path": {"type": "string", "default_value": "/data/processed"}
+      }
+    },
+    "expected": {
+      "name": "etl_pipeline",
+      "task_count": 3,
+      "parameter_count": 2,
+      "dependency_chain": ["extract_data", "transform_data", "load_data"]
+    }
+  },
+  {
+    "description": "Pipeline with parallel branches and join",
+    "input": {
+      "name": "parallel_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "start_processing",
+          "type": "DatabricksNotebook",
+          "description": "Initialize processing",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:30:00"},
+          "notebook_path": "/Workspace/notebooks/init"
+        },
+        {
+          "name": "process_branch_a",
+          "type": "DatabricksNotebook",
+          "description": "Process branch A",
+          "depends_on": [
+            {"activity": "start_processing", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.01:00:00"},
+          "notebook_path": "/Workspace/notebooks/branch_a"
+        },
+        {
+          "name": "process_branch_b",
+          "type": "DatabricksNotebook",
+          "description": "Process branch B",
+          "depends_on": [
+            {"activity": "start_processing", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.01:00:00"},
+          "notebook_path": "/Workspace/notebooks/branch_b"
+        },
+        {
+          "name": "process_branch_c",
+          "type": "DatabricksNotebook",
+          "description": "Process branch C",
+          "depends_on": [
+            {"activity": "start_processing", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.01:00:00"},
+          "notebook_path": "/Workspace/notebooks/branch_c"
+        },
+        {
+          "name": "merge_results",
+          "type": "DatabricksNotebook",
+          "description": "Merge all branches",
+          "depends_on": [
+            {"activity": "process_branch_a", "dependency_conditions": ["Succeeded"]},
+            {"activity": "process_branch_b", "dependency_conditions": ["Succeeded"]},
+            {"activity": "process_branch_c", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.01:30:00"},
+          "notebook_path": "/Workspace/notebooks/merge"
+        }
+      ]
+    },
+    "expected": {
+      "name": "parallel_pipeline",
+      "task_count": 5,
+      "parallel_branches": 3
+    }
+  },
+  {
+    "description": "Pipeline with IfCondition branching",
+    "input": {
+      "name": "conditional_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "check_data_size",
+          "type": "DatabricksNotebook",
+          "description": "Check input data size",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:15:00"},
+          "notebook_path": "/Workspace/notebooks/check_size"
+        },
+        {
+          "name": "decide_processing",
+          "type": "IfCondition",
+          "description": "Decide processing mode based on size",
+          "depends_on": [
+            {"activity": "check_data_size", "dependency_conditions": ["Succeeded"]}
+          ],
+          "expression": {
+            "type": "Expression",
+            "value": "@greater(1000000, 100000)"
+          },
+          "if_true_activities": [
+            {
+              "name": "large_scale_process",
+              "type": "DatabricksSparkJar",
+              "description": "Use distributed processing",
+              "depends_on": [],
+              "policy": {"timeout": "0.04:00:00", "retry": 2, "retry_interval_in_seconds": 120},
+              "main_class_name": "com.example.LargeScaleProcessor",
+              "libraries": [
+                {"jar": "dbfs:/jars/processor.jar"}
+              ]
+            }
+          ],
+          "if_false_activities": [
+            {
+              "name": "small_scale_process",
+              "type": "DatabricksNotebook",
+              "description": "Use notebook processing",
+              "depends_on": [],
+              "policy": {"timeout": "0.01:00:00"},
+              "notebook_path": "/Workspace/notebooks/small_process"
+            }
+          ]
+        },
+        {
+          "name": "finalize",
+          "type": "DatabricksNotebook",
+          "description": "Finalize processing",
+          "depends_on": [
+            {"activity": "decide_processing", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.00:30:00"},
+          "notebook_path": "/Workspace/notebooks/finalize"
+        }
+      ]
+    },
+    "expected": {
+      "name": "conditional_pipeline",
+      "task_count": 5,
+      "has_if_condition": true,
+      "conditional_branches": 2
+    }
+  },
+  {
+    "description": "Pipeline with ForEach for batch processing",
+    "input": {
+      "name": "batch_processing_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "prepare_batches",
+          "type": "DatabricksNotebook",
+          "description": "Prepare data batches",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:30:00"},
+          "notebook_path": "/Workspace/notebooks/prepare_batches"
+        },
+        {
+          "name": "process_batches",
+          "type": "ForEach",
+          "description": "Process each batch in parallel",
+          "depends_on": [
+            {"activity": "prepare_batches", "dependency_conditions": ["Succeeded"]}
+          ],
+          "batch_count": 10,
+          "items": {
+            "type": "Expression",
+            "value": "@array(['batch1', 'batch2', 'batch3', 'batch4', 'batch5'])"
+          },
+          "activities": [
+            {
+              "name": "process_batch",
+              "type": "DatabricksNotebook",
+              "description": "Process single batch",
+              "depends_on": [],
+              "policy": {"timeout": "0.01:00:00", "retry": 1, "retry_interval_in_seconds": 30},
+              "notebook_path": "/Workspace/notebooks/process_batch",
+              "base_parameters": {
+                "batch_id": {"value": "@item()", "type": "Expression"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "aggregate_results",
+          "type": "DatabricksNotebook",
+          "description": "Aggregate batch results",
+          "depends_on": [
+            {"activity": "process_batches", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.00:45:00"},
+          "notebook_path": "/Workspace/notebooks/aggregate"
+        }
+      ]
+    },
+    "expected": {
+      "name": "batch_processing_pipeline",
+      "task_count": 3,
+      "has_for_each": true,
+      "for_each_concurrency": 10
+    }
+  },
+  {
+    "description": "Pipeline with mixed activity types",
+    "input": {
+      "name": "mixed_activity_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "initialize",
+          "type": "DatabricksNotebook",
+          "description": "Initialize job",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:15:00"},
+          "notebook_path": "/Workspace/notebooks/init"
+        },
+        {
+          "name": "run_etl_jar",
+          "type": "DatabricksSparkJar",
+          "description": "Run ETL JAR",
+          "depends_on": [
+            {"activity": "initialize", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.02:00:00", "retry": 2, "retry_interval_in_seconds": 60},
+          "main_class_name": "com.example.ETLMain",
+          "parameters": ["--mode", "full"],
+          "libraries": [
+            {"jar": "dbfs:/jars/etl.jar"},
+            {"maven": {"coordinates": "org.apache.spark:spark-sql_2.12:3.4.0"}}
+          ]
+        },
+        {
+          "name": "run_validation_script",
+          "type": "DatabricksSparkPython",
+          "description": "Run validation Python script",
+          "depends_on": [
+            {"activity": "run_etl_jar", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.00:30:00"},
+          "python_file": "dbfs:/scripts/validate.py",
+          "parameters": ["--strict", "true"]
+        },
+        {
+          "name": "generate_report",
+          "type": "DatabricksNotebook",
+          "description": "Generate final report",
+          "depends_on": [
+            {"activity": "run_validation_script", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.00:30:00"},
+          "notebook_path": "/Workspace/notebooks/report",
+          "base_parameters": {
+            "format": "html",
+            "email": "team@company.com"
+          }
+        }
+      ],
+      "parameters": {
+        "run_date": {"type": "string", "default_value": "2024-01-01"},
+        "environment": {"type": "string", "default_value": "production"}
+      }
+    },
+    "expected": {
+      "name": "mixed_activity_pipeline",
+      "task_count": 4,
+      "activity_types": ["DatabricksNotebookActivity", "SparkJarActivity", "SparkPythonActivity"],
+      "parameter_count": 2
+    }
+  },
+  {
+    "description": "Pipeline with nested ForEach containing multiple activities (RunJobActivity)",
+    "input": {
+      "name": "nested_foreach_pipeline",
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "activities": [
+        {
+          "name": "setup",
+          "type": "DatabricksNotebook",
+          "description": "Setup processing",
+          "depends_on": [],
+          "policy": {"timeout": "0.00:15:00"},
+          "notebook_path": "/Workspace/notebooks/setup"
+        },
+        {
+          "name": "process_regions",
+          "type": "ForEach",
+          "description": "Process each region",
+          "depends_on": [
+            {"activity": "setup", "dependency_conditions": ["Succeeded"]}
+          ],
+          "batch_count": 3,
+          "items": {
+            "type": "Expression",
+            "value": "@array(['US', 'EU', 'APAC'])"
+          },
+          "activities": [
+            {
+              "name": "extract_region_data",
+              "type": "DatabricksNotebook",
+              "description": "Extract data for region",
+              "depends_on": [],
+              "policy": {"timeout": "0.01:00:00"},
+              "notebook_path": "/Workspace/notebooks/extract_region",
+              "base_parameters": {
+                "region": {"value": "@item()", "type": "Expression"}
+              }
+            },
+            {
+              "name": "transform_region_data",
+              "type": "DatabricksNotebook",
+              "description": "Transform region data",
+              "depends_on": [
+                {"activity": "extract_region_data", "dependency_conditions": ["Succeeded"]}
+              ],
+              "policy": {"timeout": "0.02:00:00"},
+              "notebook_path": "/Workspace/notebooks/transform_region",
+              "base_parameters": {
+                "region": {"value": "@item()", "type": "Expression"}
+              }
+            },
+            {
+              "name": "load_region_data",
+              "type": "DatabricksNotebook",
+              "description": "Load region data",
+              "depends_on": [
+                {"activity": "transform_region_data", "dependency_conditions": ["Succeeded"]}
+              ],
+              "policy": {"timeout": "0.00:45:00"},
+              "notebook_path": "/Workspace/notebooks/load_region",
+              "base_parameters": {
+                "region": {"value": "@item()", "type": "Expression"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "generate_global_report",
+          "type": "DatabricksNotebook",
+          "description": "Generate global report",
+          "depends_on": [
+            {"activity": "process_regions", "dependency_conditions": ["Succeeded"]}
+          ],
+          "policy": {"timeout": "0.00:30:00"},
+          "notebook_path": "/Workspace/notebooks/global_report"
+        }
+      ]
+    },
+    "expected": {
+      "name": "nested_foreach_pipeline",
+      "task_count": 3,
+      "has_for_each": true,
+      "for_each_creates_run_job": true,
+      "inner_job_task_count": 3
+    }
+  }
+]
