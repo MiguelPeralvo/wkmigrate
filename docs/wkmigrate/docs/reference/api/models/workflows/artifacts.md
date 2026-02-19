@@ -5,10 +5,26 @@ title: wkmigrate.models.workflows.artifacts
 
 This module defines representational classes for Databricks workflow artifacts.
 
+## CopyDataArtifact Objects
+
+```python
+@dataclass(slots=True)
+class CopyDataArtifact()
+```
+
+Represents a copy data artifact.
+
+**Attributes**:
+
+- `task` - Databricks notebook or pipeline task configuration
+- `notebook` - Databricks notebook to be created in the target workspace
+- `secrets` - List of Databricks secrets to be created in the target workspace
+- `pipeline_name` - Name of a Spark Declarative Pipeline to be created in the target workspace
+
 ## NotebookArtifact Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class NotebookArtifact()
 ```
 
@@ -23,7 +39,7 @@ Represents a notebook that needs to be materialized.
 ## PreparedWorkflow Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class PreparedWorkflow()
 ```
 
@@ -36,4 +52,22 @@ Artifacts generated while preparing a workflow.
 - `pipelines` - List of ``PipelineInstruction`` objects describing DLT pipelines to create.
 - `secrets` - List of ``SecretInstruction`` objects describing secrets to materialize.
 - `unsupported` - Collection of entries describing properties or nodes that could not be translated.
+- `inner_jobs` - Additional job settings created for nested ForEach tasks.
+
+## PreparedActivity Objects
+
+```python
+@dataclass(slots=True)
+class PreparedActivity()
+```
+
+Artifacts generated while preparing a workflow task.
+
+**Attributes**:
+
+- `task` - Task configuration as a dictionary.
+- `notebooks` - List of ``NotebookArtifact`` objects to upload.
+- `pipelines` - List of ``PipelineInstruction`` objects describing DLT pipelines to create.
+- `secrets` - List of ``SecretInstruction`` objects describing secrets to materialize.
+- `inner_jobs` - Additional job settings created for nested ForEach tasks.
 

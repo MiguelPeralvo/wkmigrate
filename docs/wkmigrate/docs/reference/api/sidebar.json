@@ -11,13 +11,6 @@
         },
         {
           "items": [
-            "reference/api/wkmigrate/datasets/data_type_mapping"
-          ],
-          "label": "wkmigrate.datasets",
-          "type": "category"
-        },
-        {
-          "items": [
             "reference/api/wkmigrate/definition_stores/definition_store",
             "reference/api/wkmigrate/definition_stores/definition_store_builder",
             "reference/api/wkmigrate/definition_stores/factory_definition_store",
@@ -42,7 +35,6 @@
           "items": [
             {
               "items": [
-                "reference/api/wkmigrate/models/ir/activities",
                 "reference/api/wkmigrate/models/ir/datasets",
                 "reference/api/wkmigrate/models/ir/linked_services",
                 "reference/api/wkmigrate/models/ir/pipeline",
@@ -72,12 +64,28 @@
         },
         {
           "items": [
+            "reference/api/wkmigrate/preparers/copy_activity_preparer",
+            "reference/api/wkmigrate/preparers/for_each_activity_preparer",
+            "reference/api/wkmigrate/preparers/if_condition_activity_preparer",
+            "reference/api/wkmigrate/preparers/lookup_activity_preparer",
+            "reference/api/wkmigrate/preparers/notebook_activity_preparer",
+            "reference/api/wkmigrate/preparers/preparer",
+            "reference/api/wkmigrate/preparers/spark_jar_activity_preparer",
+            "reference/api/wkmigrate/preparers/spark_python_activity_preparer",
+            "reference/api/wkmigrate/preparers/utils"
+          ],
+          "label": "wkmigrate.preparers",
+          "type": "category"
+        },
+        {
+          "items": [
             {
               "items": [
                 "reference/api/wkmigrate/translators/activity_translators/activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/copy_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/for_each_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/if_condition_activity_translator",
+                "reference/api/wkmigrate/translators/activity_translators/lookup_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/notebook_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/spark_jar_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/spark_python_activity_translator"
@@ -108,13 +116,8 @@
           "label": "wkmigrate.translators",
           "type": "category"
         },
-        {
-          "items": [
-            "reference/api/wkmigrate/workflows/preparer"
-          ],
-          "label": "wkmigrate.workflows",
-          "type": "category"
-        },
+        "reference/api/wkmigrate/code_generator",
+        "reference/api/wkmigrate/datasets",
         "reference/api/wkmigrate/not_translatable",
         "reference/api/wkmigrate/utils"
       ],

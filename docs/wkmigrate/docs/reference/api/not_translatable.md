@@ -6,7 +6,7 @@ title: wkmigrate.not_translatable
 Helpers for tracking non-translatable pipeline properties.
 
 These utilities capture contextual metadata (activity name/type) for any warnings
-raised during translation. They centralize warning creation to ensure a consistent 
+raised during translation. They centralize warning creation to ensure a consistent
 schema across all translators and definition stores.
 
 #### not\_translatable\_context

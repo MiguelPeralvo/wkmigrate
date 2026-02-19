@@ -23,7 +23,7 @@ when migrating from ADF definitions to Databricks.
 ## WorkspaceDefinitionStore Objects
 
 ```python
-@dataclass
+@dataclasses.dataclass(slots=True)
 class WorkspaceDefinitionStore(DefinitionStore)
 ```
 
@@ -55,34 +55,17 @@ Validates credentials and initializes the Databricks workspace client.
 
 - `ValueError` - If the authentication type is invalid or the host name is not provided.
 
-#### load
+#### to\_job
 
 ```python
-def load(pipeline_name: str) -> dict
-```
-
-Fetches a Databricks job definition by name.
-
-**Arguments**:
-
-- `pipeline_name` - Job name inside the target workspace.
-  
-
-**Returns**:
-
-- `dict` - Job settings returned by the Jobs API.
-
-#### to\_pipeline
-
-```python
-def to_pipeline(pipeline_definition: dict) -> int | None
+def to_job(pipeline_definition: Pipeline) -> int | None
 ```
 
 Uploads artifacts and creates a Databricks job.
 
 **Arguments**:
 
-- `pipeline_definition` - Serialized ``Pipeline`` dataclass payload as a ``dict``.
+- `pipeline_definition` - ``Pipeline`` dataclass.
   
 
 **Returns**:
@@ -97,11 +80,11 @@ Uploads artifacts and creates a Databricks job.
 #### dump
 
 ```python
-@deprecated("Use 'to_pipeline' as of wkmigrate 0.0.3")
-def dump(pipeline_definition: dict) -> int | None
+@deprecated("Use 'to_job' as of wkmigrate 0.0.3")
+def dump(pipeline_definition: Pipeline) -> int | None
 ```
 
-This method is deprecated. Use ``to_pipeline`` instead. Uploads artifacts and creates a Databricks job.
+This method is deprecated. Use ``to_job`` instead. Uploads artifacts and creates a Databricks job.
 
 **Arguments**:
 
@@ -120,14 +103,31 @@ This method is deprecated. Use ``to_pipeline`` instead. Uploads artifacts and cr
 #### to\_local\_files
 
 ```python
+@deprecated("Use 'to_asset_bundle' as of wkmigrate 0.0.3")
 def to_local_files(pipeline_definition: Pipeline,
                    local_directory: str) -> None
 ```
 
-Materializes notebooks, workflows definitions, secret definitions, and unsupported nodes as files in a local directory.
+Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
 
 **Arguments**:
 
 - `pipeline_definition` - Prepared pipeline as a ``Pipeline``.
 - `local_directory` - Destination directory for generated artifacts.
+
+#### to\_asset\_bundle
+
+```python
+def to_asset_bundle(pipeline_definition: Pipeline | dict,
+                    bundle_directory: str,
+                    download_notebooks: bool = True) -> None
+```
+
+Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
+
+**Arguments**:
+
+- `pipeline_definition` - Prepared pipeline as a ``Pipeline`` or raw dictionary payload.
+- `bundle_directory` - Destination directory for the bundle artifacts.
+- `download_notebooks` - If True, downloads referenced notebooks from the workspace to the bundle.
 

@@ -29,7 +29,7 @@ when migrating from ADF to Databricks Workflows.
 ## FactoryDefinitionStore Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class FactoryDefinitionStore(DefinitionStore)
 ```
 
@@ -65,10 +65,10 @@ Validates configuration and initializes the Factory client.
 #### load
 
 ```python
-def load(pipeline_name: str) -> dict
+def load(pipeline_name: str) -> Pipeline
 ```
 
-Returns a dictionary representation of a Data Factory pipeline.
+Returns an internal ``Pipeline`` representation of a Data Factory pipeline.
 
 **Arguments**:
 
@@ -77,30 +77,10 @@ Returns a dictionary representation of a Data Factory pipeline.
 
 **Returns**:
 
-  Pipeline definition decorated with linked resources as a ``dict``.
+  Pipeline definition decorated with linked resources as a ``Pipeline`` dataclass.
   
 
 **Raises**:
 
 - `ValueError` - If the factory client is not initialized.
-
-#### dump
-
-```python
-def dump(pipeline_definition: dict) -> None
-```
-
-**Notes**:
-
-  Saving pipeline definitions to Azure Data Factory is not currently supported.
-  
-
-**Arguments**:
-
-- `pipeline_definition` - Pipeline definition to dump as a ``dict``.
-  
-
-**Raises**:
-
-- `NotImplementedError` - Always.
 

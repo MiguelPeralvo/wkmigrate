@@ -5,8 +5,8 @@ title: wkmigrate.translators.dataset_translators
 
 This module defines translators for translating datasets into internal representations.
 
-Translators in this module normalize dataset payloads into internal representations. Each 
-translator must validate required fields, coerce connection settings, and emit ``UnsupportedValue`` 
+Translators in this module normalize dataset payloads into internal representations. Each
+translator must validate required fields, coerce connection settings, and emit ``UnsupportedValue``
 objects for any unparsable inputs.
 
 #### translate\_dataset

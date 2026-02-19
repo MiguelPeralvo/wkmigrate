@@ -1,0 +1,142 @@
+---
+sidebar_label: code_generator
+title: wkmigrate.code_generator
+---
+
+This module defines shared Spark code-generation helpers used by activity preparers.
+
+Helpers in this module emit Python source fragments that read data, configure options,
+and manage credentials.  They are consumed by the Copy and Lookup activity preparers
+to build Databricks notebooks.
+
+#### get\_option\_expressions
+
+```python
+def get_option_expressions(dataset_definition: dict) -> list[str]
+```
+
+Generates code to create a Spark data source options dictionary for the specified dataset definition.
+
+**Arguments**:
+
+- `dataset_definition` - Dataset definition dictionary.
+  
+
+**Returns**:
+
+  List of Python source lines that creates an options dictionary.
+
+#### get\_file\_options
+
+```python
+def get_file_options(dataset_definition: dict, file_type: str) -> list[str]
+```
+
+Generates code to create a Spark data source options dictionary for a file dataset.
+
+**Arguments**:
+
+- `dataset_definition` - Dataset definition dictionary.
+- `file_type` - File type (for example ``"csv"`` or ``"parquet"``).
+  
+
+**Returns**:
+
+  List of Python source lines that create the options dictionary.
+
+#### get\_database\_options
+
+```python
+def get_database_options(dataset_definition: dict,
+                         database_type: str) -> list[str]
+```
+
+Generates code to create a Spark data source options dictionary for interacting with a database.
+
+**Arguments**:
+
+- `dataset_definition` - Dataset definition dictionary.
+- `database_type` - Database type (for example ``"sqlserver"``).
+  
+
+**Returns**:
+
+  List of Python source lines that create the options dictionary.
+
+#### get\_read\_expression
+
+```python
+def get_read_expression(source_definition: dict,
+                        source_query: str | None = None) -> str
+```
+
+Generates code to read data from a data source into a DataFrame.
+
+**Arguments**:
+
+- `source_definition` - Dataset definition dictionary.
+- `source_query` - Optional SQL query for database sources.
+  
+
+**Returns**:
+
+  Python source lines that read data into a DataFrame.
+  
+
+**Raises**:
+
+- `ValueError` - If the dataset type is not supported for reading.
+
+#### get\_file\_read\_expression
+
+```python
+def get_file_read_expression(source_definition: dict) -> str
+```
+
+Generates code to read data from a file dataset into a DataFrame.
+
+**Arguments**:
+
+- `source_definition` - Dataset definition dictionary.
+  
+
+**Returns**:
+
+  Python source lines that read data into a DataFrame.
+
+#### get\_delta\_read\_expression
+
+```python
+def get_delta_read_expression(source_definition: dict) -> str
+```
+
+Generates code to read data from a Delta table into a DataFrame.
+
+**Arguments**:
+
+- `source_definition` - Dataset definition dictionary.
+  
+
+**Returns**:
+
+  Python source lines that read data into a DataFrame.
+
+#### get\_jdbc\_read\_expression
+
+```python
+def get_jdbc_read_expression(source_definition: dict,
+                             source_query: str | None = None) -> str
+```
+
+Generates code to read data from a database into a DataFrame.
+
+**Arguments**:
+
+- `source_definition` - Dataset definition dictionary.
+- `source_query` - Optional SQL query string (default:  ``None``).
+  
+
+**Returns**:
+
+  Python source lines that read data into a DataFrame.
+

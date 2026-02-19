@@ -5,8 +5,8 @@ title: wkmigrate.utils
 
 This module defines shared utilities for translating data pipelines.
 
-Utilities in this module cover common translation patterns such as mapping 
-dictionaries with parser specifications, normalizing expressions, and enriching 
+Utilities in this module cover common translation patterns such as mapping
+dictionaries with parser specifications, normalizing expressions, and enriching
 metadata (e.g. appending system tags).
 
 #### identity
@@ -51,6 +51,23 @@ Appends the ``CREATED_BY_WKMIGRATE`` system tag to a set of job tags.
 **Returns**:
 
 - `dict` - Updated tag dictionary.
+
+#### parse\_activity\_timeout\_string
+
+```python
+def parse_activity_timeout_string(timeout_string: str) -> int
+```
+
+Parses a timeout string in the format ``d.hh:mm:ss`` into seconds.
+
+**Arguments**:
+
+- `timeout_string` - Timeout string from the activity policy.
+  
+
+**Returns**:
+
+  Total seconds represented by the timeout.
 
 #### parse\_expression
 
@@ -121,6 +138,52 @@ Merges a list of unsupported values into a single ``UnsupportedValue`` object.
 **Returns**:
 
   Single ``UnsupportedValue`` object.
+
+#### get\_data\_source\_definition
+
+```python
+def get_data_source_definition(
+    dataset_definitions: list[dict] | UnsupportedValue
+) -> Dataset | UnsupportedValue
+```
+
+Parses the first dataset definition from an activity into a ``Dataset`` object.
+
+Validates that the definition contains the required ``properties`` and ``type``
+fields before delegating to the dataset translator.
+
+**Arguments**:
+
+- `dataset_definitions` - Raw dataset definitions list from the ADF activity, or an
+  ``UnsupportedValue`` propagated from an earlier validation step.
+  
+
+**Returns**:
+
+  Parsed ``Dataset`` or ``UnsupportedValue`` when parsing fails.
+
+#### get\_data\_source\_properties
+
+```python
+def get_data_source_properties(
+    data_source_definition: dict | UnsupportedValue
+) -> dict | UnsupportedValue
+```
+
+Parses data-source properties from an ADF activity source or sink block.
+
+Validates that the definition contains a ``type`` field and delegates to
+``parse_format_options`` to produce a format-specific options dictionary.
+
+**Arguments**:
+
+- `data_source_definition` - Source or sink definition from the ADF activity, or an
+  ``UnsupportedValue`` propagated from an earlier validation step.
+  
+
+**Returns**:
+
+  Data-source properties as a ``dict`` or ``UnsupportedValue`` when parsing fails.
 
 #### get\_placeholder\_activity
 

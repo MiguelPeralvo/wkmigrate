@@ -7,7 +7,7 @@ This module defines a translator for translating Copy activities.
 
 Translators in this module normalize Copy Data activity payloads into internal representations.
 Each translator must validate required fields, coerce connection settings, source and sink dataset
-properties, and column mappings.Translators should emit ``UnsupportedValue`` objects for any unparsable 
+properties, and column mappings.Translators should emit ``UnsupportedValue`` objects for any unparsable
 inputs.
 
 #### translate\_copy\_activity
@@ -27,8 +27,8 @@ This method returns an ``UnsupportedValue`` if the activity cannot be translated
 
 **Arguments**:
 
-- `activity` - Copy activity definition as a ``dict``.
-- `base_kwargs` - Common activity metadata from ``_build_base_activity_kwargs``.
+- `activity` - Copy activity definition as a ``dict``
+- `base_kwargs` - Common activity metadata from ``_build_base_activity_kwargs``
   
 
 **Returns**:

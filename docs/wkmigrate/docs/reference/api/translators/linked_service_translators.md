@@ -5,8 +5,8 @@ title: wkmigrate.translators.linked_service_translators
 
 This module defines translators for Azure Data Factory linked service definitions.
 
-Translators in this module normalize linked service payloads into internal representations. 
-Translators must validate required fields, coerce connection settings, and emit an ``UnsupportedValue`` 
+Translators in this module normalize linked service payloads into internal representations.
+Translators must validate required fields, coerce connection settings, and emit an ``UnsupportedValue``
 objects for any unparsable inputs.
 
 #### translate\_abfs\_spec

@@ -8,11 +8,11 @@ This module defines representational classes for Databricks workflow instruction
 ## PipelineInstruction Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class PipelineInstruction()
 ```
 
-Represents a workflow pipeline that must be created.
+Represents a declarative pipeline that must be created.
 
 **Attributes**:
 
@@ -32,7 +32,7 @@ Returns the local identifier for the pipeline.
 ## SecretInstruction Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class SecretInstruction()
 ```
 
@@ -45,5 +45,4 @@ Represents a secret value that must exist in Databricks.
 - `service_name` - Logical source system or service associated with the secret.
 - `service_type` - Type of backing service (for example ``sqlserver`` or ``csv``).
 - `provided_value` - Secret value obtained from source metadata, if available.
-- `user_input_required` - ``True`` when the user must provide the secret value interactively.
 

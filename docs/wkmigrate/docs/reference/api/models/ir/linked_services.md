@@ -5,15 +5,15 @@ title: wkmigrate.models.ir.linked_services
 
 This module defines internal representations for linked services.
 
-Linked services in this module represent connections to external services and systems used by 
+Linked services in this module represent connections to external services and systems used by
 various pipeline activities (e.g. Copy Data, Lookup Value). Each linked service contains metadata
-specific to the associated service. Linked services are translated from ADF payloads into internal 
+specific to the associated service. Linked services are translated from ADF payloads into internal
 representations that can be used to connect to services from Databricks.
 
 ## LinkedService Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class LinkedService()
 ```
 
@@ -27,7 +27,7 @@ Base class representing a translated linked service.
 ## SqlLinkedService Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class SqlLinkedService(LinkedService)
 ```
 
@@ -43,7 +43,7 @@ Linked-service metadata for SQL/JDBC connections to a relational database.
 ## AbfsLinkedService Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class AbfsLinkedService(LinkedService)
 ```
 
@@ -57,7 +57,7 @@ Linked-service metadata for ABFS/ADLS storage accounts.
 ## DatabricksClusterLinkedService Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class DatabricksClusterLinkedService(LinkedService)
 ```
 

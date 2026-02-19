@@ -6,14 +6,14 @@ title: wkmigrate.models.ir.datasets
 This module defines internal representations for datasets.
 
 Datasets in this module represent the source and sink datasets used by various pipeline activities
-(e.g. Copy Data, Lookup Value). Each dataset contains metadata about the dataset's type, name, and 
-parameters. Datasets are translated from ADF payloads into internal representations that can be used 
+(e.g. Copy Data, Lookup Value). Each dataset contains metadata about the dataset's type, name, and
+parameters. Datasets are translated from ADF payloads into internal representations that can be used
 to generate Databricks Lakeflow jobs.
 
 ## Dataset Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class Dataset()
 ```
 
@@ -28,7 +28,7 @@ Base class representing a parsed dataset.
 ## FileDataset Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class FileDataset(Dataset)
 ```
 
@@ -46,7 +46,7 @@ Dataset definition for file-based sources and sinks in an ABFS/ADLS storage acco
 ## DeltaTableDataset Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class DeltaTableDataset(Dataset)
 ```
 
@@ -61,7 +61,7 @@ Dataset definition for Delta tables accessible from a Databricks cluster.
 ## SqlTableDataset Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class SqlTableDataset(Dataset)
 ```
 
@@ -81,7 +81,7 @@ Dataset definition for JDBC-accessible tables in a relational database.
 ## DatasetProperties Objects
 
 ```python
-@dataclass
+@dataclass(slots=True)
 class DatasetProperties()
 ```
 
