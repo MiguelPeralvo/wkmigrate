@@ -7,8 +7,10 @@ metadata (e.g. appending system tags).
 
 import re
 from datetime import datetime, timedelta
+from importlib import import_module
 from typing import Any
 
+from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.pipeline import Activity, DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
@@ -152,6 +154,72 @@ def merge_unsupported_values(values: list[Any]) -> UnsupportedValue:
     if unsupported:
         return UnsupportedValue(value=values, message=";".join([value.message for value in unsupported]))
     raise ValueError("No unsupported values in input list")
+
+
+def get_data_source_definition(dataset_definitions: list[dict] | UnsupportedValue) -> Dataset | UnsupportedValue:
+    """
+    Parses the first dataset definition from an activity into a ``Dataset`` object.
+
+    Validates that the definition contains the required ``properties`` and ``type``
+    fields before delegating to the dataset translator.
+
+    Args:
+        dataset_definitions: Raw dataset definitions list from the ADF activity, or an
+            ``UnsupportedValue`` propagated from an earlier validation step.
+
+    Returns:
+        Parsed ``Dataset`` or ``UnsupportedValue`` when parsing fails.
+    """
+    if isinstance(dataset_definitions, UnsupportedValue):
+        return dataset_definitions
+
+    dataset = dataset_definitions[0]
+    properties = dataset.get("properties")
+    if properties is None:
+        return UnsupportedValue(value=dataset, message="Missing property 'properties' in dataset definition")
+
+    dataset_type = properties.get("type")
+    if dataset_type is None:
+        return UnsupportedValue(value=dataset, message="Missing property 'type' in dataset definition")
+
+    if not isinstance(dataset_type, str):
+        return UnsupportedValue(
+            value=dataset, message=f"Invalid value {dataset_type} for property 'type' in dataset definition"
+        )
+
+    dataset_translators = import_module("wkmigrate.translators.dataset_translators")
+    return dataset_translators.translate_dataset(dataset)
+
+
+def get_data_source_properties(data_source_definition: dict | UnsupportedValue) -> dict | UnsupportedValue:
+    """
+    Parses data-source properties from an ADF activity source or sink block.
+
+    Validates that the definition contains a ``type`` field and delegates to
+    ``parse_format_options`` to produce a format-specific options dictionary.
+
+    Args:
+        data_source_definition: Source or sink definition from the ADF activity, or an
+            ``UnsupportedValue`` propagated from an earlier validation step.
+
+    Returns:
+        Data-source properties as a ``dict`` or ``UnsupportedValue`` when parsing fails.
+    """
+    if isinstance(data_source_definition, UnsupportedValue):
+        return data_source_definition
+
+    source_type = data_source_definition.get("type")
+    if source_type is None:
+        return UnsupportedValue(value=data_source_definition, message="Missing property 'type' in source definition")
+
+    if not isinstance(source_type, str):
+        return UnsupportedValue(
+            value=data_source_definition,
+            message=f"Invalid value {source_type} for property 'type' in source definition",
+        )
+
+    dataset_parsers = import_module("wkmigrate.parsers.dataset_parsers")
+    return dataset_parsers.parse_format_options(data_source_definition)
 
 
 def get_placeholder_activity(base_kwargs: dict) -> DatabricksNotebookActivity:

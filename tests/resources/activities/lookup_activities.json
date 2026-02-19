@@ -1,0 +1,468 @@
+[
+  {
+    "description": "Lookup activity - SQL source with first row only",
+    "input": {
+      "name": "lookup_config",
+      "type": "Lookup",
+      "description": "Lookup configuration from SQL table",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:30:00",
+        "retry": 2,
+        "retry_interval_in_seconds": 60
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "AzureSqlSource",
+        "sql_reader_query": "SELECT TOP 1 * FROM config_table WHERE active = 1"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "sql_config_dataset",
+          "properties": {
+            "type": "AzureSqlTable",
+            "schema_type_properties_schema": "dbo",
+            "table": "config_table"
+          },
+          "linked_service_definition": {
+            "name": "sql-server-link",
+            "properties": {
+              "type": "SqlServer",
+              "server": "sql-prod.database.windows.net",
+              "database": "config_db",
+              "user_name": "etl_user",
+              "authentication_type": "SQL Authentication"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_config",
+      "task_key": "lookup_config",
+      "first_row_only": true,
+      "source_query": "SELECT TOP 1 * FROM config_table WHERE active = 1",
+      "source_dataset_type": "sqlserver"
+    }
+  },
+  {
+    "description": "Lookup activity - SQL source with all rows",
+    "input": {
+      "name": "lookup_all_records",
+      "type": "Lookup",
+      "description": "Lookup all records from SQL",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00"
+      },
+      "first_row_only": false,
+      "source": {
+        "type": "AzureSqlSource",
+        "sql_reader_query": "SELECT id, name FROM lookup_table"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "sql_lookup_dataset",
+          "properties": {
+            "type": "AzureSqlTable",
+            "schema_type_properties_schema": "dbo",
+            "table": "lookup_table"
+          },
+          "linked_service_definition": {
+            "name": "sql-server-link",
+            "properties": {
+              "type": "SqlServer",
+              "server": "sql-prod.database.windows.net",
+              "database": "ref_db",
+              "user_name": "read_user",
+              "authentication_type": "SQL Authentication"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_all_records",
+      "task_key": "lookup_all_records",
+      "first_row_only": false,
+      "source_query": "SELECT id, name FROM lookup_table",
+      "source_dataset_type": "sqlserver"
+    }
+  },
+  {
+    "description": "Lookup activity - CSV file source with first row only",
+    "input": {
+      "name": "lookup_csv_config",
+      "type": "Lookup",
+      "description": "Lookup data from CSV file",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:15:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "DelimitedTextSource",
+        "store_settings": {
+          "type": "AzureBlobFSReadSettings",
+          "recursive": false
+        },
+        "format_settings": {
+          "type": "DelimitedTextReadSettings"
+        }
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "csv_config_dataset",
+          "properties": {
+            "type": "DelimitedText",
+            "location": {
+              "type": "AzureBlobFSLocation",
+              "container": "config-data",
+              "folder_path": "lookups",
+              "file_name": "settings.csv"
+            },
+            "first_row_as_header": true,
+            "column_delimiter": ",",
+            "quote_char": "\"",
+            "escape_char": "\\",
+            "encoding_name": "UTF-8"
+          },
+          "linked_service_definition": {
+            "name": "storage-link",
+            "properties": {
+              "type": "AzureBlobFS",
+              "url": "DefaultEndpointsProtocol=https;AccountName=configstore;EndpointSuffix=core.windows.net;",
+              "storage_account_name": "DefaultEndpointsProtocol=https;AccountName=configstore;EndpointSuffix=core.windows.net;"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_csv_config",
+      "task_key": "lookup_csv_config",
+      "first_row_only": true,
+      "source_query": null,
+      "source_dataset_type": "DelimitedText"
+    }
+  },
+  {
+    "description": "Lookup activity - Parquet file source all rows",
+    "input": {
+      "name": "lookup_parquet_ref",
+      "type": "Lookup",
+      "description": "Lookup reference data from Parquet",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:20:00"
+      },
+      "first_row_only": false,
+      "source": {
+        "type": "ParquetSource",
+        "store_settings": {
+          "type": "AzureBlobFSReadSettings",
+          "recursive": true
+        }
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "parquet_ref_dataset",
+          "properties": {
+            "type": "Parquet",
+            "location": {
+              "type": "AzureBlobFSLocation",
+              "container": "reference",
+              "folder_path": "lookups",
+              "file_name": "ref_data.parquet"
+            },
+            "compression_codec": "snappy"
+          },
+          "linked_service_definition": {
+            "name": "ref-storage",
+            "properties": {
+              "type": "AzureBlobFS",
+              "url": "DefaultEndpointsProtocol=https;AccountName=refstore;EndpointSuffix=core.windows.net;",
+              "storage_account_name": "DefaultEndpointsProtocol=https;AccountName=refstore;EndpointSuffix=core.windows.net;"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_parquet_ref",
+      "task_key": "lookup_parquet_ref",
+      "first_row_only": false,
+      "source_query": null,
+      "source_dataset_type": "Parquet"
+    }
+  },
+  {
+    "description": "Lookup activity - JSON file source first row only",
+    "input": {
+      "name": "lookup_json_settings",
+      "type": "Lookup",
+      "description": "Lookup settings from JSON file",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "JsonSource",
+        "store_settings": {
+          "type": "AzureBlobFSReadSettings"
+        }
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "json_settings_dataset",
+          "properties": {
+            "type": "Json",
+            "location": {
+              "type": "AzureBlobFSLocation",
+              "container": "config",
+              "folder_path": "settings",
+              "file_name": "app_config.json"
+            },
+            "encoding_name": "UTF-8"
+          },
+          "linked_service_definition": {
+            "name": "config-storage",
+            "properties": {
+              "type": "AzureBlobFS",
+              "url": "DefaultEndpointsProtocol=https;AccountName=configacct;EndpointSuffix=core.windows.net;",
+              "storage_account_name": "DefaultEndpointsProtocol=https;AccountName=configacct;EndpointSuffix=core.windows.net;"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_json_settings",
+      "task_key": "lookup_json_settings",
+      "first_row_only": true,
+      "source_query": null,
+      "source_dataset_type": "Json"
+    }
+  },
+  {
+    "description": "Lookup activity - Delta table source",
+    "input": {
+      "name": "lookup_delta_ref",
+      "type": "Lookup",
+      "description": "Lookup reference data from Delta table",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "AzureDatabricksDeltaLakeSource"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "delta_ref_dataset",
+          "properties": {
+            "type": "AzureDatabricksDeltaLakeDataset",
+            "database": "reference",
+            "table": "country_codes"
+          },
+          "linked_service_definition": {
+            "name": "databricks-link",
+            "properties": {
+              "type": "AzureDatabricks",
+              "domain": "https://adb-123456789.1.azuredatabricks.net",
+              "new_cluster_node_type": "Standard_DS3_v2",
+              "new_cluster_version": "13.3.x-scala2.12",
+              "new_cluster_num_of_worker": "1:2"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_delta_ref",
+      "task_key": "lookup_delta_ref",
+      "first_row_only": true,
+      "source_query": null,
+      "source_dataset_type": "delta"
+    }
+  },
+  {
+    "description": "Lookup activity - SQL source with no query (uses table)",
+    "input": {
+      "name": "lookup_sql_table",
+      "type": "Lookup",
+      "description": "Lookup from SQL table without query",
+      "depends_on": [
+        {
+          "activity": "prepare_data",
+          "dependency_conditions": ["Succeeded"]
+        }
+      ],
+      "policy": {
+        "timeout": "0.00:30:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "AzureSqlSource"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "sql_table_dataset",
+          "properties": {
+            "type": "AzureSqlTable",
+            "schema_type_properties_schema": "dbo",
+            "table": "settings"
+          },
+          "linked_service_definition": {
+            "name": "sql-settings",
+            "properties": {
+              "type": "SqlServer",
+              "server": "sql-settings.database.windows.net",
+              "database": "settings_db",
+              "user_name": "reader",
+              "authentication_type": "SQL Authentication"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_sql_table",
+      "task_key": "lookup_sql_table",
+      "first_row_only": true,
+      "source_query": null,
+      "source_dataset_type": "sqlserver",
+      "has_dependency": true
+    }
+  },
+  {
+    "description": "Lookup activity - default first_row_only (not specified, defaults to true)",
+    "input": {
+      "name": "lookup_default_first_row",
+      "type": "Lookup",
+      "description": "Lookup with default first_row_only",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "source": {
+        "type": "AzureSqlSource",
+        "sql_reader_query": "SELECT * FROM defaults"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "sql_defaults_dataset",
+          "properties": {
+            "type": "AzureSqlTable",
+            "schema_type_properties_schema": "dbo",
+            "table": "defaults"
+          },
+          "linked_service_definition": {
+            "name": "sql-defaults",
+            "properties": {
+              "type": "SqlServer",
+              "server": "sql-defaults.database.windows.net",
+              "database": "defaults_db",
+              "user_name": "reader",
+              "authentication_type": "SQL Authentication"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "lookup_default_first_row",
+      "task_key": "lookup_default_first_row",
+      "first_row_only": true,
+      "source_query": "SELECT * FROM defaults",
+      "source_dataset_type": "sqlserver"
+    }
+  },
+  {
+    "description": "Lookup activity - missing input dataset returns UnsupportedValue",
+    "input": {
+      "name": "lookup_missing_dataset",
+      "type": "Lookup",
+      "description": "Lookup with missing dataset",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "AzureSqlSource"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "input_dataset_definitions"
+  },
+  {
+    "description": "Lookup activity - missing source returns UnsupportedValue",
+    "input": {
+      "name": "lookup_missing_source",
+      "type": "Lookup",
+      "description": "Lookup with missing source",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "first_row_only": true,
+      "input_dataset_definitions": [
+        {
+          "name": "valid_dataset",
+          "properties": {
+            "type": "AzureSqlTable",
+            "schema_type_properties_schema": "dbo",
+            "table": "data"
+          },
+          "linked_service_definition": {
+            "name": "sql-link",
+            "properties": {
+              "type": "SqlServer",
+              "server": "sql.database.windows.net",
+              "database": "db",
+              "user_name": "user",
+              "authentication_type": "SQL Authentication"
+            }
+          }
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "source"
+  },
+  {
+    "description": "Lookup activity - unsupported dataset type returns UnsupportedValue",
+    "input": {
+      "name": "lookup_unsupported_type",
+      "type": "Lookup",
+      "description": "Lookup with unsupported dataset type",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.00:10:00"
+      },
+      "first_row_only": true,
+      "source": {
+        "type": "CosmosDbSqlApiSource"
+      },
+      "input_dataset_definitions": [
+        {
+          "name": "cosmos_dataset",
+          "properties": {
+            "type": "CosmosDbSqlApiCollection"
+          },
+          "linked_service_definition": {
+            "name": "cosmos-link",
+            "properties": {
+              "type": "CosmosDb"
+            }
+          }
+        }
+      ]
+    },
+    "expected_unsupported": true,
+    "expected_message": "Unsupported dataset type"
+  }
+]

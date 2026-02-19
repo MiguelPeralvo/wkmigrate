@@ -69,32 +69,6 @@
     }
   },
   {
-    "description": "Lookup activity creates placeholder",
-    "input": {
-      "name": "lookup_data",
-      "type": "Lookup",
-      "description": "Lookup configuration data",
-      "depends_on": [],
-      "policy": {
-        "timeout": "0.00:30:00",
-        "retry": 2,
-        "retry_interval_in_seconds": 60
-      },
-      "source": {
-        "type": "AzureSqlSource"
-      }
-    },
-    "expected": {
-      "name": "lookup_data",
-      "task_key": "lookup_data",
-      "activity_type": "Lookup",
-      "timeout_seconds": 1800,
-      "max_retries": 2,
-      "min_retry_interval_millis": 60000,
-      "notebook_path": "/UNSUPPORTED_ADF_ACTIVITY"
-    }
-  },
-  {
     "description": "Wait activity creates placeholder",
     "input": {
       "name": "wait_task",

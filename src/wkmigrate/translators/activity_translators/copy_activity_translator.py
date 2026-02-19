@@ -9,9 +9,12 @@ inputs.
 from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.dataset_parsers import parse_format_options
-from wkmigrate.translators.dataset_translators import translate_dataset
-from wkmigrate.utils import get_value_or_unsupported, merge_unsupported_values
+from wkmigrate.utils import (
+    get_data_source_definition,
+    get_data_source_properties,
+    get_value_or_unsupported,
+    merge_unsupported_values,
+)
 
 
 def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity | UnsupportedValue:
@@ -31,10 +34,10 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     Returns:
         ``CopyActivity`` representation of the Copy task.
     """
-    source_dataset = _parse_dataset(get_value_or_unsupported(activity, "input_dataset_definitions"))
-    sink_dataset = _parse_dataset(get_value_or_unsupported(activity, "output_dataset_definitions"))
-    source_properties = _parse_dataset_format_settings(get_value_or_unsupported(activity, "source"))
-    sink_properties = _parse_dataset_format_settings(get_value_or_unsupported(activity, "sink"))
+    source_dataset = get_data_source_definition(get_value_or_unsupported(activity, "input_dataset_definitions"))
+    sink_dataset = get_data_source_definition(get_value_or_unsupported(activity, "output_dataset_definitions"))
+    source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
+    sink_properties = get_data_source_properties(get_value_or_unsupported(activity, "sink"))
     column_mapping = _parse_dataset_mapping(activity.get("translator") or {})
 
     if (
@@ -53,61 +56,6 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
         )
 
     return merge_unsupported_values([source_dataset, sink_dataset, source_properties, sink_properties])
-
-
-def _parse_dataset(dataset_definitions: list[dict] | UnsupportedValue) -> Dataset | UnsupportedValue:
-    """
-    Parses dataset properties from an ADF dataset definition into a dictionary of format-specific options.
-
-    Args:
-        dataset_definitions: Dataset definitions from the Copy Data activity.
-
-    Returns:
-        Dataset properties as a dictionary of format options.
-    """
-    if isinstance(dataset_definitions, UnsupportedValue):
-        return dataset_definitions
-
-    dataset = dataset_definitions[0]
-    properties = dataset.get("properties")
-    if properties is None:
-        return UnsupportedValue(value=dataset, message="Missing property 'properties' in dataset definition")
-
-    dataset_type = properties.get("type")
-    if dataset_type is None:
-        return UnsupportedValue(value=dataset, message="Missing property 'type' in dataset definition")
-
-    if not isinstance(dataset_type, str):
-        return UnsupportedValue(
-            value=dataset, message=f"Invalid value {dataset_type} for property 'type' in dataset definition"
-        )
-
-    return translate_dataset(dataset)
-
-
-def _parse_dataset_format_settings(dataset_definition: dict | UnsupportedValue) -> dict | UnsupportedValue:
-    """
-    Parses dataset format settings from a Copy Data activity definition to a ``dict`` object.
-
-    Args:
-        dataset_definition: Dataset definition from the Copy Data activity.
-
-    Returns:
-        Dataset format settings as a ``dict`` object.
-    """
-    if isinstance(dataset_definition, UnsupportedValue):
-        return dataset_definition
-
-    dataset_type = dataset_definition.get("type")
-    if dataset_type is None:
-        return UnsupportedValue(value=dataset_definition, message="Missing property 'type' in dataset definition")
-
-    if not isinstance(dataset_type, str):
-        return UnsupportedValue(
-            value=dataset_definition, message=f"Invalid value {dataset_type} for property 'type' in dataset definition"
-        )
-
-    return parse_format_options(dataset_definition)
 
 
 def _parse_dataset_mapping(mapping: dict) -> list[ColumnMapping]:

@@ -164,6 +164,27 @@ class SparkPythonActivity(Activity):
 
 
 @dataclass(slots=True, kw_only=True)
+class LookupActivity(Activity):
+    """
+    Lookup activity metadata.
+
+    Translates an ADF Lookup activity into a notebook task that reads data with
+    Spark and publishes the result as a Databricks task value.
+
+    Attributes:
+        source_dataset: Parsed IR representation of the lookup dataset.
+        source_properties: Parsed source format/connection properties from the ADF source block.
+        first_row_only: When ``True`` only the first row is returned; mirrors the ADF setting.
+        source_query: Optional SQL query or stored-procedure call for database sources.
+    """
+
+    source_dataset: Dataset | None = None
+    source_properties: dict[str, Any] | None = None
+    first_row_only: bool = True
+    source_query: str | None = None
+
+
+@dataclass(slots=True, kw_only=True)
 class IfConditionActivity(Activity):
     """
     If Condition activity metadata.

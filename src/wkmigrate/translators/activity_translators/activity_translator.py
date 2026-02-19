@@ -20,6 +20,7 @@ from wkmigrate.translators.activity_translators.spark_python_activity_translator
 from wkmigrate.translators.activity_translators.if_condition_activity_translator import translate_if_condition_activity
 from wkmigrate.translators.activity_translators.for_each_activity_translator import translate_for_each_activity
 from wkmigrate.translators.activity_translators.copy_activity_translator import translate_copy_activity
+from wkmigrate.translators.activity_translators.lookup_activity_translator import translate_lookup_activity
 from wkmigrate.models.ir.pipeline import Activity, Dependency, IfConditionActivity
 from wkmigrate.models.ir.translator_result import ActivityTranslatorResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
@@ -36,6 +37,7 @@ _type_translators: dict[str, TypeTranslator] = {
     "IfCondition": translate_if_condition_activity,
     "ForEach": translate_for_each_activity,
     "Copy": translate_copy_activity,
+    "Lookup": translate_lookup_activity,
 }
 
 

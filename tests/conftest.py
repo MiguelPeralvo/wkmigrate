@@ -74,6 +74,12 @@ def unsupported_activity_fixtures() -> list[dict]:
 
 
 @pytest.fixture
+def lookup_activity_fixtures() -> list[dict]:
+    """Load Lookup activity test fixtures."""
+    return load_fixtures("lookup_activities.json")
+
+
+@pytest.fixture
 def linked_service_fixtures() -> list[dict]:
     """Load linked service test fixtures."""
     return load_fixtures("linked_services.json")

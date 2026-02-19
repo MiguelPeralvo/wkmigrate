@@ -16,6 +16,7 @@ from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
     ForEachActivity,
     IfConditionActivity,
+    LookupActivity,
     RunJobActivity,
     SparkJarActivity,
     SparkPythonActivity,
@@ -36,6 +37,9 @@ from wkmigrate.translators.activity_translators.notebook_activity_translator imp
 )
 from wkmigrate.translators.activity_translators.spark_jar_activity_translator import (
     translate_spark_jar_activity,
+)
+from wkmigrate.translators.activity_translators.lookup_activity_translator import (
+    translate_lookup_activity,
 )
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import (
     translate_spark_python_activity,
@@ -399,12 +403,118 @@ def test_execute_pipeline_creates_placeholder(unsupported_activity_fixtures: lis
     assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
 
 
-def test_lookup_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
-    """Test that Lookup activity creates placeholder."""
-    fixture = next(f for f in unsupported_activity_fixtures if "Lookup activity" in f["description"])
+def test_lookup_sql_first_row_only(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with SQL source and first_row_only."""
+    fixture = next(f for f in lookup_activity_fixtures if "SQL source with first row only" in f["description"])
     result = translate_activity(fixture["input"])
 
-    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+    assert isinstance(result, LookupActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.task_key == fixture["expected"]["task_key"]
+    assert result.first_row_only is True
+    assert result.source_query == fixture["expected"]["source_query"]
+    assert result.source_dataset is not None
+
+
+def test_lookup_sql_all_rows(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with SQL source returning all rows."""
+    fixture = next(f for f in lookup_activity_fixtures if "SQL source with all rows" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is False
+    assert result.source_query == fixture["expected"]["source_query"]
+
+
+def test_lookup_csv_file_source(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with CSV file source."""
+    fixture = next(f for f in lookup_activity_fixtures if "CSV file source" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is True
+    assert result.source_query is None
+    assert result.source_dataset is not None
+
+
+def test_lookup_parquet_file_source(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with Parquet file source."""
+    fixture = next(f for f in lookup_activity_fixtures if "Parquet file source" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is False
+    assert result.source_query is None
+
+
+def test_lookup_json_file_source(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with JSON file source."""
+    fixture = next(f for f in lookup_activity_fixtures if "JSON file source" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is True
+
+
+def test_lookup_delta_table_source(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with Delta table source."""
+    fixture = next(f for f in lookup_activity_fixtures if "Delta table source" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is True
+    assert result.source_dataset is not None
+
+
+def test_lookup_sql_no_query_uses_table(lookup_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Lookup activity with SQL source but no query."""
+    fixture = next(f for f in lookup_activity_fixtures if "no query (uses table)" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.source_query is None
+    assert result.depends_on is not None
+    assert len(result.depends_on) == 1
+    assert result.depends_on[0].task_key == "prepare_data"
+
+
+def test_lookup_default_first_row_only(lookup_activity_fixtures: list[dict]) -> None:
+    """Test that first_row_only defaults to True when not specified."""
+    fixture = next(f for f in lookup_activity_fixtures if "default first_row_only" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, LookupActivity)
+    assert result.first_row_only is True
+
+
+def test_lookup_missing_dataset_returns_placeholder(lookup_activity_fixtures: list[dict]) -> None:
+    """Test that missing input dataset creates a placeholder activity."""
+    fixture = next(f for f in lookup_activity_fixtures if "missing input dataset" in f["description"])
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_lookup_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
+
+
+def test_lookup_missing_source_returns_placeholder(lookup_activity_fixtures: list[dict]) -> None:
+    """Test that missing source creates a placeholder activity."""
+    fixture = next(f for f in lookup_activity_fixtures if "missing source" in f["description"])
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_lookup_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
+
+
+def test_lookup_unsupported_dataset_type_returns_placeholder(lookup_activity_fixtures: list[dict]) -> None:
+    """Test that unsupported dataset type creates a placeholder activity."""
+    fixture = next(f for f in lookup_activity_fixtures if "unsupported dataset type" in f["description"])
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_lookup_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
 
 
 def test_wait_creates_placeholder_with_dependency(unsupported_activity_fixtures: list[dict]) -> None:

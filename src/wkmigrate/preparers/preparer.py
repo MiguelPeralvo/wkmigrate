@@ -16,6 +16,7 @@ from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
     ForEachActivity,
     IfConditionActivity,
+    LookupActivity,
     Pipeline,
     RunJobActivity,
     SparkJarActivity,
@@ -26,6 +27,7 @@ from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretI
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
 from wkmigrate.preparers.if_condition_activity_preparer import prepare_if_condition_activity
+from wkmigrate.preparers.lookup_activity_preparer import prepare_lookup_activity
 from wkmigrate.preparers.notebook_activity_preparer import prepare_notebook_activity
 from wkmigrate.preparers.run_job_activity_preparer import prepare_run_job_activity
 from wkmigrate.preparers.spark_jar_activity_preparer import prepare_spark_jar_activity
@@ -129,4 +131,6 @@ def prepare_activity(
         return prepare_run_job_activity(activity, default_files_to_delta_sinks)
     if isinstance(activity, CopyActivity):
         return prepare_copy_activity(activity, default_files_to_delta_sinks), None
+    if isinstance(activity, LookupActivity):
+        return prepare_lookup_activity(activity), None
     raise ValueError(f"Unsupported activity type '{type(activity)}'")

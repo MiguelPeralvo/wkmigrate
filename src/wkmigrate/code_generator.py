@@ -1,0 +1,189 @@
+"""This module defines shared Spark code-generation helpers used by activity preparers.
+
+Helpers in this module emit Python source fragments that read data, configure options,
+and manage credentials.  They are consumed by the Copy and Lookup activity preparers
+to build Databricks notebooks.
+"""
+
+from __future__ import annotations
+
+from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
+
+
+def get_option_expressions(dataset_definition: dict) -> list[str]:
+    """
+    Generates code to create a Spark data source options dictionary for the specified dataset definition.
+
+    Args:
+        dataset_definition: Dataset definition dictionary.
+
+    Returns:
+        List of Python source lines that creates an options dictionary.
+    """
+    dataset_type = dataset_definition.get("type")
+    if dataset_type in {"avro", "csv", "json", "orc", "parquet"}:
+        return get_file_options(dataset_definition, dataset_type)
+    if dataset_type == "sqlserver":
+        return get_database_options(dataset_definition, dataset_type)
+    return []
+
+
+def get_file_options(dataset_definition: dict, file_type: str) -> list[str]:
+    """
+    Generates code to create a Spark data source options dictionary for a file dataset.
+
+    Args:
+        dataset_definition: Dataset definition dictionary.
+        file_type: File type (for example ``"csv"`` or ``"parquet"``).
+
+    Returns:
+        List of Python source lines that create the options dictionary.
+    """
+    dataset_name = dataset_definition.get("dataset_name")
+    service_name = dataset_definition.get("service_name")
+    config_lines = [
+        rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
+        for option in DATASET_OPTIONS.get(file_type, [])
+        if dataset_definition.get(option)
+    ]
+    if "records_per_file" in dataset_definition:
+        records_per_file = dataset_definition.get("records_per_file")
+        config_lines.append(f'spark.conf.set("spark.sql.files.maxRecordsPerFile", "{records_per_file}")')
+    config_lines.append(
+        f"""spark.conf.set(
+                "fs.azure.account.key.{dataset_definition.get('storage_account_name')}.dfs.core.windows.net",
+                    dbutils.secrets.get(
+                        scope="wkmigrate_credentials_scope", 
+                        key="{service_name}_storage_account_key"
+                )
+            )
+            """
+    )
+    return [f"{dataset_name}_options = {{}}", *config_lines]
+
+
+def get_database_options(dataset_definition: dict, database_type: str) -> list[str]:
+    """
+    Generates code to create a Spark data source options dictionary for interacting with a database.
+
+    Args:
+        dataset_definition: Dataset definition dictionary.
+        database_type: Database type (for example ``"sqlserver"``).
+
+    Returns:
+        List of Python source lines that create the options dictionary.
+    """
+    dataset_name = dataset_definition.get("dataset_name")
+    service_name = dataset_definition.get("service_name")
+    secrets_lines = [
+        f"""{dataset_name}_options["{secret}"] = dbutils.secrets.get(
+                scope="wkmigrate_credentials_scope", 
+                key="{service_name}_{secret}"
+            )
+            """
+        for secret in DATASET_SECRETS[database_type]
+    ]
+    options_lines = [
+        f"""{dataset_name}_options["{option}"] = '{dataset_definition.get(option)}'"""
+        for option in DATASET_OPTIONS.get(database_type, [])
+        if dataset_definition.get(option)
+    ]
+    return [f"{dataset_name}_options = {{}}", *secrets_lines, *options_lines]
+
+
+def get_read_expression(source_definition: dict, source_query: str | None = None) -> str:
+    """
+    Generates code to read data from a data source into a DataFrame.
+
+    Args:
+        source_definition: Dataset definition dictionary.
+        source_query: Optional SQL query for database sources.
+
+    Returns:
+        Python source lines that read data into a DataFrame.
+
+    Raises:
+        ValueError: If the dataset type is not supported for reading.
+    """
+    source_type = source_definition.get("type")
+
+    if source_type in {"avro", "csv", "json", "orc", "parquet"}:
+        return get_file_read_expression(source_definition)
+    if source_type == "delta":
+        return get_delta_read_expression(source_definition)
+    if source_type == "sqlserver":
+        return get_jdbc_read_expression(source_definition, source_query)
+
+    raise ValueError(f'Reading data from "{source_type}" not supported')
+
+
+def get_file_read_expression(source_definition: dict) -> str:
+    """
+    Generates code to read data from a file dataset into a DataFrame.
+
+    Args:
+        source_definition: Dataset definition dictionary.
+
+    Returns:
+        Python source lines that read data into a DataFrame.
+    """
+    source_name = source_definition.get("dataset_name")
+    source_type = source_definition.get("type")
+    container_name = source_definition.get("container")
+    storage_account_name = source_definition.get("storage_account_name")
+    folder_path = source_definition.get("folder_path")
+
+    return f"""{source_name}_df = ( 
+                        spark.read.format("{source_type}")
+                            .options(**{source_name}_options)
+                            .load("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        )
+                    """
+
+
+def get_delta_read_expression(source_definition: dict) -> str:
+    """
+    Generates code to read data from a Delta table into a DataFrame.
+
+    Args:
+        source_definition: Dataset definition dictionary.
+
+    Returns:
+        Python source lines that read data into a DataFrame.
+    """
+    source_name = source_definition.get("dataset_name")
+    database_name = source_definition.get("database_name")
+    table_name = source_definition.get("table_name")
+    return f'{source_name}_df = spark.read.table("hive_metastore.{database_name}.{table_name}")\n'
+
+
+def get_jdbc_read_expression(source_definition: dict, source_query: str | None = None) -> str:
+    """
+    Generates code to read data from a database into a DataFrame.
+
+    Args:
+        source_definition: Dataset definition dictionary.
+        source_query: Optional SQL query string (default:  ``None``).
+
+    Returns:
+        Python source lines that read data into a DataFrame.
+    """
+    source_name = source_definition.get("dataset_name")
+    schema_name = source_definition.get("schema_name")
+    table_name = source_definition.get("table_name")
+
+    lines = [
+        f"{source_name}_df = (",
+        f'    spark.read.format("{source_definition.get("type")}")',
+        f"        .options(**{source_name}_options)",
+    ]
+
+    if source_query:
+        escaped_query = source_query.replace('"', '\\"')
+        lines.append(f'        .option("query", "{escaped_query}")')
+    else:
+        lines.append(f'        .option("dbtable", "{schema_name}.{table_name}")')
+
+    lines.append("        .load()")
+    lines.append(")")
+    return "\n".join(lines) + "\n"

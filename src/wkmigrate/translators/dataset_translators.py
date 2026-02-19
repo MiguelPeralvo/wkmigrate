@@ -165,10 +165,15 @@ def _parse_format_options(dataset_type: str, dataset: dict) -> dict | Unsupporte
     """
 
     format_parsers = {
+        "Avro": _parse_avro_format_options,
         "avro": _parse_avro_format_options,
+        "DelimitedText": _parse_delimited_format_options,
         "csv": _parse_delimited_format_options,
+        "Json": _parse_json_format_options,
         "json": _parse_json_format_options,
+        "Orc": _parse_orc_format_options,
         "orc": _parse_orc_format_options,
+        "Parquet": _parse_parquet_format_options,
         "parquet": _parse_parquet_format_options,
     }
     format_parser = format_parsers.get(dataset_type)
@@ -267,16 +272,18 @@ def _parse_character_value(char: str) -> str:
     return json.dumps(char).strip('"')
 
 
-def _parse_compression_type(compression: dict) -> str | None:
+def _parse_compression_type(compression: dict | None) -> str | None:
     """
     Parses the compression type from a format settings object.
 
     Args:
-        compression: Compression configuration dictionary.
+        compression: Compression configuration dictionary, or ``None`` when no compression is specified.
 
     Returns:
         Compression type string, if present.
     """
+    if compression is None:
+        return None
     return compression.get("type")
 
 
