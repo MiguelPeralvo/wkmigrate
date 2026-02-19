@@ -103,7 +103,7 @@ def _create_lookup_notebook(
     script_lines.append(_get_task_value_expression(first_row_only))
 
     notebook_content = autopep8.fix_code("\n".join(script_lines))
-    source_dataset_name = source_definition.get("dataset_name")
+    source_dataset_name = source_definition.get("dataset_name", "unnamed_dataset")
     notebook_path = f"/wkmigrate/lookup_notebooks/lookup_{source_dataset_name}"
     notebook_artifact = NotebookArtifact(file_path=notebook_path, content=notebook_content)
     return notebook_path, notebook_artifact

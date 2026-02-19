@@ -39,8 +39,8 @@ def get_file_options(dataset_definition: dict, file_type: str) -> list[str]:
     Returns:
         List of Python source lines that create the options dictionary.
     """
-    dataset_name = dataset_definition.get("dataset_name")
-    service_name = dataset_definition.get("service_name")
+    dataset_name = dataset_definition["dataset_name"]
+    service_name = dataset_definition["service_name"]
     config_lines = [
         rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
         for option in DATASET_OPTIONS.get(file_type, [])
@@ -73,8 +73,8 @@ def get_database_options(dataset_definition: dict, database_type: str) -> list[s
     Returns:
         List of Python source lines that create the options dictionary.
     """
-    dataset_name = dataset_definition.get("dataset_name")
-    service_name = dataset_definition.get("service_name")
+    dataset_name = dataset_definition["dataset_name"]
+    service_name = dataset_definition["service_name"]
     secrets_lines = [
         f"""{dataset_name}_options["{secret}"] = dbutils.secrets.get(
                 scope="wkmigrate_credentials_scope", 
@@ -127,11 +127,11 @@ def get_file_read_expression(source_definition: dict) -> str:
     Returns:
         Python source lines that read data into a DataFrame.
     """
-    source_name = source_definition.get("dataset_name")
-    source_type = source_definition.get("type")
-    container_name = source_definition.get("container")
-    storage_account_name = source_definition.get("storage_account_name")
-    folder_path = source_definition.get("folder_path")
+    source_name = source_definition["dataset_name"]
+    source_type = source_definition["type"]
+    container_name = source_definition["container"]
+    storage_account_name = source_definition["storage_account_name"]
+    folder_path = source_definition["folder_path"]
 
     return f"""{source_name}_df = ( 
                         spark.read.format("{source_type}")
@@ -151,9 +151,12 @@ def get_delta_read_expression(source_definition: dict) -> str:
     Returns:
         Python source lines that read data into a DataFrame.
     """
-    source_name = source_definition.get("dataset_name")
-    database_name = source_definition.get("database_name")
-    table_name = source_definition.get("table_name")
+    source_name = source_definition["dataset_name"]
+    database_name = source_definition["database_name"]
+    table_name = source_definition["table_name"]
+    if not table_name:
+        raise ValueError("No value for 'table_name' in Delta dataset definition")
+
     return f'{source_name}_df = spark.read.table("hive_metastore.{database_name}.{table_name}")\n'
 
 
@@ -168,9 +171,9 @@ def get_jdbc_read_expression(source_definition: dict, source_query: str | None =
     Returns:
         Python source lines that read data into a DataFrame.
     """
-    source_name = source_definition.get("dataset_name")
-    schema_name = source_definition.get("schema_name")
-    table_name = source_definition.get("table_name")
+    source_name = source_definition["dataset_name"]
+    schema_name = source_definition["schema_name"]
+    table_name = source_definition["table_name"]
 
     lines = [
         f"{source_name}_df = (",

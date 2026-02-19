@@ -173,6 +173,9 @@ def get_data_source_definition(dataset_definitions: list[dict] | UnsupportedValu
     if isinstance(dataset_definitions, UnsupportedValue):
         return dataset_definitions
 
+    if not dataset_definitions:
+        return UnsupportedValue(value=dataset_definitions, message="No dataset definition provided")
+
     dataset = dataset_definitions[0]
     properties = dataset.get("properties")
     if properties is None:
