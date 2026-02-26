@@ -190,7 +190,7 @@ def get_data_source_definition(dataset_definitions: list[dict] | UnsupportedValu
             value=dataset, message=f"Invalid value {dataset_type} for property 'type' in dataset definition"
         )
 
-    dataset_translators = import_module("wkmigrate.translators.dataset_translators")
+    dataset_translators = import_module("wkmigrate.translators.datasets")
     return dataset_translators.translate_dataset(dataset)
 
 

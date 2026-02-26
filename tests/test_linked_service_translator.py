@@ -1,7 +1,7 @@
 from contextlib import nullcontext as does_not_raise
 import pytest
 
-from wkmigrate.translators.linked_service_translators import (
+from wkmigrate.translators.linked_services import (
     translate_databricks_cluster_spec,
     translate_sql_server_spec,
 )

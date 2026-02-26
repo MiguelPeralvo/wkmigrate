@@ -14,7 +14,7 @@ from wkmigrate.models.ir.linked_services import (
     SqlLinkedService,
 )
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.translators.linked_service_translators import (
+from wkmigrate.translators.linked_services import (
     translate_abfs_spec,
     translate_databricks_cluster_spec,
     translate_sql_server_spec,

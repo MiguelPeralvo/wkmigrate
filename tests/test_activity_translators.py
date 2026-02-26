@@ -13,6 +13,7 @@ import pytest
 
 from tests.conftest import get_base_kwargs
 from wkmigrate.models.ir.pipeline import (
+    CopyActivity,
     DatabricksNotebookActivity,
     ForEachActivity,
     IfConditionActivity,
@@ -679,3 +680,46 @@ def test_databricks_job_missing_job_id_returns_unsupported(databricks_job_activi
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message
+
+
+def test_copy_postgresql_to_delta(copy_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Copy activity with a PostgreSQL source dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "PostgreSQL to Delta" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.task_key == fixture["expected"]["task_key"]
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_mysql_to_delta(copy_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Copy activity with a MySQL source dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "MySQL to Delta" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.task_key == fixture["expected"]["task_key"]
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.source_dataset.schema_name is None
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_oracle_to_delta(copy_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Copy activity with an Oracle source dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "Oracle to Delta" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.task_key == fixture["expected"]["task_key"]
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]

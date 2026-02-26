@@ -80,6 +80,12 @@ def databricks_job_activity_fixtures() -> list[dict]:
 
 
 @pytest.fixture
+def copy_activity_fixtures() -> list[dict]:
+    """Load Copy activity test fixtures."""
+    return load_fixtures("copy_activities.json")
+
+
+@pytest.fixture
 def lookup_activity_fixtures() -> list[dict]:
     """Load Lookup activity test fixtures."""
     return load_fixtures("lookup_activities.json")

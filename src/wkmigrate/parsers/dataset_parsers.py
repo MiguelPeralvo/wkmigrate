@@ -39,6 +39,8 @@ def parse_format_options(dataset: dict) -> dict | UnsupportedValue:
         return _parse_parquet_format_options(dataset)
     if dataset_type == "sqlserver":
         return _parse_sql_server_format_options(dataset)
+    if isinstance(dataset_type, str) and dataset_type in {"postgresql", "mysql", "oracle"}:
+        return _parse_jdbc_format_options(dataset, dataset_type)
     return UnsupportedValue(value=dataset, message=f"Unsupported dataset type '{dataset_type}'")
 
 
@@ -167,6 +169,28 @@ def _parse_sql_server_format_options(dataset: dict) -> dict | UnsupportedValue:
     }
 
 
+def _parse_jdbc_format_options(dataset: dict, dataset_type: str) -> dict | UnsupportedValue:
+    """
+    Parses format options from a JDBC-based dataset definition (PostgreSQL, MySQL, or Oracle).
+
+    Args:
+        dataset: Raw dataset definition from Azure Data Factory.
+        dataset_type: Normalised dataset type string (``postgresql``, ``mysql``, or ``oracle``).
+
+    Returns:
+        JDBC dataset properties as a dictionary of format options.
+    """
+    format_settings = dataset.get("format_settings", {})
+    return {
+        "type": dataset_type,
+        "query_timeout_seconds": _parse_query_timeout_seconds(format_settings.get("query_timeout_seconds")),
+        "numPartitions": format_settings.get("numPartitions"),
+        "batchsize": format_settings.get("batchsize"),
+        "sessionInitStatement": format_settings.get("sessionInitStatement"),
+        "mode": _parse_sql_write_behavior(format_settings.get("mode")),
+    }
+
+
 def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
     """
     Parses a dataset type from an Azure Data Factory source or sink dataset (e.g. 'DeltaSource') into a Spark data
@@ -186,6 +210,12 @@ def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
         "AzureDatabricksDeltaLakeSink": "delta",
         "AzureSqlSource": "sqlserver",
         "AzureSqlSink": "sqlserver",
+        "AzurePostgreSqlSource": "postgresql",
+        "AzurePostgreSqlSink": "postgresql",
+        "AzureMySqlSource": "mysql",
+        "AzureMySqlSink": "mysql",
+        "OracleSource": "oracle",
+        "OracleSink": "oracle",
         "DelimitedTextSource": "csv",
         "DelimitedTextSink": "csv",
         "JsonSource": "json",
