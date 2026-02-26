@@ -23,7 +23,8 @@ def prepare_run_job_activity(
 ) -> tuple[PreparedActivity, PreparedWorkflow | None]:
 
     if activity.existing_job_id:
-        task = prune_nones({**get_base_task(activity), "run_job_task": {"job_id": activity.existing_job_id}})
+        run_job_task = prune_nones({"job_id": activity.existing_job_id, "job_parameters": activity.job_parameters})
+        task = prune_nones({**get_base_task(activity), "run_job_task": run_job_task})
         return PreparedActivity(task=task), None
 
     if not activity.pipeline and not activity.existing_job_id:

@@ -21,6 +21,9 @@ from wkmigrate.models.ir.pipeline import (
     SparkJarActivity,
     SparkPythonActivity,
 )
+from wkmigrate.translators.activity_translators.databricks_job_activity_translator import (
+    translate_databricks_job_activity,
+)
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.translators.activity_translators.activity_translator import (
     translate_activities,
@@ -630,3 +633,49 @@ def test_translate_activities_multiple_activities() -> None:
     assert isinstance(result[1], SparkJarActivity)
     assert result[1].depends_on is not None
     assert result[1].depends_on[0].task_key == "task1"
+
+
+def test_basic_databricks_job_activity(databricks_job_activity_fixtures: list[dict]) -> None:
+    """Test translation of a basic Databricks Job activity."""
+    fixture = next(f for f in databricks_job_activity_fixtures if "Basic Databricks Job" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, RunJobActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.task_key == fixture["expected"]["task_key"]
+    assert result.existing_job_id == fixture["expected"]["existing_job_id"]
+    assert result.job_parameters == fixture["expected"]["job_parameters"]
+    assert result.timeout_seconds == fixture["expected"]["timeout_seconds"]
+    assert result.max_retries == fixture["expected"]["max_retries"]
+
+
+def test_databricks_job_with_parameters(databricks_job_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Databricks Job activity with runtime job parameters."""
+    fixture = next(f for f in databricks_job_activity_fixtures if "with job parameters" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, RunJobActivity)
+    assert result.existing_job_id == fixture["expected"]["existing_job_id"]
+    assert result.job_parameters == fixture["expected"]["job_parameters"]
+
+
+def test_databricks_job_with_dependency(databricks_job_activity_fixtures: list[dict]) -> None:
+    """Test translation of a Databricks Job activity with an upstream dependency."""
+    fixture = next(f for f in databricks_job_activity_fixtures if "upstream dependency" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, RunJobActivity)
+    assert result.existing_job_id == fixture["expected"]["existing_job_id"]
+    assert result.depends_on is not None
+    assert len(result.depends_on) == 1
+    assert result.depends_on[0].task_key == "upstream_task"
+
+
+def test_databricks_job_missing_job_id_returns_unsupported(databricks_job_activity_fixtures: list[dict]) -> None:
+    """Test that a missing existing_job_id returns UnsupportedValue."""
+    fixture = next(f for f in databricks_job_activity_fixtures if "missing existing_job_id" in f["description"])
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_databricks_job_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message

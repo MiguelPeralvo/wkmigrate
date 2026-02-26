@@ -1,0 +1,100 @@
+[
+  {
+    "description": "Basic Databricks Job activity with existing job ID",
+    "input": {
+      "name": "run_existing_job",
+      "type": "DatabricksJob",
+      "description": "Run an existing Databricks job",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00",
+        "retry": 0,
+        "retry_interval_in_seconds": 30
+      },
+      "existing_job_id": "12345"
+    },
+    "expected": {
+      "name": "run_existing_job",
+      "task_key": "run_existing_job",
+      "description": "Run an existing Databricks job",
+      "timeout_seconds": 3600,
+      "max_retries": 0,
+      "min_retry_interval_millis": 30000,
+      "existing_job_id": "12345",
+      "job_parameters": null
+    }
+  },
+  {
+    "description": "Databricks Job activity with job parameters",
+    "input": {
+      "name": "run_parameterized_job",
+      "type": "DatabricksJob",
+      "description": "Run job with runtime parameters",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.02:00:00",
+        "retry": 0,
+        "retry_interval_in_seconds": 30
+      },
+      "existing_job_id": "12345",
+      "job_parameters": {
+        "env": "production",
+        "input_path": "/mnt/data/input",
+        "batch_date": "2026-02-26"
+      }
+    },
+    "expected": {
+      "name": "run_parameterized_job",
+      "task_key": "run_parameterized_job",
+      "existing_job_id": "12345",
+      "job_parameters": {
+        "env": "production",
+        "input_path": "/mnt/data/input",
+        "batch_date": "2026-02-26"
+      }
+    }
+  },
+  {
+    "description": "Databricks Job activity with upstream dependency",
+    "input": {
+      "name": "run_dependent_job",
+      "type": "DatabricksJob",
+      "description": "Run job after upstream task completes",
+      "depends_on": [
+        {
+          "activity": "upstream_task",
+          "dependency_conditions": ["Succeeded"]
+        }
+      ],
+      "policy": {
+        "timeout": "0.02:00:00",
+        "retry": 1,
+        "retry_interval_in_seconds": 60
+      },
+      "existing_job_id": "67890"
+    },
+    "expected": {
+      "name": "run_dependent_job",
+      "task_key": "run_dependent_job",
+      "timeout_seconds": 7200,
+      "max_retries": 1,
+      "min_retry_interval_millis": 60000,
+      "existing_job_id": "67890",
+      "depends_on": [{"task_key": "upstream_task", "outcome": null}]
+    }
+  },
+  {
+    "description": "Databricks Job activity missing existing_job_id (should return UnsupportedValue)",
+    "input": {
+      "name": "invalid_job_activity",
+      "type": "DatabricksJob",
+      "description": "Missing job ID",
+      "depends_on": [],
+      "policy": {
+        "timeout": "0.01:00:00"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing field 'existing_job_id'"
+  }
+]
