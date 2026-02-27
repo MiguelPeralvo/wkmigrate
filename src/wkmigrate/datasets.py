@@ -83,7 +83,7 @@ def parse_spark_data_type(sink_type: str, sink_system: str) -> str:
         ValueError: If the sink system is unsupported.
         ValueError: If the sink type is not supported for the given system.
     """
-    if sink_system == "delta":
+    if sink_system in {"delta", "postgresql", "mysql", "oracle"}:
         return sink_type
     if sink_system == "sqlserver":
         mapped_type = sql_server_type_mapping.get(sink_type)

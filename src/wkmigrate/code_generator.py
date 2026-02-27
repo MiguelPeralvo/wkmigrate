@@ -111,7 +111,7 @@ def get_read_expression(source_definition: dict, source_query: str | None = None
         return get_file_read_expression(source_definition)
     if source_type == "delta":
         return get_delta_read_expression(source_definition)
-    if source_type == "sqlserver":
+    if source_type in {"sqlserver", "postgresql", "mysql", "oracle"}:
         return get_jdbc_read_expression(source_definition, source_query)
 
     raise ValueError(f'Reading data from "{source_type}" not supported')
@@ -185,7 +185,8 @@ def get_jdbc_read_expression(source_definition: dict, source_query: str | None =
         escaped_query = source_query.replace('"', '\\"')
         lines.append(f'        .option("query", "{escaped_query}")')
     else:
-        lines.append(f'        .option("dbtable", "{schema_name}.{table_name}")')
+        dbtable = source_definition.get("dbtable") or f"{schema_name}.{table_name}"
+        lines.append(f'        .option("dbtable", "{dbtable}")')
 
     lines.append("        .load()")
     lines.append(")")

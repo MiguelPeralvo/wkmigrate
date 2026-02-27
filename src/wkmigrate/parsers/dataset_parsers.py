@@ -208,7 +208,7 @@ def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
     return result
 
 
-def _parse_sql_write_behavior(write_mode: str) -> str | UnsupportedValue:
+def _parse_sql_write_behavior(write_mode: str | None) -> str | None | UnsupportedValue:
     """
     Parses an ADF write mode into a Spark output mode. Any SQL write modes which are not translatable will return an
     ``UnsupportedValue`` object.
@@ -219,6 +219,8 @@ def _parse_sql_write_behavior(write_mode: str) -> str | UnsupportedValue:
     Returns:
         Normalized Spark output mode.
     """
+    if write_mode is None:
+        return None
     if write_mode == "insert":
         return "append"
     return UnsupportedValue(value=write_mode, message=f"Unsupported SQL write mode '{write_mode}'")
