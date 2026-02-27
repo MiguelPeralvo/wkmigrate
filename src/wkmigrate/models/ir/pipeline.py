@@ -126,11 +126,13 @@ class RunJobActivity(Activity):
         name: Name of the job to run.
         pipeline: Pipeline to run, if no existing job ID is provided.
         existing_job_id: ID of the existing job to run.
+        job_parameters: Key-value pairs passed to the job at runtime, overriding job defaults.
     """
 
     name: str
     pipeline: Pipeline | None = None
     existing_job_id: str | None = None
+    job_parameters: dict[str, Any] | None = None
 
 
 @dataclass(slots=True, kw_only=True)

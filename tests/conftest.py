@@ -74,6 +74,12 @@ def unsupported_activity_fixtures() -> list[dict]:
 
 
 @pytest.fixture
+def databricks_job_activity_fixtures() -> list[dict]:
+    """Load Databricks Job activity test fixtures."""
+    return load_fixtures("databricks_job_activities.json")
+
+
+@pytest.fixture
 def lookup_activity_fixtures() -> list[dict]:
     """Load Lookup activity test fixtures."""
     return load_fixtures("lookup_activities.json")

@@ -38,6 +38,7 @@
                 "reference/api/wkmigrate/models/ir/datasets",
                 "reference/api/wkmigrate/models/ir/linked_services",
                 "reference/api/wkmigrate/models/ir/pipeline",
+                "reference/api/wkmigrate/models/ir/translation_context",
                 "reference/api/wkmigrate/models/ir/unsupported"
               ],
               "label": "wkmigrate.models.ir",
@@ -70,6 +71,7 @@
             "reference/api/wkmigrate/preparers/lookup_activity_preparer",
             "reference/api/wkmigrate/preparers/notebook_activity_preparer",
             "reference/api/wkmigrate/preparers/preparer",
+            "reference/api/wkmigrate/preparers/run_job_activity_preparer",
             "reference/api/wkmigrate/preparers/spark_jar_activity_preparer",
             "reference/api/wkmigrate/preparers/spark_python_activity_preparer",
             "reference/api/wkmigrate/preparers/utils"
@@ -83,6 +85,7 @@
               "items": [
                 "reference/api/wkmigrate/translators/activity_translators/activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/copy_activity_translator",
+                "reference/api/wkmigrate/translators/activity_translators/databricks_job_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/for_each_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/if_condition_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/lookup_activity_translator",
