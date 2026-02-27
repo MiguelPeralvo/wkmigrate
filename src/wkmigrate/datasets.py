@@ -17,17 +17,23 @@ from wkmigrate.models.workflows.instructions import SecretInstruction
 from wkmigrate.utils import parse_mapping
 
 FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
-SQL_DATASET_TYPES = {"AzureSqlTable"}
+SQL_DATASET_TYPES = {"AzureSqlTable", "AzurePostgreSqlTable", "AzureMySqlTable", "OracleTable"}
 DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
+
+_JDBC_SECRETS = ["host", "database", "user_name", "password"]
+_JDBC_OPTIONS = ["mode", "dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
 
 DATASET_SECRETS: dict[str, list[str]] = {
     "avro": ["storage_account_key"],
     "csv": ["storage_account_key"],
     "delta": [],
     "json": ["storage_account_key"],
+    "mysql": _JDBC_SECRETS,
+    "oracle": _JDBC_SECRETS,
     "orc": ["storage_account_key"],
     "parquet": ["storage_account_key"],
-    "sqlserver": ["host", "database", "user_name", "password"],
+    "postgresql": _JDBC_SECRETS,
+    "sqlserver": _JDBC_SECRETS,
 }
 
 DATASET_OPTIONS: dict[str, list[str]] = {
@@ -43,9 +49,12 @@ DATASET_OPTIONS: dict[str, list[str]] = {
         "encoding",
     ],
     "json": ["encoding", "compression"],
+    "mysql": _JDBC_OPTIONS,
+    "oracle": _JDBC_OPTIONS,
     "orc": ["compression"],
     "parquet": ["compression"],
-    "sqlserver": ["mode", "dbtable", "numPartitions", "batchsize", "sessionInitStatement"],
+    "postgresql": _JDBC_OPTIONS,
+    "sqlserver": _JDBC_OPTIONS,
 }
 
 sql_server_type_mapping: dict[str, str] = {

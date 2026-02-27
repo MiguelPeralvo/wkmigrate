@@ -278,7 +278,7 @@ def _get_write_expression(sink_definition: dict) -> str:
                         .mode("overwrite")  \
                         .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
                     """
-    if sink_type == "sqlserver":
+    if sink_type in {"sqlserver", "postgresql", "mysql", "oracle"}:
         return rf"""{sink_name}_df.write.format("jdbc")  \
                         .options(**{sink_name}_options)  \
                         .save()

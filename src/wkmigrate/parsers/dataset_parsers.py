@@ -23,8 +23,8 @@ def parse_format_options(dataset: dict) -> dict | UnsupportedValue:
         Format options as a ``dict`` object.
     """
     dataset_type = _parse_dataset_type(dataset.get("type", ""))
-    if dataset_type is None:
-        return UnsupportedValue(value=dataset, message="Missing property 'type' in dataset definition")
+    if isinstance(dataset_type, UnsupportedValue):
+        return dataset_type
     if dataset_type == "avro":
         return _parse_avro_format_options(dataset)
     if dataset_type == "csv":
@@ -37,8 +37,8 @@ def parse_format_options(dataset: dict) -> dict | UnsupportedValue:
         return _parse_orc_format_options(dataset)
     if dataset_type == "parquet":
         return _parse_parquet_format_options(dataset)
-    if dataset_type == "sqlserver":
-        return _parse_sql_server_format_options(dataset)
+    if dataset_type in {"sqlserver", "postgresql", "mysql", "oracle"}:
+        return _parse_sql_format_options(dataset, dataset_type)
     return UnsupportedValue(value=dataset, message=f"Unsupported dataset type '{dataset_type}'")
 
 
@@ -145,19 +145,20 @@ def _parse_parquet_format_options(dataset: dict) -> dict | UnsupportedValue:
     }
 
 
-def _parse_sql_server_format_options(dataset: dict) -> dict | UnsupportedValue:
+def _parse_sql_format_options(dataset: dict, dataset_type: str) -> dict | UnsupportedValue:
     """
-    Parses format options from a SQL Server dataset definition.
+    Parses format options from a SQL (SQL Server, PostgreSQL, MySQL, or Oracle) dataset definition.
 
     Args:
         dataset: Raw dataset definition from Azure Data Factory.
+        dataset_type: Normalised dataset type string (e.g. ``"sqlserver"`` or ``"postgresql"``).
 
     Returns:
-        SQL Server dataset properties as a dictionary of format options.
+        SQL dataset properties as a dictionary of format options.
     """
     format_settings = dataset.get("format_settings", {})
     return {
-        "type": "sqlserver",
+        "type": dataset_type,
         "query_isolation_level": _parse_query_isolation_level(format_settings.get("query_isolation_level")),
         "query_timeout_seconds": _parse_query_timeout_seconds(format_settings.get("query_timeout_seconds")),
         "numPartitions": format_settings.get("numPartitions"),
@@ -184,12 +185,18 @@ def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
         "AvroSink": "avro",
         "AzureDatabricksDeltaLakeSource": "delta",
         "AzureDatabricksDeltaLakeSink": "delta",
+        "AzureMySqlSource": "mysql",
+        "AzureMySqlSink": "mysql",
+        "AzurePostgreSqlSource": "postgresql",
+        "AzurePostgreSqlSink": "postgresql",
         "AzureSqlSource": "sqlserver",
         "AzureSqlSink": "sqlserver",
         "DelimitedTextSource": "csv",
         "DelimitedTextSink": "csv",
         "JsonSource": "json",
         "JsonSink": "json",
+        "OracleSource": "oracle",
+        "OracleSink": "oracle",
         "OrcSource": "orc",
         "OrcSink": "orc",
         "ParquetSource": "parquet",

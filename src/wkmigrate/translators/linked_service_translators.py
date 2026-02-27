@@ -112,6 +112,78 @@ def translate_sql_server_spec(sql_server_spec: dict) -> SqlLinkedService | Unsup
     )
 
 
+def translate_postgresql_spec(postgresql_spec: dict) -> SqlLinkedService | UnsupportedValue:
+    """
+    Parses an Azure Database for PostgreSQL linked service definition into an ``SqlLinkedService`` object.
+
+    Args:
+        postgresql_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        PostgreSQL linked-service metadata as a ``SqlLinkedService`` object.
+    """
+    if not postgresql_spec:
+        return UnsupportedValue(value=postgresql_spec, message="Missing PostgreSQL linked service definition")
+
+    properties = postgresql_spec.get("properties", {})
+    return SqlLinkedService(
+        service_name=postgresql_spec.get("name", str(uuid4())),
+        service_type="postgresql",
+        host=properties.get("server"),
+        database=properties.get("database"),
+        user_name=properties.get("user_name"),
+        authentication_type=properties.get("authentication_type"),
+    )
+
+
+def translate_mysql_spec(mysql_spec: dict) -> SqlLinkedService | UnsupportedValue:
+    """
+    Parses an Azure Database for MySQL linked service definition into an ``SqlLinkedService`` object.
+
+    Args:
+        mysql_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        MySQL linked-service metadata as a ``SqlLinkedService`` object.
+    """
+    if not mysql_spec:
+        return UnsupportedValue(value=mysql_spec, message="Missing MySQL linked service definition")
+
+    properties = mysql_spec.get("properties", {})
+    return SqlLinkedService(
+        service_name=mysql_spec.get("name", str(uuid4())),
+        service_type="mysql",
+        host=properties.get("server"),
+        database=properties.get("database"),
+        user_name=properties.get("user_name"),
+        authentication_type=properties.get("authentication_type"),
+    )
+
+
+def translate_oracle_spec(oracle_spec: dict) -> SqlLinkedService | UnsupportedValue:
+    """
+    Parses an Oracle Database linked service definition into an ``SqlLinkedService`` object.
+
+    Args:
+        oracle_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        Oracle linked-service metadata as a ``SqlLinkedService`` object.
+    """
+    if not oracle_spec:
+        return UnsupportedValue(value=oracle_spec, message="Missing Oracle linked service definition")
+
+    properties = oracle_spec.get("properties", {})
+    return SqlLinkedService(
+        service_name=oracle_spec.get("name", str(uuid4())),
+        service_type="oracle",
+        host=properties.get("server"),
+        database=properties.get("database"),
+        user_name=properties.get("user_name"),
+        authentication_type=properties.get("authentication_type"),
+    )
+
+
 def _parse_log_conf(cluster_log_destination: str | None) -> dict | None:
     """
     Parses a cluster log configuration from a DBFS destination into a dictionary of log settings.

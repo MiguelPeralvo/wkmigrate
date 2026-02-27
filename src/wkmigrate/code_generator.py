@@ -23,7 +23,7 @@ def get_option_expressions(dataset_definition: dict) -> list[str]:
     dataset_type = dataset_definition.get("type")
     if dataset_type in {"avro", "csv", "json", "orc", "parquet"}:
         return get_file_options(dataset_definition, dataset_type)
-    if dataset_type == "sqlserver":
+    if dataset_type in {"sqlserver", "postgresql", "mysql", "oracle"}:
         return get_database_options(dataset_definition, dataset_type)
     return []
 

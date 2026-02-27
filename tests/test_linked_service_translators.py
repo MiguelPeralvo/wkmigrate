@@ -17,6 +17,9 @@ from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.translators.linked_service_translators import (
     translate_abfs_spec,
     translate_databricks_cluster_spec,
+    translate_mysql_spec,
+    translate_oracle_spec,
+    translate_postgresql_spec,
     translate_sql_server_spec,
 )
 
@@ -183,6 +186,75 @@ def test_abfs_null_input_returns_unsupported(linked_service_fixtures: list[dict]
     """Test that null input returns UnsupportedValue."""
     fixture = next(f for f in linked_service_fixtures if "Empty/null ABFS" in f["description"])
     result = translate_abfs_spec(fixture["input"])
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
+
+
+def test_full_postgresql_configuration(linked_service_fixtures: list[dict]) -> None:
+    """Test translation of PostgreSQL linked service with full configuration."""
+    fixture = next(f for f in linked_service_fixtures if "PostgreSQL linked service - full" in f["description"])
+    result = translate_postgresql_spec(fixture["input"])
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.service_name == fixture["expected"]["service_name"]
+    assert result.service_type == fixture["expected"]["service_type"]
+    assert result.host == fixture["expected"]["host"]
+    assert result.database == fixture["expected"]["database"]
+    assert result.user_name == fixture["expected"]["user_name"]
+    assert result.authentication_type == fixture["expected"]["authentication_type"]
+
+
+def test_postgresql_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
+    """Test that null PostgreSQL input returns UnsupportedValue."""
+    fixture = next(f for f in linked_service_fixtures if "Empty/null PostgreSQL" in f["description"])
+    result = translate_postgresql_spec(fixture["input"])
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
+
+
+def test_full_mysql_configuration(linked_service_fixtures: list[dict]) -> None:
+    """Test translation of MySQL linked service with full configuration."""
+    fixture = next(f for f in linked_service_fixtures if "MySQL linked service - full" in f["description"])
+    result = translate_mysql_spec(fixture["input"])
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.service_name == fixture["expected"]["service_name"]
+    assert result.service_type == fixture["expected"]["service_type"]
+    assert result.host == fixture["expected"]["host"]
+    assert result.database == fixture["expected"]["database"]
+    assert result.user_name == fixture["expected"]["user_name"]
+    assert result.authentication_type == fixture["expected"]["authentication_type"]
+
+
+def test_mysql_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
+    """Test that null MySQL input returns UnsupportedValue."""
+    fixture = next(f for f in linked_service_fixtures if "Empty/null MySQL" in f["description"])
+    result = translate_mysql_spec(fixture["input"])
+
+    assert isinstance(result, UnsupportedValue)
+    assert fixture["expected_message"] in result.message
+
+
+def test_full_oracle_configuration(linked_service_fixtures: list[dict]) -> None:
+    """Test translation of Oracle linked service with full configuration."""
+    fixture = next(f for f in linked_service_fixtures if "Oracle linked service - full" in f["description"])
+    result = translate_oracle_spec(fixture["input"])
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.service_name == fixture["expected"]["service_name"]
+    assert result.service_type == fixture["expected"]["service_type"]
+    assert result.host == fixture["expected"]["host"]
+    assert result.database == fixture["expected"]["database"]
+    assert result.user_name == fixture["expected"]["user_name"]
+    assert result.authentication_type == fixture["expected"]["authentication_type"]
+
+
+def test_oracle_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
+    """Test that null Oracle input returns UnsupportedValue."""
+    fixture = next(f for f in linked_service_fixtures if "Empty/null Oracle" in f["description"])
+    result = translate_oracle_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message

@@ -16,12 +16,12 @@ from wkmigrate.models.ir.datasets import (
 from wkmigrate.translators.linked_service_translators import (
     translate_abfs_spec,
     translate_databricks_cluster_spec,
+    translate_mysql_spec,
+    translate_oracle_spec,
+    translate_postgresql_spec,
     translate_sql_server_spec,
 )
 
-_FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
-_SQL_DATASET_TYPES = {"AzureSqlTable"}
-_DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 _IGNORED_FORMAT_OPTIONS = {"dataset_name", "container", "folder_path"}
 
 
@@ -43,14 +43,21 @@ def translate_dataset(dataset: dict) -> Dataset | UnsupportedValue:
     if not dataset_type:
         return UnsupportedValue(value=dataset, message="Missing property 'type' in dataset properties")
 
-    if dataset_type in _FILE_DATASET_TYPES:
-        return translate_file_dataset(dataset_type, dataset)
-    if dataset_type in _SQL_DATASET_TYPES:
-        return translate_sql_server_dataset(dataset)
-    if dataset_type in _DELTA_DATASET_TYPES:
-        return translate_delta_table_dataset(dataset)
-
-    return UnsupportedValue(value=dataset, message=f"Unsupported dataset type '{dataset_type}'")
+    match dataset_type:
+        case "Avro" | "DelimitedText" | "Json" | "Orc" | "Parquet":
+            return translate_file_dataset(dataset_type, dataset)
+        case "AzureSqlTable":
+            return translate_sql_server_dataset(dataset)
+        case "AzurePostgreSqlTable":
+            return translate_postgresql_dataset(dataset)
+        case "AzureMySqlTable":
+            return translate_mysql_dataset(dataset)
+        case "OracleTable":
+            return translate_oracle_dataset(dataset)
+        case "AzureDatabricksDeltaLakeDataset":
+            return translate_delta_table_dataset(dataset)
+        case _:
+            return UnsupportedValue(value=dataset, message=f"Unsupported dataset type '{dataset_type}'")
 
 
 def translate_file_dataset(dataset_type: str, dataset: dict) -> FileDataset | UnsupportedValue:
@@ -143,6 +150,107 @@ def translate_sql_server_dataset(dataset: dict) -> SqlTableDataset | Unsupported
         schema_name=dataset_properties.get("schema_type_properties_schema"),
         table_name=dataset_properties.get("table"),
         dbtable=f'{dataset_properties.get("schema_type_properties_schema")}.{dataset_properties.get("table")}',
+        service_name=linked_service.service_name,
+        host=linked_service.host,
+        database=linked_service.database,
+        user_name=linked_service.user_name,
+        authentication_type=linked_service.authentication_type,
+        connection_options={},
+    )
+
+
+def translate_postgresql_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
+    """
+    Translates an Azure Database for PostgreSQL dataset definition into a ``SqlTableDataset`` object.
+
+    Args:
+        dataset: Raw dataset definition from Azure Data Factory.
+
+    Returns:
+        PostgreSQL dataset as a ``SqlTableDataset`` object.
+    """
+    linked_service_definition = _get_linked_service_definition(dataset)
+    linked_service = translate_postgresql_spec(linked_service_definition)
+    if isinstance(linked_service, UnsupportedValue):
+        return UnsupportedValue(value=dataset, message=linked_service.message)
+
+    dataset_properties = dataset.get("properties", {})
+    schema = dataset_properties.get("schema_type_properties_schema")
+    table = dataset_properties.get("table")
+    return SqlTableDataset(
+        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
+        dataset_type="postgresql",
+        schema_name=schema,
+        table_name=table,
+        dbtable=f"{schema}.{table}",
+        service_name=linked_service.service_name,
+        host=linked_service.host,
+        database=linked_service.database,
+        user_name=linked_service.user_name,
+        authentication_type=linked_service.authentication_type,
+        connection_options={},
+    )
+
+
+def translate_mysql_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
+    """
+    Translates an Azure Database for MySQL dataset definition into a ``SqlTableDataset`` object.
+
+    MySQL does not use a separate schema namespace, so ``schema_name`` is always ``None``
+    and ``dbtable`` contains only the bare table name.
+
+    Args:
+        dataset: Raw dataset definition from Azure Data Factory.
+
+    Returns:
+        MySQL dataset as a ``SqlTableDataset`` object.
+    """
+    linked_service_definition = _get_linked_service_definition(dataset)
+    linked_service = translate_mysql_spec(linked_service_definition)
+    if isinstance(linked_service, UnsupportedValue):
+        return UnsupportedValue(value=dataset, message=linked_service.message)
+
+    dataset_properties = dataset.get("properties", {})
+    table = dataset_properties.get("table")
+    return SqlTableDataset(
+        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
+        dataset_type="mysql",
+        schema_name=None,
+        table_name=table,
+        dbtable=table,
+        service_name=linked_service.service_name,
+        host=linked_service.host,
+        database=linked_service.database,
+        user_name=linked_service.user_name,
+        authentication_type=linked_service.authentication_type,
+        connection_options={},
+    )
+
+
+def translate_oracle_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
+    """
+    Translates an Oracle Database dataset definition into a ``SqlTableDataset`` object.
+
+    Args:
+        dataset: Raw dataset definition from Azure Data Factory.
+
+    Returns:
+        Oracle dataset as a ``SqlTableDataset`` object.
+    """
+    linked_service_definition = _get_linked_service_definition(dataset)
+    linked_service = translate_oracle_spec(linked_service_definition)
+    if isinstance(linked_service, UnsupportedValue):
+        return UnsupportedValue(value=dataset, message=linked_service.message)
+
+    dataset_properties = dataset.get("properties", {})
+    schema = dataset_properties.get("schema_type_properties_schema")
+    table = dataset_properties.get("table")
+    return SqlTableDataset(
+        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
+        dataset_type="oracle",
+        schema_name=schema,
+        table_name=table,
+        dbtable=f"{schema}.{table}",
         service_name=linked_service.service_name,
         host=linked_service.host,
         database=linked_service.database,
