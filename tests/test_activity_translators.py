@@ -919,10 +919,6 @@ class TestTranslationContextCache:
         assert "inner_jar" not in final_ctx.activity_cache
 
 
-# ---------------------------------------------------------------------------
-# Copy activity - SQL dataset tests
-# ---------------------------------------------------------------------------
-
 
 def test_copy_postgresql_to_delta(copy_activity_fixtures: list[dict]) -> None:
     """Test Copy activity with a PostgreSQL source dataset."""

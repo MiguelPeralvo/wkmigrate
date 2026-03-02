@@ -138,25 +138,9 @@ def translate_sql_server_dataset(dataset: dict) -> SqlTableDataset | Unsupported
     Returns:
         SQL Server dataset as a ``SqlTableDataset`` object.
     """
-    linked_service_definition = _get_linked_service_definition(dataset)
-    linked_service = translate_sql_server_spec(linked_service_definition)
-    if isinstance(linked_service, UnsupportedValue):
-        return UnsupportedValue(value=dataset, message=linked_service.message)
-
-    dataset_properties = dataset.get("properties", {})
-    return SqlTableDataset(
-        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
-        dataset_type="sqlserver",
-        schema_name=dataset_properties.get("schema_type_properties_schema"),
-        table_name=dataset_properties.get("table"),
-        dbtable=f'{dataset_properties.get("schema_type_properties_schema")}.{dataset_properties.get("table")}',
-        service_name=linked_service.service_name,
-        host=linked_service.host,
-        database=linked_service.database,
-        user_name=linked_service.user_name,
-        authentication_type=linked_service.authentication_type,
-        connection_options={},
-    )
+    schema = dataset.get("properties", {}).get("schema_type_properties_schema")
+    table = dataset.get("properties", {}).get("table")
+    return _translate_sql_dataset(dataset, "sqlserver", translate_sql_server_spec, schema, table)
 
 
 def translate_postgresql_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
@@ -169,27 +153,9 @@ def translate_postgresql_dataset(dataset: dict) -> SqlTableDataset | Unsupported
     Returns:
         PostgreSQL dataset as a ``SqlTableDataset`` object.
     """
-    linked_service_definition = _get_linked_service_definition(dataset)
-    linked_service = translate_postgresql_spec(linked_service_definition)
-    if isinstance(linked_service, UnsupportedValue):
-        return UnsupportedValue(value=dataset, message=linked_service.message)
-
-    dataset_properties = dataset.get("properties", {})
-    schema = dataset_properties.get("schema_type_properties_schema")
-    table = dataset_properties.get("table")
-    return SqlTableDataset(
-        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
-        dataset_type="postgresql",
-        schema_name=schema,
-        table_name=table,
-        dbtable=f"{schema}.{table}",
-        service_name=linked_service.service_name,
-        host=linked_service.host,
-        database=linked_service.database,
-        user_name=linked_service.user_name,
-        authentication_type=linked_service.authentication_type,
-        connection_options={},
-    )
+    schema = dataset.get("properties", {}).get("schema_type_properties_schema")
+    table = dataset.get("properties", {}).get("table")
+    return _translate_sql_dataset(dataset, "postgresql", translate_postgresql_spec, schema, table)
 
 
 def translate_mysql_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
@@ -205,26 +171,8 @@ def translate_mysql_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue
     Returns:
         MySQL dataset as a ``SqlTableDataset`` object.
     """
-    linked_service_definition = _get_linked_service_definition(dataset)
-    linked_service = translate_mysql_spec(linked_service_definition)
-    if isinstance(linked_service, UnsupportedValue):
-        return UnsupportedValue(value=dataset, message=linked_service.message)
-
-    dataset_properties = dataset.get("properties", {})
-    table = dataset_properties.get("table")
-    return SqlTableDataset(
-        dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
-        dataset_type="mysql",
-        schema_name=None,
-        table_name=table,
-        dbtable=table,
-        service_name=linked_service.service_name,
-        host=linked_service.host,
-        database=linked_service.database,
-        user_name=linked_service.user_name,
-        authentication_type=linked_service.authentication_type,
-        connection_options={},
-    )
+    table = dataset.get("properties", {}).get("table")
+    return _translate_sql_dataset(dataset, "mysql", translate_mysql_spec, None, table)
 
 
 def translate_oracle_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValue:
@@ -237,20 +185,42 @@ def translate_oracle_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValu
     Returns:
         Oracle dataset as a ``SqlTableDataset`` object.
     """
-    linked_service_definition = _get_linked_service_definition(dataset)
-    linked_service = translate_oracle_spec(linked_service_definition)
+    schema = dataset.get("properties", {}).get("schema_type_properties_schema")
+    table = dataset.get("properties", {}).get("table")
+    return _translate_sql_dataset(dataset, "oracle", translate_oracle_spec, schema, table)
+
+
+def _translate_sql_dataset(
+    dataset: dict,
+    dataset_type: str,
+    translate_spec,
+    schema_name: str | None,
+    table_name: str | None,
+) -> SqlTableDataset | UnsupportedValue:
+    """
+    Builds a ``SqlTableDataset`` from a raw ADF dataset definition.
+
+    Args:
+        dataset: Raw dataset definition from Azure Data Factory.
+        dataset_type: Normalised dataset type string (e.g. ``"sqlserver"`` or ``"postgresql"``).
+        translate_spec: Linked-service translator callable for the given database type.
+        schema_name: Schema name, or ``None`` for databases without a schema namespace (e.g. MySQL).
+        table_name: Table name.
+
+    Returns:
+        SQL table dataset as a ``SqlTableDataset`` object.
+    """
+    linked_service = translate_spec(_get_linked_service_definition(dataset))
     if isinstance(linked_service, UnsupportedValue):
         return UnsupportedValue(value=dataset, message=linked_service.message)
 
-    dataset_properties = dataset.get("properties", {})
-    schema = dataset_properties.get("schema_type_properties_schema")
-    table = dataset_properties.get("table")
+    dbtable = table_name if schema_name is None else f"{schema_name}.{table_name}"
     return SqlTableDataset(
         dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
-        dataset_type="oracle",
-        schema_name=schema,
-        table_name=table,
-        dbtable=f"{schema}.{table}",
+        dataset_type=dataset_type,
+        schema_name=schema_name,
+        table_name=table_name,
+        dbtable=dbtable,
         service_name=linked_service.service_name,
         host=linked_service.host,
         database=linked_service.database,
@@ -258,7 +228,6 @@ def translate_oracle_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValu
         authentication_type=linked_service.authentication_type,
         connection_options={},
     )
-
 
 def _parse_format_options(dataset_type: str, dataset: dict) -> dict | UnsupportedValue:
     """

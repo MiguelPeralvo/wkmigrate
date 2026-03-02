@@ -98,18 +98,7 @@ def translate_sql_server_spec(sql_server_spec: dict) -> SqlLinkedService | Unsup
     Returns:
         SQL Server linked-service metadata as a ``SqlLinkedService`` object.
     """
-    if not sql_server_spec:
-        return UnsupportedValue(value=sql_server_spec, message="Missing SQL Server linked service definition")
-
-    properties = sql_server_spec.get("properties", {})
-    return SqlLinkedService(
-        service_name=sql_server_spec.get("name", str(uuid4())),
-        service_type="sqlserver",
-        host=properties.get("server"),
-        database=properties.get("database"),
-        user_name=properties.get("user_name"),
-        authentication_type=properties.get("authentication_type"),
-    )
+    return _translate_sql_spec(sql_server_spec, "sqlserver", "SQL Server")
 
 
 def translate_postgresql_spec(postgresql_spec: dict) -> SqlLinkedService | UnsupportedValue:
@@ -122,18 +111,7 @@ def translate_postgresql_spec(postgresql_spec: dict) -> SqlLinkedService | Unsup
     Returns:
         PostgreSQL linked-service metadata as a ``SqlLinkedService`` object.
     """
-    if not postgresql_spec:
-        return UnsupportedValue(value=postgresql_spec, message="Missing PostgreSQL linked service definition")
-
-    properties = postgresql_spec.get("properties", {})
-    return SqlLinkedService(
-        service_name=postgresql_spec.get("name", str(uuid4())),
-        service_type="postgresql",
-        host=properties.get("server"),
-        database=properties.get("database"),
-        user_name=properties.get("user_name"),
-        authentication_type=properties.get("authentication_type"),
-    )
+    return _translate_sql_spec(postgresql_spec, "postgresql", "PostgreSQL")
 
 
 def translate_mysql_spec(mysql_spec: dict) -> SqlLinkedService | UnsupportedValue:
@@ -146,18 +124,7 @@ def translate_mysql_spec(mysql_spec: dict) -> SqlLinkedService | UnsupportedValu
     Returns:
         MySQL linked-service metadata as a ``SqlLinkedService`` object.
     """
-    if not mysql_spec:
-        return UnsupportedValue(value=mysql_spec, message="Missing MySQL linked service definition")
-
-    properties = mysql_spec.get("properties", {})
-    return SqlLinkedService(
-        service_name=mysql_spec.get("name", str(uuid4())),
-        service_type="mysql",
-        host=properties.get("server"),
-        database=properties.get("database"),
-        user_name=properties.get("user_name"),
-        authentication_type=properties.get("authentication_type"),
-    )
+    return _translate_sql_spec(mysql_spec, "mysql", "MySQL")
 
 
 def translate_oracle_spec(oracle_spec: dict) -> SqlLinkedService | UnsupportedValue:
@@ -170,19 +137,33 @@ def translate_oracle_spec(oracle_spec: dict) -> SqlLinkedService | UnsupportedVa
     Returns:
         Oracle linked-service metadata as a ``SqlLinkedService`` object.
     """
-    if not oracle_spec:
-        return UnsupportedValue(value=oracle_spec, message="Missing Oracle linked service definition")
+    return _translate_sql_spec(oracle_spec, "oracle", "Oracle")
 
-    properties = oracle_spec.get("properties", {})
+
+def _translate_sql_spec(spec: dict, service_type: str, display_name: str) -> SqlLinkedService | UnsupportedValue:
+    """
+    Builds an ``SqlLinkedService`` from a raw ADF linked service definition.
+
+    Args:
+        spec: Linked-service definition from Azure Data Factory.
+        service_type: Normalised service type string (e.g. ``"sqlserver"`` or ``"postgresql"``).
+        display_name: Human-readable name used in the missing-definition error message.
+
+    Returns:
+        SQL linked-service metadata as a ``SqlLinkedService`` object.
+    """
+    if not spec:
+        return UnsupportedValue(value=spec, message=f"Missing {display_name} linked service definition")
+
+    properties = spec.get("properties", {})
     return SqlLinkedService(
-        service_name=oracle_spec.get("name", str(uuid4())),
-        service_type="oracle",
+        service_name=spec.get("name", str(uuid4())),
+        service_type=service_type,
         host=properties.get("server"),
         database=properties.get("database"),
         user_name=properties.get("user_name"),
         authentication_type=properties.get("authentication_type"),
     )
-
 
 def _parse_log_conf(cluster_log_destination: str | None) -> dict | None:
     """
