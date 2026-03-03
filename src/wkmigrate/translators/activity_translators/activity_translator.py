@@ -32,6 +32,7 @@ from wkmigrate.translators.activity_translators.lookup_activity_translator impor
 from wkmigrate.translators.activity_translators.notebook_activity_translator import translate_notebook_activity
 from wkmigrate.translators.activity_translators.spark_jar_activity_translator import translate_spark_jar_activity
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
+from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
 from wkmigrate.utils import get_placeholder_activity, normalize_translated_result, parse_activity_timeout_string
 
@@ -45,6 +46,7 @@ _default_type_translators: dict[str, TypeTranslator] = {
     "DatabricksSparkPython": translate_spark_python_activity,
     "Copy": translate_copy_activity,
     "Lookup": translate_lookup_activity,
+    "WebActivity": translate_web_activity,
 }
 
 
@@ -109,9 +111,6 @@ def translate_activities(activities: list[dict] | None) -> list[Activity] | None
 def translate_activity(activity: dict, is_conditional_task: bool = False) -> Activity:
     """
     Translates a single ADF activity into an ``Activity`` object.
-
-    This is a convenience wrapper that discards the final context.  Use
-    ``visit_activity`` directly when you need the updated context.
 
     Args:
         activity: Activity definition emitted by ADF.
