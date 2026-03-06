@@ -9,7 +9,7 @@ import warnings
 
 from wkmigrate.translators.activity_translators.activity_translator import translate_activities_with_context
 from wkmigrate.models.ir.pipeline import Pipeline
-from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.warnings import TranslationWarning
 from wkmigrate.translators.pipeline_translators.parameter_translator import translate_parameters
 from wkmigrate.translators.trigger_translators.schedule_trigger_translator import translate_schedule_trigger
 from wkmigrate.utils import append_system_tags
@@ -33,7 +33,7 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
         warnings.simplefilter("always", UserWarning)
         if "name" not in pipeline:
             warnings.warn(
-                NotTranslatableWarning(
+                TranslationWarning(
                     "pipeline.name", "No pipeline name in source definition, setting to UNNAMED_WORKFLOW"
                 ),
                 stacklevel=2,
@@ -47,7 +47,7 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
             tags=append_system_tags(pipeline.get("tags")),
         )
 
-    not_translatable = []
+    translation_warnings: list[dict] = []
     for warning in caught_warnings:
         if not issubclass(warning.category, UserWarning):
             continue
@@ -55,7 +55,7 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
         property_name = getattr(warning.message, "property_name", "unknown")
         activity_name = getattr(warning.message, "activity_name", None)
         activity_type = getattr(warning.message, "activity_type", None)
-        entry = {
+        entry: dict = {
             "property": property_name,
             "message": message,
         }
@@ -63,6 +63,6 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
             entry["activity_name"] = activity_name
         if activity_type is not None:
             entry["activity_type"] = activity_type
-        not_translatable.append(entry)
-    pipeline_ir.not_translatable = not_translatable
+        translation_warnings.append(entry)
+    pipeline_ir.warnings = translation_warnings
     return pipeline_ir

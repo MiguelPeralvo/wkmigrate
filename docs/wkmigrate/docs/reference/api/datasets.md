@@ -28,12 +28,6 @@ Converts a source-system data type to the Spark equivalent.
 **Returns**:
 
   Spark-compatible data type string.
-  
-
-**Raises**:
-
-- `ValueError` - If the sink system is unsupported.
-- `ValueError` - If the sink type is not supported for the given system.
 
 #### merge\_dataset\_definition
 

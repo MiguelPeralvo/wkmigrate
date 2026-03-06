@@ -2,10 +2,11 @@
 
 Translators in this module normalize Copy Data activity payloads into internal representations.
 Each translator must validate required fields, coerce connection settings, source and sink dataset
-properties, and column mappings.Translators should emit ``UnsupportedValue`` objects for any unparsable
-inputs.
+properties, and column mappings.  Translators should emit ``UnsupportedValue`` objects for any
+unparsable inputs.
 """
 
+from wkmigrate.datasets import parse_spark_data_type
 from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
@@ -19,7 +20,9 @@ from wkmigrate.utils import (
 
 def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity | UnsupportedValue:
     """
-    Translates an ADF Copy activity into a ``CopyActivity`` object. Copy activities are translated into Lakeflow Declarative Pipelines tasks or Notebook tasks depending on the source and target dataset types.
+    Translates an ADF Copy activity into a ``CopyActivity`` object. Copy activities are translated
+    into Lakeflow Declarative Pipelines tasks or Notebook tasks depending on the source and target
+    dataset types.
 
     This method returns an ``UnsupportedValue`` if the activity cannot be translated. This can be due to:
     * Missing or invalid dataset definitions
@@ -38,7 +41,9 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     sink_dataset = get_data_source_definition(get_value_or_unsupported(activity, "output_dataset_definitions"))
     source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
     sink_properties = get_data_source_properties(get_value_or_unsupported(activity, "sink"))
-    column_mapping = _parse_dataset_mapping(activity.get("translator") or {})
+
+    sink_system = sink_dataset.dataset_type if isinstance(sink_dataset, Dataset) else None
+    column_mapping = _parse_dataset_mapping(activity.get("translator") or {}, sink_system)
 
     if (
         isinstance(source_dataset, Dataset)
@@ -58,21 +63,28 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     return merge_unsupported_values([source_dataset, sink_dataset, source_properties, sink_properties])
 
 
-def _parse_dataset_mapping(mapping: dict) -> list[ColumnMapping]:
+def _parse_dataset_mapping(mapping: dict, sink_system: str | None) -> list[ColumnMapping]:
     """
-    Parses a mapping from one set of data columns to another.
+    Parses a mapping from one set of data columns to another, converting ADF column types
+    to Spark equivalents using the sink system's type mapping.
 
     Args:
         mapping: Data column mapping definition.
+        sink_system: Normalized sink dataset type (e.g. ``"sqlserver"``), used for type conversion.
 
     Returns:
         List of column mapping definitions as ``ColumnMapping`` objects.
     """
     return [
         ColumnMapping(
-            source_column_name=(mapping.get("source").get("name") or f"_c{mapping.get('source').get('ordinal') - 1}"),
-            sink_column_name=mapping.get("sink").get("name"),
-            sink_column_type=mapping.get("sink").get("type"),
+            source_column_name=mapping_entry.get("source").get("name")
+            or f"_c{mapping_entry.get("source", {}).get("ordinal", 1) - 1}",
+            sink_column_name=mapping_entry.get("sink").get("name"),
+            sink_column_type=(
+                parse_spark_data_type(mapping_entry.get("sink").get("type"), sink_system)
+                if mapping_entry.get("sink").get("type") and sink_system
+                else mapping_entry.get("sink").get("type")
+            ),
         )
-        for mapping in (mapping.get("mappings") or [])
+        for mapping_entry in mapping.get("mappings") or []
     ]

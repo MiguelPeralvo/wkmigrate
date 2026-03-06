@@ -9,7 +9,7 @@ import pytest
 
 from wkmigrate.code_generator import get_web_activity_notebook_content
 from wkmigrate.models.ir.pipeline import Authentication
-from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.warnings import TranslationWarning
 
 
 def test_web_activity_notebook_with_auth_and_cert_validation() -> None:
@@ -56,8 +56,8 @@ def test_web_activity_notebook_contains_request_call() -> None:
 
 
 def test_web_activity_notebook_with_unsupported_auth_type() -> None:
-    """get_web_activity_notebook_content raises NotTranslatableWarning for unsupported auth type."""
-    with pytest.raises(NotTranslatableWarning) as exc_info:
+    """get_web_activity_notebook_content raises TranslationWarning for unsupported auth type."""
+    with pytest.raises(TranslationWarning) as exc_info:
         get_web_activity_notebook_content(
             activity_name="test_web_activity_invalid_auth",
             activity_type="WebActivity",

@@ -28,6 +28,7 @@ from wkmigrate.translators.pipeline_translators.pipeline_translator import trans
                 tags={"env": "test", "CREATED_BY_WKMIGRATE": ""},
                 tasks=[],
                 not_translatable=[],
+                warnings=[],
             ),
             does_not_raise(),
         ),
@@ -46,7 +47,8 @@ from wkmigrate.translators.pipeline_translators.pipeline_translator import trans
                 schedule={"quartz_cron_expression": "0 0 0 */1 * ?", "timezone_id": "UTC"},
                 tags={"env": "test", "CREATED_BY_WKMIGRATE": ""},
                 tasks=[],
-                not_translatable=[
+                not_translatable=[],
+                warnings=[
                     {
                         "property": "pipeline.name",
                         "message": "No pipeline name in source definition, setting to UNNAMED_WORKFLOW",

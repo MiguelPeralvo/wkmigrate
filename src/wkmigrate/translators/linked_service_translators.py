@@ -165,6 +165,7 @@ def _translate_sql_spec(spec: dict, service_type: str, display_name: str) -> Sql
         authentication_type=properties.get("authentication_type"),
     )
 
+
 def _parse_log_conf(cluster_log_destination: str | None) -> dict | None:
     """
     Parses a cluster log configuration from a DBFS destination into a dictionary of log settings.

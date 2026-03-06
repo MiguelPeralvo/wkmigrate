@@ -9,11 +9,13 @@ objects needed to materialise credentials in a Databricks workspace.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from wkmigrate.models.ir.datasets import Dataset, DatasetProperties
 from wkmigrate.models.workflows.instructions import SecretInstruction
+from wkmigrate.warnings import TranslationWarning
 from wkmigrate.utils import parse_mapping
 
 FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
@@ -22,6 +24,7 @@ DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 
 _JDBC_SECRETS = ["host", "database", "user_name", "password"]
 _JDBC_OPTIONS = ["mode", "dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
+
 
 DATASET_SECRETS: dict[str, list[str]] = {
     "avro": ["storage_account_key"],
@@ -57,14 +60,129 @@ DATASET_OPTIONS: dict[str, list[str]] = {
     "sqlserver": _JDBC_OPTIONS,
 }
 
-sql_server_type_mapping: dict[str, str] = {
+_sql_server_type_mapping: dict[str, str] = {
     "Boolean": "boolean",
+    "Byte": "tinyint",
     "Int16": "short",
     "Int32": "int",
     "Int64": "long",
     "Single": "float",
     "Double": "double",
     "Decimal": "decimal(38, 38)",
+    "String": "string",
+    "DateTime": "timestamp",
+    "DateTimeOffset": "timestamp",
+    "Guid": "string",
+    "Byte[]": "binary",
+    "TimeSpan": "string",
+}
+
+_postgresql_type_mapping: dict[str, str] = {
+    "smallint": "short",
+    "integer": "int",
+    "bigint": "long",
+    "real": "float",
+    "float": "float",
+    "double precision": "double",
+    "numeric": "decimal(38, 38)",
+    "decimal": "decimal(38, 38)",
+    "boolean": "boolean",
+    "character varying": "string",
+    "varchar": "string",
+    "text": "string",
+    "char": "string",
+    "character": "string",
+    "date": "date",
+    "timestamp without time zone": "timestamp_ntz",
+    "timestamp with time zone": "timestamp",
+    "timestamp": "timestamp",
+    "time without time zone": "timestamp_ntz",
+    "time with time zone": "timestamp_ntz",
+    "time": "time",
+    "interval": "string",
+    "enum": "string",
+    "money": "string",
+    "inet": "string",
+    "cidr": "string",
+    "macaddr": "string",
+    "macaddr8": "string",
+    "point": "string",
+    "line": "string",
+    "lseg": "string",
+    "box": "string",
+    "path": "string",
+    "polygon": "string",
+    "circle": "string",
+    "pg_lsn": "string",
+    "bytea": "binary",
+    "bit": "boolean",
+    "bit varying": "binary",
+    "tsvector": "string",
+    "tsquery": "string",
+    "uuid": "string",
+    "xml": "string",
+    "json": "string",
+    "jsonb": "string",
+    "int4range": "string",
+    "int8range": "string",
+    "numrange": "string",
+    "tsrange": "string",
+    "tstzrange": "string",
+    "daterange": "string",
+    "oid": "decimal(20, 0)",
+    "regxxx": "string",
+    "void": "void",
+}
+
+_mysql_type_mapping: dict[str, str] = {
+    "bit": "boolean",
+    "tinyint": "boolean",
+    "smallint": "short",
+    "mediumint": "int",
+    "int": "int",
+    "bigint": "long",
+    "float": "float",
+    "double": "double",
+    "decimal": "decimal(38, 18)",
+    "char": "string",
+    "varchar": "string",
+    "text": "string",
+    "tinytext": "string",
+    "mediumtext": "string",
+    "longtext": "string",
+    "date": "date",
+    "datetime": "timestamp",
+    "timestamp": "timestamp",
+    "blob": "binary",
+    "tinyblob": "binary",
+    "mediumblob": "binary",
+    "longblob": "binary",
+    "json": "string",
+}
+
+_oracle_type_mapping: dict[str, str] = {
+    "NUMBER": "decimal(38, 38)",
+    "FLOAT": "double",
+    "BINARY_FLOAT": "float",
+    "BINARY_DOUBLE": "double",
+    "VARCHAR2": "string",
+    "NVARCHAR2": "string",
+    "CHAR": "string",
+    "NCHAR": "string",
+    "CLOB": "string",
+    "NCLOB": "string",
+    "DATE": "timestamp",
+    "TIMESTAMP": "timestamp",
+    "RAW": "binary",
+    "BLOB": "binary",
+    "LONG": "binary",
+}
+
+_JDBC_TYPE_MAPPINGS: dict[str, dict[str, str]] = {
+    "sqlserver": _sql_server_type_mapping,
+    "postgresql": _postgresql_type_mapping,
+    "mysql": _mysql_type_mapping,
+    "oracle": _oracle_type_mapping,
 }
 
 
@@ -78,19 +196,31 @@ def parse_spark_data_type(sink_type: str, sink_system: str) -> str:
 
     Returns:
         Spark-compatible data type string.
-
-    Raises:
-        ValueError: If the sink system is unsupported.
-        ValueError: If the sink type is not supported for the given system.
     """
-    if sink_system in {"delta", "postgresql", "mysql", "oracle"}:
+    if sink_system == "delta":
         return sink_type
-    if sink_system == "sqlserver":
-        mapped_type = sql_server_type_mapping.get(sink_type)
-        if mapped_type is None:
-            raise ValueError(f"No data type mapping available for SQL Server type '{sink_type}'")
-        return mapped_type
-    raise ValueError(f"No data type mapping available for target system '{sink_system}'")
+    mapping = _JDBC_TYPE_MAPPINGS.get(sink_system)
+    if mapping is None:
+        warnings.warn(
+            TranslationWarning(
+                "sink_type",
+                f"No data type mapping available for target system '{sink_system}'; "
+                f"using ADF type '{sink_type}' as-is.",
+            ),
+            stacklevel=2,
+        )
+        return sink_type
+    mapped = mapping.get(sink_type)
+    if mapped is None:
+        warnings.warn(
+            TranslationWarning(
+                "sink_type",
+                f"No data type mapping for '{sink_system}' type '{sink_type}'; " f"using ADF type '{sink_type}' as-is.",
+            ),
+            stacklevel=2,
+        )
+        return sink_type
+    return mapped
 
 
 def merge_dataset_definition(dataset: Dataset | dict | None, properties: DatasetProperties | dict | None) -> dict:

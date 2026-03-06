@@ -64,3 +64,57 @@ Parses a SQL Server linked service definition into an ``SqlLinkedService`` objec
 
   SQL Server linked-service metadata as a ``SqlLinkedService`` object.
 
+#### translate\_postgresql\_spec
+
+```python
+def translate_postgresql_spec(
+        postgresql_spec: dict) -> SqlLinkedService | UnsupportedValue
+```
+
+Parses an Azure Database for PostgreSQL linked service definition into an ``SqlLinkedService`` object.
+
+**Arguments**:
+
+- `postgresql_spec` - Linked-service definition from Azure Data Factory.
+  
+
+**Returns**:
+
+  PostgreSQL linked-service metadata as a ``SqlLinkedService`` object.
+
+#### translate\_mysql\_spec
+
+```python
+def translate_mysql_spec(
+        mysql_spec: dict) -> SqlLinkedService | UnsupportedValue
+```
+
+Parses an Azure Database for MySQL linked service definition into an ``SqlLinkedService`` object.
+
+**Arguments**:
+
+- `mysql_spec` - Linked-service definition from Azure Data Factory.
+  
+
+**Returns**:
+
+  MySQL linked-service metadata as a ``SqlLinkedService`` object.
+
+#### translate\_oracle\_spec
+
+```python
+def translate_oracle_spec(
+        oracle_spec: dict) -> SqlLinkedService | UnsupportedValue
+```
+
+Parses an Oracle Database linked service definition into an ``SqlLinkedService`` object.
+
+**Arguments**:
+
+- `oracle_spec` - Linked-service definition from Azure Data Factory.
+  
+
+**Returns**:
+
+  Oracle linked-service metadata as a ``SqlLinkedService`` object.
+

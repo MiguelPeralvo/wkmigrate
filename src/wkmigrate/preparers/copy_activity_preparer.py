@@ -15,7 +15,6 @@ import autopep8  # type: ignore
 from wkmigrate.datasets import (
     collect_data_source_secrets,
     merge_dataset_definition,
-    parse_spark_data_type,
 )
 from wkmigrate.code_generator import (
     get_option_expressions,
@@ -203,8 +202,8 @@ def _get_mapping(
     for mapping in column_mapping:
         source_col = mapping["source_column_name"]
         sink_col = mapping["sink_column_name"]
-        sink_type = parse_spark_data_type(mapping["sink_column_type"], sink_dataset["type"])
-        if cast_column_types:
+        sink_type = mapping["sink_column_type"]
+        if cast_column_types and sink_type:
             expressions.append(f'"cast({source_col} as {sink_type}) as {sink_col}"')
         else:
             expressions.append(f'"{source_col} as {sink_col}"')

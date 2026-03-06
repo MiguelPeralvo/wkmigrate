@@ -7,7 +7,7 @@ emit warnings for partially supported configurations.
 
 import warnings
 from wkmigrate.enums.interval_type import IntervalType
-from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.warnings import TranslationWarning
 
 
 def parse_cron_expression(recurrence: dict | None) -> str | None:
@@ -26,7 +26,7 @@ def parse_cron_expression(recurrence: dict | None) -> str | None:
     num_intervals = recurrence.get("interval")
     if num_intervals is None:
         warnings.warn(
-            NotTranslatableWarning("schedule.num_intervals", 'Setting empty "num_intervals" to "1" by default'),
+            TranslationWarning("schedule.num_intervals", 'Setting empty "num_intervals" to "1" by default'),
             stacklevel=2,
         )
         num_intervals = 1
@@ -38,7 +38,7 @@ def parse_cron_expression(recurrence: dict | None) -> str | None:
     if interval_type == IntervalType.WEEK:
         if num_intervals > 1:
             warnings.warn(
-                NotTranslatableWarning(
+                TranslationWarning(
                     "schedule.num_intervals",
                     'Ignoring "num_intervals" > 1 for weekly triggers; Using weekly interval',
                 ),
@@ -48,7 +48,7 @@ def parse_cron_expression(recurrence: dict | None) -> str | None:
     if interval_type == IntervalType.MONTH:
         if num_intervals > 1:
             warnings.warn(
-                NotTranslatableWarning(
+                TranslationWarning(
                     "schedule.num_intervals",
                     'Ignoring "num_intervals" > 1 for monthly triggers; Using monthly interval',
                 ),
