@@ -6,6 +6,7 @@ objects for any unparsable inputs.
 """
 
 import json
+from collections.abc import Callable
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.datasets import (
     Dataset,
@@ -13,6 +14,7 @@ from wkmigrate.models.ir.datasets import (
     FileDataset,
     SqlTableDataset,
 )
+from wkmigrate.models.ir.linked_services import SqlLinkedService
 from wkmigrate.translators.linked_service_translators import (
     translate_abfs_spec,
     translate_databricks_cluster_spec,
@@ -193,7 +195,7 @@ def translate_oracle_dataset(dataset: dict) -> SqlTableDataset | UnsupportedValu
 def _translate_sql_dataset(
     dataset: dict,
     dataset_type: str,
-    translate_spec,
+    translate_spec: Callable[[dict], SqlLinkedService | UnsupportedValue],
     schema_name: str | None,
     table_name: str | None,
 ) -> SqlTableDataset | UnsupportedValue:
@@ -228,6 +230,7 @@ def _translate_sql_dataset(
         authentication_type=linked_service.authentication_type,
         connection_options={},
     )
+
 
 def _parse_format_options(dataset_type: str, dataset: dict) -> dict | UnsupportedValue:
     """

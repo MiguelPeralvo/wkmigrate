@@ -919,7 +919,6 @@ class TestTranslationContextCache:
         assert "inner_jar" not in final_ctx.activity_cache
 
 
-
 def test_copy_postgresql_to_delta(copy_activity_fixtures: list[dict]) -> None:
     """Test Copy activity with a PostgreSQL source dataset."""
     fixture = next(f for f in copy_activity_fixtures if "PostgreSQL to Delta" in f["description"])
@@ -948,6 +947,42 @@ def test_copy_mysql_to_delta(copy_activity_fixtures: list[dict]) -> None:
 def test_copy_oracle_to_delta(copy_activity_fixtures: list[dict]) -> None:
     """Test Copy activity with an Oracle source dataset."""
     fixture = next(f for f in copy_activity_fixtures if "Oracle to Delta" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_delta_to_postgresql(copy_activity_fixtures: list[dict]) -> None:
+    """Test Copy activity with a PostgreSQL sink dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "Delta to PostgreSQL" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_delta_to_mysql(copy_activity_fixtures: list[dict]) -> None:
+    """Test Copy activity with a MySQL sink dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "Delta to MySQL" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_dataset is not None
+    assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
+    assert result.sink_dataset is not None
+    assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_delta_to_oracle(copy_activity_fixtures: list[dict]) -> None:
+    """Test Copy activity with an Oracle sink dataset."""
+    fixture = next(f for f in copy_activity_fixtures if "Delta to Oracle" in f["description"])
     result = translate_activity(fixture["input"])
 
     assert isinstance(result, CopyActivity)
