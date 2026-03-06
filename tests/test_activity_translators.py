@@ -1044,11 +1044,11 @@ def test_context_cache_foreach_multi_inner_does_not_modify_parent() -> None:
     }
     result, final_ctx = translate_activities_with_context([for_each], ctx)
 
-        assert result is not None
-        assert "outer_task" in final_ctx.activity_cache
-        assert "loop" in final_ctx.activity_cache
-        assert "inner_nb" not in final_ctx.activity_cache
-        assert "inner_jar" not in final_ctx.activity_cache
+    assert result is not None
+    assert "outer_task" in final_ctx.activity_cache
+    assert "loop" in final_ctx.activity_cache
+    assert "inner_nb" not in final_ctx.activity_cache
+    assert "inner_jar" not in final_ctx.activity_cache
 
 
 def test_copy_postgresql_to_delta(copy_activity_fixtures: list[dict]) -> None:
@@ -1122,8 +1122,3 @@ def test_copy_delta_to_oracle(copy_activity_fixtures: list[dict]) -> None:
     assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
     assert result.sink_dataset is not None
     assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
-    assert result is not None
-    assert "outer_task" in final_ctx.activity_cache
-    assert "loop" in final_ctx.activity_cache
-    assert "inner_nb" not in final_ctx.activity_cache
-    assert "inner_jar" not in final_ctx.activity_cache
