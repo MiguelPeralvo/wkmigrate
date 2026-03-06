@@ -8,6 +8,7 @@ SQL Server connections, and ABFS storage accounts.
 from __future__ import annotations
 
 
+from tests.conftest import get_fixture
 from wkmigrate.models.ir.linked_services import (
     AbfsLinkedService,
     DatabricksClusterLinkedService,
@@ -26,7 +27,7 @@ from wkmigrate.translators.linked_service_translators import (
 
 def test_autoscaling_cluster(linked_service_fixtures: list[dict]) -> None:
     """Test translation of Databricks linked service with autoscaling."""
-    fixture = next(f for f in linked_service_fixtures if "autoscaling cluster" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_autoscaling")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -41,7 +42,7 @@ def test_autoscaling_cluster(linked_service_fixtures: list[dict]) -> None:
 
 def test_autoscaling_cluster_custom_tags(linked_service_fixtures: list[dict]) -> None:
     """Test that custom tags include system tags."""
-    fixture = next(f for f in linked_service_fixtures if "autoscaling cluster" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_autoscaling")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -51,7 +52,7 @@ def test_autoscaling_cluster_custom_tags(linked_service_fixtures: list[dict]) ->
 
 def test_autoscaling_cluster_spark_config(linked_service_fixtures: list[dict]) -> None:
     """Test that Spark configuration is preserved."""
-    fixture = next(f for f in linked_service_fixtures if "autoscaling cluster" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_autoscaling")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -61,7 +62,7 @@ def test_autoscaling_cluster_spark_config(linked_service_fixtures: list[dict]) -
 
 def test_autoscaling_cluster_init_scripts(linked_service_fixtures: list[dict]) -> None:
     """Test that init scripts are parsed with correct types."""
-    fixture = next(f for f in linked_service_fixtures if "autoscaling cluster" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_autoscaling")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -78,7 +79,7 @@ def test_autoscaling_cluster_init_scripts(linked_service_fixtures: list[dict]) -
 
 def test_autoscaling_cluster_log_conf(linked_service_fixtures: list[dict]) -> None:
     """Test that cluster log configuration is preserved."""
-    fixture = next(f for f in linked_service_fixtures if "autoscaling cluster" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_autoscaling")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -87,7 +88,7 @@ def test_autoscaling_cluster_log_conf(linked_service_fixtures: list[dict]) -> No
 
 def test_fixed_cluster_size(linked_service_fixtures: list[dict]) -> None:
     """Test translation of Databricks linked service with fixed cluster size."""
-    fixture = next(f for f in linked_service_fixtures if "fixed cluster size" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_fixed")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -97,7 +98,7 @@ def test_fixed_cluster_size(linked_service_fixtures: list[dict]) -> None:
 
 def test_minimal_configuration(linked_service_fixtures: list[dict]) -> None:
     """Test translation of Databricks linked service with minimal configuration."""
-    fixture = next(f for f in linked_service_fixtures if "minimal configuration" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_minimal")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, DatabricksClusterLinkedService)
@@ -109,7 +110,7 @@ def test_minimal_configuration(linked_service_fixtures: list[dict]) -> None:
 
 def test_invalid_worker_count_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that invalid worker count returns UnsupportedValue."""
-    fixture = next(f for f in linked_service_fixtures if "invalid worker count" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_invalid_workers")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
@@ -118,7 +119,7 @@ def test_invalid_worker_count_returns_unsupported(linked_service_fixtures: list[
 
 def test_databricks_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that null input returns UnsupportedValue."""
-    fixture = next(f for f in linked_service_fixtures if "Empty/null Databricks" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "databricks_null")
     result = translate_databricks_cluster_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
@@ -127,7 +128,7 @@ def test_databricks_null_input_returns_unsupported(linked_service_fixtures: list
 
 def test_full_sql_server_configuration(linked_service_fixtures: list[dict]) -> None:
     """Test translation of SQL Server linked service with full configuration."""
-    fixture = next(f for f in linked_service_fixtures if "SQL Server linked service - full" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "sql_full")
     result = translate_sql_server_spec(fixture["input"])
 
     assert isinstance(result, SqlLinkedService)
@@ -141,7 +142,7 @@ def test_full_sql_server_configuration(linked_service_fixtures: list[dict]) -> N
 
 def test_minimal_sql_server_configuration(linked_service_fixtures: list[dict]) -> None:
     """Test translation of SQL Server linked service with minimal configuration."""
-    fixture = next(f for f in linked_service_fixtures if "SQL Server linked service - minimal" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "sql_minimal")
     result = translate_sql_server_spec(fixture["input"])
 
     assert isinstance(result, SqlLinkedService)
@@ -154,7 +155,7 @@ def test_minimal_sql_server_configuration(linked_service_fixtures: list[dict]) -
 
 def test_sql_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that null input returns UnsupportedValue."""
-    fixture = next(f for f in linked_service_fixtures if "Empty/null SQL Server" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "sql_null")
     result = translate_sql_server_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
@@ -163,7 +164,7 @@ def test_sql_null_input_returns_unsupported(linked_service_fixtures: list[dict])
 
 def test_full_abfs_configuration(linked_service_fixtures: list[dict]) -> None:
     """Test translation of ABFS linked service with full configuration."""
-    fixture = next(f for f in linked_service_fixtures if "ABFS linked service - full" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "abfs_full")
     result = translate_abfs_spec(fixture["input"])
 
     assert isinstance(result, AbfsLinkedService)
@@ -175,7 +176,7 @@ def test_full_abfs_configuration(linked_service_fixtures: list[dict]) -> None:
 
 def test_invalid_connection_string_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that invalid connection string returns UnsupportedValue."""
-    fixture = next(f for f in linked_service_fixtures if "ABFS linked service - invalid" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "abfs_invalid")
     result = translate_abfs_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
@@ -184,7 +185,7 @@ def test_invalid_connection_string_returns_unsupported(linked_service_fixtures: 
 
 def test_abfs_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that null input returns UnsupportedValue."""
-    fixture = next(f for f in linked_service_fixtures if "Empty/null ABFS" in f["description"])
+    fixture = get_fixture(linked_service_fixtures, "abfs_null")
     result = translate_abfs_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
