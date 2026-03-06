@@ -183,7 +183,7 @@ def get_jdbc_read_expression(source_definition: dict, source_query: str | None =
 
     lines = [
         f"{source_name}_df = (",
-        f'    spark.read.format("{source_definition.get("type")}")',
+        '    spark.read.format("jdbc")',
         f"        .options(**{source_name}_options)",
     ]
 

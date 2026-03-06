@@ -18,9 +18,6 @@ from wkmigrate.models.workflows.instructions import SecretInstruction
 from wkmigrate.warnings import TranslationWarning
 from wkmigrate.utils import parse_mapping
 
-FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
-SQL_DATASET_TYPES = {"AzureSqlTable", "AzurePostgreSqlTable", "AzureMySqlTable", "OracleTable"}
-DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 
 _JDBC_SECRETS = ["host", "database", "user_name", "password"]
 _JDBC_OPTIONS = ["mode", "dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
