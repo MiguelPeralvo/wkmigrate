@@ -1,6 +1,6 @@
 ---
-sidebar_label: warnings
-title: wkmigrate.warnings
+sidebar_label: translation_warnings
+title: wkmigrate.translation_warnings
 ---
 
 Helpers for tracking translation warnings.
@@ -44,4 +44,14 @@ Initializes the warning and attaches contextual metadata.
 
 - `property_name` - Pipeline property that triggered the warning.
 - `message` - Human-readable warning message.
+
+## UnsupportedActivityWarning Objects
+
+```python
+class UnsupportedActivityWarning(TranslationWarning)
+```
+
+Warning emitted when an activity or property cannot be translated at all.
+
+These warnings are routed to ``unsupported.json`` rather than ``warnings.json``.
 

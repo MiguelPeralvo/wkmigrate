@@ -4,10 +4,6 @@ The activity translator routes each ADF activity to its corresponding translator
 shared metadata (policy, dependencies, cluster specs), and flattens nested control-flow
 constructs. It also captures non-translatable warnings so that callers receive structured
 diagnostics with the translated activities.
-
-Translation state is captured in a ``TranslationContext`` that is threaded through function calls
-and returned alongside results.  No mutable state is shared between functions — each state transition
-produces a new context, making the data flow fully explicit.
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ from wkmigrate.models.ir.pipeline import Activity, Dependency, IfConditionActivi
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.warnings import TranslationWarning, translation_warning_context
+from wkmigrate.translation_warnings import TranslationWarning, translation_warning_context
 from wkmigrate.translators.activity_translators.copy_activity_translator import translate_copy_activity
 from wkmigrate.translators.activity_translators.databricks_job_activity_translator import (
     translate_databricks_job_activity,
@@ -34,7 +30,7 @@ from wkmigrate.translators.activity_translators.spark_jar_activity_translator im
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
-from wkmigrate.utils import get_placeholder_activity, normalize_translated_result, parse_activity_timeout_string
+from wkmigrate.utils import normalize_translated_result, parse_activity_timeout_string
 
 
 TypeTranslator = Callable[[dict, dict], TranslationResult]
@@ -189,7 +185,7 @@ def _dispatch_activity(
             translator = context.registry.get(activity_type)
             if translator is not None:
                 return translator(activity, base_kwargs), context
-            return get_placeholder_activity(base_kwargs), context
+            return UnsupportedValue(value=activity, message=f"Unsupported activity type '{activity_type}'"), context
 
 
 def _build_activity_index(activities: list[dict]) -> tuple[dict[str, dict], list[str]]:

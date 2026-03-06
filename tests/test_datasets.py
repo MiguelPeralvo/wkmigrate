@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from wkmigrate.datasets import parse_spark_data_type
-from wkmigrate.warnings import TranslationWarning
+from wkmigrate.translation_warnings import TranslationWarning
 
 
 class TestParseSparkDataTypeSqlServer:

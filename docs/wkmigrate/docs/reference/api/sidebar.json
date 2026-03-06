@@ -123,8 +123,8 @@
         },
         "reference/api/wkmigrate/code_generator",
         "reference/api/wkmigrate/datasets",
-        "reference/api/wkmigrate/utils",
-        "reference/api/wkmigrate/warnings"
+        "reference/api/wkmigrate/translation_warnings",
+        "reference/api/wkmigrate/utils"
       ],
       "label": "wkmigrate",
       "type": "category"

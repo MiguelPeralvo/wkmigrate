@@ -13,7 +13,7 @@ import autopep8  # type: ignore
 
 from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
 from wkmigrate.models.ir.pipeline import Authentication
-from wkmigrate.warnings import TranslationWarning, translation_warning_context
+from wkmigrate.translation_warnings import TranslationWarning, translation_warning_context
 
 
 def get_option_expressions(dataset_definition: dict) -> list[str]:

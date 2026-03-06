@@ -15,7 +15,7 @@ from wkmigrate.code_generator import (
     get_web_activity_notebook_content,
 )
 from wkmigrate.models.ir.pipeline import Authentication
-from wkmigrate.warnings import TranslationWarning
+from wkmigrate.translation_warnings import TranslationWarning
 
 
 def test_web_activity_notebook_with_auth_and_cert_validation() -> None:

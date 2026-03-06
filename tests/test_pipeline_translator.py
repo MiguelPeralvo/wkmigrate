@@ -63,3 +63,72 @@ def test_translate_pipeline(pipeline_definition, expected_result, context):
     with context:
         result = translate_pipeline(pipeline_definition)
         assert result == expected_result
+
+
+def test_unsupported_activity_populates_not_translatable() -> None:
+    """Unsupported activity types produce entries in Pipeline.not_translatable."""
+    pipeline = {
+        "name": "unsupported_test",
+        "activities": [
+            {
+                "name": "custom_task",
+                "type": "CustomUnsupportedType",
+                "depends_on": [],
+            }
+        ],
+    }
+    result = translate_pipeline(pipeline)
+
+    assert len(result.not_translatable) == 1
+    entry = result.not_translatable[0]
+    assert entry["property"] == "custom_task"
+    assert "activity_name" in entry
+    assert entry["activity_name"] == "custom_task"
+    assert entry["activity_type"] == "CustomUnsupportedType"
+
+
+def test_unsupported_activity_does_not_appear_in_warnings() -> None:
+    """Unsupported activities go to not_translatable, not warnings."""
+    pipeline = {
+        "name": "separation_test",
+        "activities": [
+            {
+                "name": "bad_task",
+                "type": "SetVariable",
+                "depends_on": [],
+            }
+        ],
+    }
+    result = translate_pipeline(pipeline)
+
+    assert len(result.not_translatable) == 1
+    assert len(result.warnings) == 0
+
+
+def test_mixed_warnings_and_unsupported() -> None:
+    """A pipeline with both unsupported activities and translation warnings separates them correctly."""
+    pipeline = {
+        "name": "mixed_test",
+        "activities": [
+            {
+                "name": "good_notebook",
+                "type": "DatabricksNotebook",
+                "depends_on": [],
+                "policy": {"timeout": "0.01:00:00", "secure_input": True},
+                "notebook_path": "/notebooks/etl",
+            },
+            {
+                "name": "unsupported_task",
+                "type": "ExecutePipeline",
+                "depends_on": [],
+            },
+        ],
+    }
+    result = translate_pipeline(pipeline)
+
+    assert len(result.not_translatable) == 1
+    assert result.not_translatable[0]["property"] == "unsupported_task"
+
+    assert len(result.warnings) >= 1
+    warning_properties = [w["property"] for w in result.warnings]
+    assert "secure_input" in warning_properties

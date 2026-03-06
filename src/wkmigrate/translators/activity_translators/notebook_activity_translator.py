@@ -8,7 +8,7 @@ and emit ``UnsupportedValue`` objects for any unparsable inputs.
 import warnings
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.warnings import TranslationWarning
+from wkmigrate.translation_warnings import TranslationWarning
 
 
 def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:

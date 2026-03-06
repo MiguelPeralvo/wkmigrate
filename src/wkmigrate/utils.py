@@ -6,6 +6,7 @@ metadata (e.g. appending system tags).
 """
 
 import re
+import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from importlib import import_module
@@ -14,6 +15,7 @@ from typing import Any
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.pipeline import Activity, Authentication, DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.translation_warnings import UnsupportedActivityWarning
 
 
 def translate(items: dict | None, mapping: dict) -> dict | None:
@@ -281,9 +283,10 @@ def normalize_translated_result(result: Activity | UnsupportedValue, base_kwargs
     Normalizes translator results so callers always receive Activities.
 
     Translators may return an ``UnsupportedValue`` to signal that an activity could not
-    be translated. In those cases, this helper converts the unsupported value into a
-    placeholder notebook activity so downstream components (such as the workflow
-    preparer) continue to operate on ``Activity`` instances only.
+    be translated. In those cases, this helper emits an ``UnsupportedActivityWarning``
+    (captured by ``translate_pipeline`` for ``unsupported.json``) and converts the
+    unsupported value into a placeholder notebook activity so downstream components
+    continue to operate on ``Activity`` instances only.
 
     Args:
         result: Activity or UnsupportedValue as an internal representation
@@ -293,6 +296,11 @@ def normalize_translated_result(result: Activity | UnsupportedValue, base_kwargs
         A placeholder DatabricksNotebookActivity for any UnsupportedValue; Otherwise the input Activity
     """
     if isinstance(result, UnsupportedValue):
+        activity_name = base_kwargs.get("name", "unknown")
+        warnings.warn(
+            UnsupportedActivityWarning(activity_name, result.message),
+            stacklevel=2,
+        )
         return get_placeholder_activity(base_kwargs)
 
     return result

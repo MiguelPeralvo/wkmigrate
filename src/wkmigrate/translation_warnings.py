@@ -48,3 +48,10 @@ class TranslationWarning(UserWarning):
         else:
             self.activity_name = context.get("activity_name")
             self.activity_type = context.get("activity_type")
+
+
+class UnsupportedActivityWarning(TranslationWarning):
+    """Warning emitted when an activity or property cannot be translated at all.
+
+    These warnings are routed to ``unsupported.json`` rather than ``warnings.json``.
+    """

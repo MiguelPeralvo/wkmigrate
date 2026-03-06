@@ -7,7 +7,7 @@ emit warnings for partially supported configurations.
 
 import warnings
 from wkmigrate.enums.interval_type import IntervalType
-from wkmigrate.warnings import TranslationWarning
+from wkmigrate.translation_warnings import TranslationWarning
 
 
 def parse_cron_expression(recurrence: dict | None) -> str | None:

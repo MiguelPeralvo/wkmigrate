@@ -229,9 +229,10 @@ def normalize_translated_result(result: Activity | UnsupportedValue,
 Normalizes translator results so callers always receive Activities.
 
 Translators may return an ``UnsupportedValue`` to signal that an activity could not
-be translated. In those cases, this helper converts the unsupported value into a
-placeholder notebook activity so downstream components (such as the workflow
-preparer) continue to operate on ``Activity`` instances only.
+be translated. In those cases, this helper emits an ``UnsupportedActivityWarning``
+(captured by ``translate_pipeline`` for ``unsupported.json``) and converts the
+unsupported value into a placeholder notebook activity so downstream components
+continue to operate on ``Activity`` instances only.
 
 **Arguments**:
 

@@ -15,7 +15,7 @@ from typing import Any
 
 from wkmigrate.models.ir.datasets import Dataset, DatasetProperties
 from wkmigrate.models.workflows.instructions import SecretInstruction
-from wkmigrate.warnings import TranslationWarning
+from wkmigrate.translation_warnings import TranslationWarning
 from wkmigrate.utils import parse_mapping
 
 
