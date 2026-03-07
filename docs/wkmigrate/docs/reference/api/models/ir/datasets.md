@@ -69,6 +69,7 @@ Dataset definition for JDBC-accessible tables in a relational database.
 
 **Attributes**:
 
+  jdbc_url = JDBC url used for interacting with the database.
 - `schema_name` - Database schema that contains the table.
 - `table_name` - Table name referenced by the dataset.
 - `dbtable` - Fully qualified ``schema.table`` name used by JDBC.

@@ -385,6 +385,40 @@ def test_uuid_generated_when_no_name() -> None:
     result = translate_databricks_cluster_spec(spec)
 
     assert isinstance(result, DatabricksClusterLinkedService)
-    # UUID format check - should be a non-empty string
     assert result.service_name is not None
     assert len(result.service_name) > 0
+
+
+def test_sql_missing_server_returns_unsupported() -> None:
+    """Spec without 'server' in properties returns UnsupportedValue."""
+    spec = {"name": "no-server", "properties": {"database": "mydb"}}
+    result = translate_sql_server_spec(spec)
+
+    assert isinstance(result, UnsupportedValue)
+    assert "server" in result.message
+
+
+def test_sql_missing_database_returns_unsupported() -> None:
+    """Spec without 'database' in properties returns UnsupportedValue."""
+    spec = {"name": "no-db", "properties": {"server": "host.example.com"}}
+    result = translate_sql_server_spec(spec)
+
+    assert isinstance(result, UnsupportedValue)
+    assert "database" in result.message
+
+
+def test_sql_spec_parses_password() -> None:
+    """Password from properties is included in the linked service."""
+    spec = {
+        "name": "sql-with-password",
+        "properties": {
+            "server": "host.example.com",
+            "database": "mydb",
+            "user_name": "admin",
+            "password": "s3cret",
+        },
+    }
+    result = translate_sql_server_spec(spec)
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.password == "s3cret"

@@ -40,7 +40,9 @@ class SqlLinkedService(LinkedService):
 
     host: str
     database: str
+    port: int | None = None
     user_name: str | None = None
+    password: str | None = None
     authentication_type: str | None = None
 
 

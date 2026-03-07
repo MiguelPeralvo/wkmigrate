@@ -28,7 +28,7 @@ def translate_abfs_spec(abfs_spec: dict) -> AbfsLinkedService | UnsupportedValue
         return UnsupportedValue(value=abfs_spec, message="Missing ABFS linked service definition")
 
     properties = abfs_spec.get("properties", {})
-    url = parse_storage_account_connection_string(properties.get("url"))
+    url = parse_storage_account_connection_string(properties.get("url", ""))
 
     if isinstance(url, UnsupportedValue):
         return UnsupportedValue(

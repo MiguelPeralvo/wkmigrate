@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from wkmigrate.models.ir.linked_services import SqlLinkedService
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.utils import get_value_or_unsupported
 
 
 def translate_sql_server_spec(sql_server_spec: dict) -> SqlLinkedService | UnsupportedValue:
@@ -78,11 +79,20 @@ def _translate_sql_spec(spec: dict, service_type: str, display_name: str) -> Sql
         return UnsupportedValue(value=spec, message=f"Missing {display_name} linked service definition")
 
     properties = spec.get("properties", {})
+    server = get_value_or_unsupported(properties, "server", "linked service properties")
+    if isinstance(server, UnsupportedValue):
+        return UnsupportedValue(value=spec, message=server.message)
+
+    database = get_value_or_unsupported(properties, "database", "linked service properties")
+    if isinstance(database, UnsupportedValue):
+        return UnsupportedValue(value=spec, message=database.message)
+
     return SqlLinkedService(
         service_name=spec.get("name", str(uuid4())),
         service_type=service_type,
-        host=properties.get("server"),
-        database=properties.get("database"),
+        host=server,
+        database=database,
         user_name=properties.get("user_name"),
+        password=properties.get("password"),
         authentication_type=properties.get("authentication_type"),
     )

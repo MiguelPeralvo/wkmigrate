@@ -72,6 +72,7 @@ class SqlTableDataset(Dataset):
     Dataset definition for JDBC-accessible tables in a relational database.
 
     Attributes:
+        jdbc_url = JDBC url used for interacting with the database.
         schema_name: Database schema that contains the table.
         table_name: Table name referenced by the dataset.
         dbtable: Fully qualified ``schema.table`` name used by JDBC.
@@ -82,6 +83,7 @@ class SqlTableDataset(Dataset):
         connection_options: Additional JDBC options (for example fetch size, partitioning).
     """
 
+    jdbc_url: str | None = None
     schema_name: str | None = None
     table_name: str | None = None
     dbtable: str | None = None

@@ -27,7 +27,7 @@ def translate_file_dataset(dataset_type: str, dataset: dict) -> FileDataset | Un
         ABFS dataset as a ``FileDataset`` object.
     """
     if not dataset:
-        return UnsupportedValue(value=dataset, message="Missing Avro dataset definition")
+        return UnsupportedValue(value=dataset, message="Missing dataset definition")
 
     container_name = parse_abfs_container_name(dataset.get("properties", {}))
     if isinstance(container_name, UnsupportedValue):
