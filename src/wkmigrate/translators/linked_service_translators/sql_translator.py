@@ -87,11 +87,20 @@ def _translate_sql_spec(spec: dict, service_type: str, display_name: str) -> Sql
     if isinstance(database, UnsupportedValue):
         return UnsupportedValue(value=spec, message=database.message)
 
+    default_ports = {
+        "sqlserver": 1433,
+        "postgresql": 5432,
+        "mysql": 3306,
+        "oracle": 1521,
+    }
+    port = properties.get("port", default_ports.get(service_type))
+
     return SqlLinkedService(
         service_name=spec.get("name", str(uuid4())),
         service_type=service_type,
         host=server,
         database=database,
+        port=port,
         user_name=properties.get("user_name"),
         password=properties.get("password"),
         authentication_type=properties.get("authentication_type"),

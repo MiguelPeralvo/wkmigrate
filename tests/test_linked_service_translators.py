@@ -7,6 +7,7 @@ SQL Server connections, and ABFS storage accounts.
 
 from __future__ import annotations
 
+import pytest
 
 from tests.conftest import get_fixture
 from wkmigrate.models.ir.linked_services import (
@@ -422,3 +423,34 @@ def test_sql_spec_parses_password() -> None:
 
     assert isinstance(result, SqlLinkedService)
     assert result.password == "s3cret"
+
+
+@pytest.mark.parametrize(
+    "translate_fn, expected_port",
+    [
+        (translate_sql_server_spec, 1433),
+        (translate_postgresql_spec, 5432),
+        (translate_mysql_spec, 3306),
+        (translate_oracle_spec, 1521),
+    ],
+)
+def test_sql_spec_default_port(translate_fn, expected_port: int) -> None:
+    """Each SQL translator uses its standard default port when none is provided."""
+    spec = {"name": "test-svc", "properties": {"server": "host.example.com", "database": "mydb"}}
+    result = translate_fn(spec)
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.port == expected_port
+
+
+@pytest.mark.parametrize(
+    "translate_fn",
+    [translate_sql_server_spec, translate_postgresql_spec, translate_mysql_spec, translate_oracle_spec],
+)
+def test_sql_spec_custom_port(translate_fn) -> None:
+    """An explicit port in properties overrides the default."""
+    spec = {"name": "test-svc", "properties": {"server": "host.example.com", "database": "mydb", "port": 9999}}
+    result = translate_fn(spec)
+
+    assert isinstance(result, SqlLinkedService)
+    assert result.port == 9999

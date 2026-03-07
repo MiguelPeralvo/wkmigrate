@@ -140,13 +140,13 @@ def _get_jdbc_url(linked_service: SqlLinkedService) -> str:
     """
     match linked_service.service_type:
         case "sqlserver":
-            return f"jdbc:sqlserver://{linked_service.host};databaseName={linked_service.database};user={linked_service.user_name};password={linked_service.password}"
+            return f"jdbc:sqlserver://{linked_service.host}:{linked_service.port or 1433};databaseName={linked_service.database};user={linked_service.user_name};password={linked_service.password}"
         case "postgresql":
-            return f"jdbc:postgresql://{linked_service.host}:{linked_service.port}/{linked_service.database}"
+            return f"jdbc:postgresql://{linked_service.host}:{linked_service.port or 5432}/{linked_service.database}"
         case "mysql":
-            return f"jdbc:mysql://{linked_service.host}:{linked_service.port}/{linked_service.database}"
+            return f"jdbc:mysql://{linked_service.host}:{linked_service.port or 3306}/{linked_service.database}"
         case "oracle":
-            return f"jdbc:oracle:thin:@{linked_service.host}:{linked_service.port}:{linked_service.database}"
+            return f"jdbc:oracle:thin:@{linked_service.host}:{linked_service.port or 1521}:{linked_service.database}"
         case _:
             warnings.warn(
                 TranslationWarning(linked_service.service_name, "Could not parse JDBC URL for SQL linked service."),
