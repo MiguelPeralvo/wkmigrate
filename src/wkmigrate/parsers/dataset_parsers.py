@@ -6,7 +6,6 @@ for any unparsable inputs.
 """
 
 from datetime import datetime, timedelta
-import json
 from wkmigrate.enums.isolation_level import IsolationLevel
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
@@ -282,16 +281,3 @@ def _parse_query_timeout_string(timeout_string: str) -> int | UnsupportedValue:
         return int(time_delta.total_seconds())
     except ValueError:
         return UnsupportedValue(value=timeout_string, message=f"Invalid query timeout string '{timeout_string}'")
-
-
-def _parse_character_value(char: str) -> str:
-    """
-    Parses a single character into a JSON-safe representation.
-
-    Args:
-        char: Character literal extracted from the dataset definition.
-
-    Returns:
-        JSON-escaped representation of the character.
-    """
-    return json.dumps(char).strip('"')

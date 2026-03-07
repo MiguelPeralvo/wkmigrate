@@ -8,7 +8,7 @@ objects for any unparsable inputs.
 
 from wkmigrate.models.ir.pipeline import WebActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.utils import parse_activity_timeout_string, parse_authentication
+from wkmigrate.translators.activity_translators.utils import parse_activity_timeout_string, parse_authentication
 
 
 def translate_web_activity(activity: dict, base_kwargs: dict) -> WebActivity | UnsupportedValue:

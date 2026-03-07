@@ -54,6 +54,9 @@ from wkmigrate.translators.activity_translators.web_activity_translator import t
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import (
     translate_spark_python_activity,
 )
+from wkmigrate.translators.activity_translators.copy_activity_translator import (
+    translate_copy_activity,
+)
 
 
 def test_basic_notebook_activity(notebook_activity_fixtures: list[dict]) -> None:
@@ -1122,3 +1125,27 @@ def test_copy_delta_to_oracle(copy_activity_fixtures: list[dict]) -> None:
     assert result.source_dataset.dataset_type == fixture["expected"]["source_dataset_type"]
     assert result.sink_dataset is not None
     assert result.sink_dataset.dataset_type == fixture["expected"]["sink_dataset_type"]
+
+
+def test_copy_csv_to_delta_with_translator(copy_activity_fixtures: list[dict]) -> None:
+    """Test Copy activity with translator column mappings (CSV to Delta)."""
+    fixture = next(f for f in copy_activity_fixtures if "CSV to Delta" in f["description"])
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, CopyActivity)
+    assert result.name == fixture["expected"]["name"]
+    assert result.source_dataset is not None
+    assert result.sink_dataset is not None
+    assert len(result.column_mapping) == fixture["expected"]["column_mapping_count"]
+
+
+def test_copy_invalid_translator_returns_unsupported(copy_activity_fixtures: list[dict]) -> None:
+    """Test Copy activity with malformed translator returns UnsupportedValue."""
+    fixture = next(f for f in copy_activity_fixtures if "CSV to Delta" in f["description"])
+    input_ = fixture["input"].copy()
+    input_["translator"] = {"mappings": [{"source": {"name": "id"}, "sink": {}}]}  # missing sink name/type
+
+    result = translate_copy_activity(input_, get_base_kwargs(input_))
+
+    assert isinstance(result, UnsupportedValue)
+    assert "translator" in result.message.lower()

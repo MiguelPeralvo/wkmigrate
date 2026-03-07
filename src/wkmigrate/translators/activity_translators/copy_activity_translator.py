@@ -10,12 +10,12 @@ from wkmigrate.datasets import parse_spark_data_type
 from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.utils import (
+from wkmigrate.translators.activity_translators.utils import (
     get_data_source_definition,
     get_data_source_properties,
-    get_value_or_unsupported,
     merge_unsupported_values,
 )
+from wkmigrate.utils import get_value_or_unsupported
 
 
 def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity | UnsupportedValue:
@@ -38,12 +38,24 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
         ``CopyActivity`` representation of the Copy task.
     """
     source_dataset = get_data_source_definition(get_value_or_unsupported(activity, "input_dataset_definitions"))
+    if isinstance(source_dataset, UnsupportedValue):
+        return UnsupportedValue(value=activity, message=source_dataset.message)
+
     sink_dataset = get_data_source_definition(get_value_or_unsupported(activity, "output_dataset_definitions"))
+    if isinstance(sink_dataset, UnsupportedValue):
+        return UnsupportedValue(value=activity, message=sink_dataset.message)
+
     source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
     sink_properties = get_data_source_properties(get_value_or_unsupported(activity, "sink"))
 
-    sink_system = sink_dataset.dataset_type if isinstance(sink_dataset, Dataset) else None
-    column_mapping = _parse_dataset_mapping(activity.get("translator") or {}, sink_system)
+    sink_system = sink_dataset.dataset_type
+    column_mapping = _parse_type_translator(activity.get("translator") or {}, sink_system)
+    if any(isinstance(mapping, UnsupportedValue) for mapping in column_mapping):
+        unsupported_value_messages = [item.message for item in column_mapping if isinstance(item, UnsupportedValue)]
+        return UnsupportedValue(
+            activity,
+            f"Could not parse property 'translator' of dataset. {'. '.join(unsupported_value_messages)}.".rstrip(),
+        )
 
     if (
         isinstance(source_dataset, Dataset)
@@ -57,34 +69,47 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
             sink_dataset=sink_dataset,
             source_properties=source_properties,
             sink_properties=sink_properties,
-            column_mapping=column_mapping,
+            column_mapping=column_mapping,  # type: ignore
         )
 
     return merge_unsupported_values([source_dataset, sink_dataset, source_properties, sink_properties])
 
 
-def _parse_dataset_mapping(mapping: dict, sink_system: str | None) -> list[ColumnMapping]:
+def _parse_type_translator(type_translator: dict, sink_system: str) -> list[ColumnMapping | UnsupportedValue]:
     """
-    Parses a mapping from one set of data columns to another, converting ADF column types
+    Parses a type translator from one set of data columns to another, converting ADF column types
     to Spark equivalents using the sink system's type mapping.
 
     Args:
-        mapping: Data column mapping definition.
+        type_translator: Tabular type translator with data column mappings.
         sink_system: Normalized sink dataset type (e.g. ``"sqlserver"``), used for type conversion.
 
     Returns:
         List of column mapping definitions as ``ColumnMapping`` objects.
     """
-    return [
-        ColumnMapping(
-            source_column_name=mapping_entry.get("source").get("name")
-            or f"_c{mapping_entry.get("source", {}).get("ordinal", 1) - 1}",
-            sink_column_name=mapping_entry.get("sink").get("name"),
-            sink_column_type=(
-                parse_spark_data_type(mapping_entry.get("sink").get("type"), sink_system)
-                if mapping_entry.get("sink").get("type") and sink_system
-                else mapping_entry.get("sink").get("type")
-            ),
-        )
-        for mapping_entry in mapping.get("mappings") or []
-    ]
+    mappings = type_translator.get("mappings") or []
+    return [_parse_dataset_mapping(mapping, sink_system) for mapping in mappings]
+
+
+def _parse_dataset_mapping(mapping: dict[str, dict], sink_system: str) -> ColumnMapping | UnsupportedValue:
+    source = get_value_or_unsupported(mapping, "source", "column mapping")
+    if isinstance(source, UnsupportedValue):
+        return source
+
+    sink = get_value_or_unsupported(mapping, "sink", "column mapping")
+    if isinstance(sink, UnsupportedValue):
+        return sink
+
+    sink_column_name = get_value_or_unsupported(sink, "name", "sink dataset")
+    if isinstance(sink_column_name, UnsupportedValue):
+        return sink_column_name
+
+    sink_column_type = get_value_or_unsupported(sink, "type", "sink dataset")
+    if isinstance(sink_column_type, UnsupportedValue):
+        return sink_column_type
+
+    return ColumnMapping(
+        source_column_name=source.get("name") or f"_c{source.get('ordinal', 1) - 1}",
+        sink_column_name=sink_column_name,
+        sink_column_type=parse_spark_data_type(sink_column_type, sink_system),
+    )

@@ -30,7 +30,7 @@ from wkmigrate.translators.activity_translators.spark_jar_activity_translator im
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
-from wkmigrate.utils import normalize_translated_result, parse_activity_timeout_string
+from wkmigrate.translators.activity_translators.utils import normalize_translated_result, parse_activity_timeout_string
 
 
 TypeTranslator = Callable[[dict, dict], TranslationResult]

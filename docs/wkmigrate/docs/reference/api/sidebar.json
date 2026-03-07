@@ -93,9 +93,31 @@
                 "reference/api/wkmigrate/translators/activity_translators/notebook_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/spark_jar_activity_translator",
                 "reference/api/wkmigrate/translators/activity_translators/spark_python_activity_translator",
+                "reference/api/wkmigrate/translators/activity_translators/utils",
                 "reference/api/wkmigrate/translators/activity_translators/web_activity_translator"
               ],
               "label": "wkmigrate.translators.activity_translators",
+              "type": "category"
+            },
+            {
+              "items": [
+                "reference/api/wkmigrate/translators/dataset_translators/__init__",
+                "reference/api/wkmigrate/translators/dataset_translators/delta_table_dataset_translator",
+                "reference/api/wkmigrate/translators/dataset_translators/file_dataset_translator",
+                "reference/api/wkmigrate/translators/dataset_translators/sql_dataset_translator",
+                "reference/api/wkmigrate/translators/dataset_translators/utils"
+              ],
+              "label": "wkmigrate.translators.dataset_translators",
+              "type": "category"
+            },
+            {
+              "items": [
+                "reference/api/wkmigrate/translators/linked_service_translators/abfs_translator",
+                "reference/api/wkmigrate/translators/linked_service_translators/databricks_translator",
+                "reference/api/wkmigrate/translators/linked_service_translators/sql_translator",
+                "reference/api/wkmigrate/translators/linked_service_translators/utils"
+              ],
+              "label": "wkmigrate.translators.linked_service_translators",
               "type": "category"
             },
             {
@@ -114,9 +136,7 @@
               ],
               "label": "wkmigrate.translators.trigger_translators",
               "type": "category"
-            },
-            "reference/api/wkmigrate/translators/dataset_translators",
-            "reference/api/wkmigrate/translators/linked_service_translators"
+            }
           ],
           "label": "wkmigrate.translators",
           "type": "category"
