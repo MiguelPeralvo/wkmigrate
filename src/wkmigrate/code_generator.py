@@ -81,6 +81,8 @@ def get_database_options(dataset_definition: dict, database_type: str) -> list[s
     """
     dataset_name = dataset_definition["dataset_name"]
     service_name = dataset_definition["service_name"]
+    jdbc_url = get_jdbc_url(dataset_definition)
+    url_line = f'{dataset_name}_options["url"] = "{jdbc_url}"'
     secrets_lines = [
         f"""{dataset_name}_options["{secret}"] = dbutils.secrets.get(
                 scope="wkmigrate_credentials_scope", 
@@ -94,7 +96,47 @@ def get_database_options(dataset_definition: dict, database_type: str) -> list[s
         for option in DATASET_OPTIONS.get(database_type, [])
         if dataset_definition.get(option)
     ]
-    return [f"{dataset_name}_options = {{}}", *secrets_lines, *options_lines]
+    return [f"{dataset_name}_options = {{}}", url_line, *secrets_lines, *options_lines]
+
+
+_DEFAULT_PORTS: dict[str, int] = {
+    "sqlserver": 1433,
+    "postgresql": 5432,
+    "mysql": 3306,
+    "oracle": 1521,
+}
+
+
+def get_jdbc_url(dataset_definition: dict) -> str:
+    """
+    Constructs a JDBC connection URL from a flattened dataset definition.
+
+    The URL format varies by database type and respects the default port for
+    each engine when no explicit port is provided.
+
+    Args:
+        dataset_definition: Flat dataset definition dictionary containing at
+            least ``type``, ``host``, and ``database``, and optionally ``port``.
+
+    Returns:
+        JDBC connection URL string.
+    """
+    db_type = dataset_definition.get("type", "")
+    host = dataset_definition.get("host", "")
+    database = dataset_definition.get("database", "")
+    port = dataset_definition.get("port") or _DEFAULT_PORTS.get(db_type)
+
+    match db_type:
+        case "sqlserver":
+            return f"jdbc:sqlserver://{host}:{port};databaseName={database}"
+        case "postgresql":
+            return f"jdbc:postgresql://{host}:{port}/{database}"
+        case "mysql":
+            return f"jdbc:mysql://{host}:{port}/{database}"
+        case "oracle":
+            return f"jdbc:oracle:thin:@{host}:{port}:{database}"
+        case _:
+            return ""
 
 
 def get_read_expression(source_definition: dict, source_query: str | None = None) -> str:

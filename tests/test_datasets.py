@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 
 from wkmigrate.datasets import parse_spark_data_type
-from wkmigrate.models.ir.linked_services import SqlLinkedService
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.translation_warnings import TranslationWarning
 from wkmigrate.translators.dataset_translators import translate_dataset
-from wkmigrate.translators.dataset_translators.sql_dataset_translator import _get_jdbc_url
 from wkmigrate.translators.dataset_translators.utils import parse_abfs_container_name
 
 
@@ -148,57 +146,3 @@ def test_parse_abfs_container_name_missing_container() -> None:
 
     assert isinstance(result, UnsupportedValue)
     assert "container" in result.message
-
-
-# --- _get_jdbc_url ---
-
-
-def _make_sql_linked_service(service_type: str, **kwargs) -> SqlLinkedService:
-    defaults = {
-        "service_name": "test-svc",
-        "host": "host.example.com",
-        "database": "mydb",
-    }
-    defaults.update(kwargs)
-    return SqlLinkedService(service_type=service_type, **defaults)
-
-
-def test_jdbc_url_sqlserver() -> None:
-    svc = _make_sql_linked_service("sqlserver", user_name="admin", password="s3cret")
-    url = _get_jdbc_url(svc)
-
-    assert url.startswith("jdbc:sqlserver://")
-    assert "host.example.com" in url
-    assert "databaseName=mydb" in url
-    assert "user=admin" in url
-    assert "password=s3cret" in url
-
-
-def test_jdbc_url_postgresql() -> None:
-    svc = _make_sql_linked_service("postgresql", port=5432)
-    url = _get_jdbc_url(svc)
-
-    assert url == "jdbc:postgresql://host.example.com:5432/mydb"
-
-
-def test_jdbc_url_mysql() -> None:
-    svc = _make_sql_linked_service("mysql", port=3306)
-    url = _get_jdbc_url(svc)
-
-    assert url == "jdbc:mysql://host.example.com:3306/mydb"
-
-
-def test_jdbc_url_oracle() -> None:
-    svc = _make_sql_linked_service("oracle", port=1521)
-    url = _get_jdbc_url(svc)
-
-    assert url == "jdbc:oracle:thin:@host.example.com:1521:mydb"
-
-
-def test_jdbc_url_unsupported_type_warns() -> None:
-    svc = _make_sql_linked_service("cosmosdb")
-
-    with pytest.warns(TranslationWarning, match="Could not parse JDBC URL"):
-        url = _get_jdbc_url(svc)
-
-    assert url == "JDBC_URL_NOT_PARSED"

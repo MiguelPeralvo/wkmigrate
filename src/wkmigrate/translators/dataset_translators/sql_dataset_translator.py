@@ -4,13 +4,11 @@ This module normalizes SQL Server, PostgreSQL, MySQL, and Oracle dataset payload
 into ``SqlTableDataset`` objects, parsing table/schema names and linked-service metadata.
 """
 
-import warnings
 from collections.abc import Callable
 
 from wkmigrate.models.ir.datasets import SqlTableDataset
 from wkmigrate.models.ir.linked_services import SqlLinkedService
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.translation_warnings import TranslationWarning
 from wkmigrate.translators.dataset_translators.utils import get_linked_service_definition
 from wkmigrate.translators.linked_service_translators import (
     translate_mysql_spec,
@@ -111,7 +109,6 @@ def _translate_sql_dataset(
         return UnsupportedValue(value=dataset, message=linked_service.message)
 
     dbtable = table_name if not schema_name else f"{schema_name}.{table_name}"
-    jdbc_url = _get_jdbc_url(linked_service)
     return SqlTableDataset(
         dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
         dataset_type=dataset_type,
@@ -121,35 +118,8 @@ def _translate_sql_dataset(
         service_name=linked_service.service_name,
         host=linked_service.host,
         database=linked_service.database,
+        port=linked_service.port,
         user_name=linked_service.user_name,
         authentication_type=linked_service.authentication_type,
-        jdbc_url=jdbc_url,
         connection_options={},
     )
-
-
-def _get_jdbc_url(linked_service: SqlLinkedService) -> str:
-    """
-    Gets the JDBC URL for a SQL linked service.
-
-    Args:
-        linked_service: SQL linked service.
-
-    Returns:
-        JDBC URL.
-    """
-    match linked_service.service_type:
-        case "sqlserver":
-            return f"jdbc:sqlserver://{linked_service.host}:{linked_service.port or 1433};databaseName={linked_service.database};user={linked_service.user_name};password={linked_service.password}"
-        case "postgresql":
-            return f"jdbc:postgresql://{linked_service.host}:{linked_service.port or 5432}/{linked_service.database}"
-        case "mysql":
-            return f"jdbc:mysql://{linked_service.host}:{linked_service.port or 3306}/{linked_service.database}"
-        case "oracle":
-            return f"jdbc:oracle:thin:@{linked_service.host}:{linked_service.port or 1521}:{linked_service.database}"
-        case _:
-            warnings.warn(
-                TranslationWarning(linked_service.service_name, "Could not parse JDBC URL for SQL linked service."),
-                stacklevel=2,
-            )
-            return "JDBC_URL_NOT_PARSED"

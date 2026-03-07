@@ -63,6 +63,27 @@ Generates code to create a Spark data source options dictionary for interacting 
 
   List of Python source lines that create the options dictionary.
 
+#### get\_jdbc\_url
+
+```python
+def get_jdbc_url(dataset_definition: dict) -> str
+```
+
+Constructs a JDBC connection URL from a flattened dataset definition.
+
+The URL format varies by database type and respects the default port for
+each engine when no explicit port is provided.
+
+**Arguments**:
+
+- `dataset_definition` - Flat dataset definition dictionary containing at
+  least ``type``, ``host``, and ``database``, and optionally ``port``.
+  
+
+**Returns**:
+
+  JDBC connection URL string.
+
 #### get\_read\_expression
 
 ```python
