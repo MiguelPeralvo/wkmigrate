@@ -22,6 +22,13 @@ from wkmigrate.utils import parse_mapping
 _JDBC_SECRETS = ["user_name", "password"]
 _JDBC_OPTIONS = ["dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
 
+DEFAULT_PORTS: dict[str, int] = {
+    "sqlserver": 1433,
+    "postgresql": 5432,
+    "mysql": 3306,
+    "oracle": 1521,
+}
+
 
 DATASET_SECRETS: dict[str, list[str]] = {
     "avro": ["storage_account_key"],

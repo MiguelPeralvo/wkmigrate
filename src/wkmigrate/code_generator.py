@@ -11,7 +11,7 @@ from typing import Any
 
 import autopep8  # type: ignore
 
-from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
+from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS, DEFAULT_PORTS
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.translation_warnings import TranslationWarning, translation_warning_context
 
@@ -99,14 +99,6 @@ def get_database_options(dataset_definition: dict, database_type: str) -> list[s
     return [f"{dataset_name}_options = {{}}", url_line, *secrets_lines, *options_lines]
 
 
-_DEFAULT_PORTS: dict[str, int] = {
-    "sqlserver": 1433,
-    "postgresql": 5432,
-    "mysql": 3306,
-    "oracle": 1521,
-}
-
-
 def get_jdbc_url(dataset_definition: dict) -> str:
     """
     Constructs a JDBC connection URL from a flattened dataset definition.
@@ -124,7 +116,7 @@ def get_jdbc_url(dataset_definition: dict) -> str:
     db_type = dataset_definition.get("type", "")
     host = dataset_definition.get("host", "")
     database = dataset_definition.get("database", "")
-    port = dataset_definition.get("port") or _DEFAULT_PORTS.get(db_type)
+    port = dataset_definition.get("port") or DEFAULT_PORTS.get(db_type)
 
     match db_type:
         case "sqlserver":

@@ -6,6 +6,7 @@ payloads into ``SqlLinkedService`` objects.
 
 from uuid import uuid4
 
+from wkmigrate.datasets import DEFAULT_PORTS
 from wkmigrate.models.ir.linked_services import SqlLinkedService
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.utils import get_value_or_unsupported
@@ -87,13 +88,7 @@ def _translate_sql_spec(spec: dict, service_type: str, display_name: str) -> Sql
     if isinstance(database, UnsupportedValue):
         return UnsupportedValue(value=spec, message=database.message)
 
-    default_ports = {
-        "sqlserver": 1433,
-        "postgresql": 5432,
-        "mysql": 3306,
-        "oracle": 1521,
-    }
-    port = properties.get("port", default_ports.get(service_type))
+    port = properties.get("port", DEFAULT_PORTS.get(service_type))
 
     return SqlLinkedService(
         service_name=spec.get("name", str(uuid4())),

@@ -14,6 +14,14 @@ from wkmigrate.translators.dataset_translators.utils import (
 )
 from wkmigrate.translators.linked_service_translators import translate_abfs_spec
 
+_NORMALIZED_FILE_TYPES: dict[str, str] = {
+    "Avro": "avro",
+    "DelimitedText": "csv",
+    "Json": "json",
+    "Orc": "orc",
+    "Parquet": "parquet",
+}
+
 
 def translate_file_dataset(dataset_type: str, dataset: dict) -> FileDataset | UnsupportedValue:
     """
@@ -49,9 +57,11 @@ def translate_file_dataset(dataset_type: str, dataset: dict) -> FileDataset | Un
     if isinstance(format_options, UnsupportedValue):
         return UnsupportedValue(value=dataset, message=format_options.message)
 
+    normalized_type = _NORMALIZED_FILE_TYPES.get(dataset_type, dataset_type)
+
     return FileDataset(
         dataset_name=dataset.get("name", "DATASET_NAME_NOT_PROVIDED"),
-        dataset_type=dataset_type,
+        dataset_type=normalized_type,
         container=container_name,
         folder_path=folder_path,
         storage_account_name=linked_service.storage_account_name,
