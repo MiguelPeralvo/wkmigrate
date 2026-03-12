@@ -84,7 +84,7 @@ def _translate_sql_dataset(
     dataset: dict,
     dataset_type: str,
     translate_spec: Callable[[dict], SqlLinkedService | UnsupportedValue],
-    table_name: str,
+    table_name: str | None,
     schema_name: str | None = None,
 ) -> SqlTableDataset | UnsupportedValue:
     """
@@ -94,12 +94,18 @@ def _translate_sql_dataset(
         dataset: Raw dataset definition from Azure Data Factory.
         dataset_type: Normalised dataset type string (e.g. ``"sqlserver"`` or ``"postgresql"``).
         translate_spec: Linked-service translator callable for the given database type.
-        table_name: Table name.
+        table_name: Table name, or ``None`` when missing from the ADF payload.
         schema_name: Optional schema name, or None for databases without a schema namespace (e.g. MySQL).
 
     Returns:
         SQL table dataset as a ``SqlTableDataset`` object.
     """
+    if not table_name:
+        return UnsupportedValue(
+            value=dataset,
+            message=f"Missing required property 'table' in {dataset_type} dataset definition",
+        )
+
     linked_service_definition = get_linked_service_definition(dataset)
     if isinstance(linked_service_definition, UnsupportedValue):
         return UnsupportedValue(value=dataset, message=linked_service_definition.message)

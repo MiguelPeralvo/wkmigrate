@@ -169,6 +169,30 @@ def _parse_sql_format_options(dataset: dict, dataset_type: str) -> dict | Unsupp
     }
 
 
+_DATASET_TYPE_MAPPINGS: dict[str, str] = {
+    "AvroSource": "avro",
+    "AvroSink": "avro",
+    "AzureDatabricksDeltaLakeSource": "delta",
+    "AzureDatabricksDeltaLakeSink": "delta",
+    "AzureMySqlSource": "mysql",
+    "AzureMySqlSink": "mysql",
+    "AzurePostgreSqlSource": "postgresql",
+    "AzurePostgreSqlSink": "postgresql",
+    "AzureSqlSource": "sqlserver",
+    "AzureSqlSink": "sqlserver",
+    "DelimitedTextSource": "csv",
+    "DelimitedTextSink": "csv",
+    "JsonSource": "json",
+    "JsonSink": "json",
+    "OracleSource": "oracle",
+    "OracleSink": "oracle",
+    "OrcSource": "orc",
+    "OrcSink": "orc",
+    "ParquetSource": "parquet",
+    "ParquetSink": "parquet",
+}
+
+
 def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
     """
     Parses a dataset type from an Azure Data Factory source or sink dataset (e.g. 'DeltaSource') into a Spark data
@@ -181,29 +205,7 @@ def _parse_dataset_type(dataset_type: str) -> str | UnsupportedValue:
     Returns:
         Spark data source or sink format string (e.g., ``csv``, ``json``).
     """
-    mappings = {
-        "AvroSource": "avro",
-        "AvroSink": "avro",
-        "AzureDatabricksDeltaLakeSource": "delta",
-        "AzureDatabricksDeltaLakeSink": "delta",
-        "AzureMySqlSource": "mysql",
-        "AzureMySqlSink": "mysql",
-        "AzurePostgreSqlSource": "postgresql",
-        "AzurePostgreSqlSink": "postgresql",
-        "AzureSqlSource": "sqlserver",
-        "AzureSqlSink": "sqlserver",
-        "DelimitedTextSource": "csv",
-        "DelimitedTextSink": "csv",
-        "JsonSource": "json",
-        "JsonSink": "json",
-        "OracleSource": "oracle",
-        "OracleSink": "oracle",
-        "OrcSource": "orc",
-        "OrcSink": "orc",
-        "ParquetSource": "parquet",
-        "ParquetSink": "parquet",
-    }
-    result = mappings.get(dataset_type)
+    result = _DATASET_TYPE_MAPPINGS.get(dataset_type)
     if result is None:
         return UnsupportedValue(value=dataset_type, message=f"Unsupported dataset type '{dataset_type}'")
     return result

@@ -48,7 +48,11 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
     sink_properties = get_data_source_properties(get_value_or_unsupported(activity, "sink"))
 
-    sink_system = sink_dataset.dataset_type
+    sink_system: str = (
+        sink_properties.get("type", sink_dataset.dataset_type)
+        if isinstance(sink_properties, dict)
+        else sink_dataset.dataset_type
+    )
     column_mapping = _parse_type_translator(activity.get("translator") or {}, sink_system)
     if any(isinstance(mapping, UnsupportedValue) for mapping in column_mapping):
         unsupported_value_messages = [item.message for item in column_mapping if isinstance(item, UnsupportedValue)]

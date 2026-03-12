@@ -108,7 +108,8 @@ def _parse_avro_format_options(dataset: dict) -> dict:
     Returns:
         Format options as a ``dict`` object.
     """
-    return {"compression": dataset.get("avro_compression_codec")}
+    properties = dataset.get("properties", {})
+    return {"compression": properties.get("avro_compression_codec")}
 
 
 def _parse_delimited_format_options(dataset: dict) -> dict:
@@ -121,15 +122,16 @@ def _parse_delimited_format_options(dataset: dict) -> dict:
     Returns:
         Format options as a ``dict`` object.
     """
+    properties = dataset.get("properties", {})
     return {
-        "header": dataset.get("first_row_as_header", False),
-        "sep": _parse_character_value(dataset.get("column_delimiter", ",")),
-        "lineSep": _parse_character_value(dataset.get("row_delimiter", "\n")),
-        "quote": _parse_character_value(dataset.get("quote_char", '"')),
-        "escape": _parse_character_value(dataset.get("escape_char", "\\")),
-        "nullValue": _parse_character_value(dataset.get("null_value", "")),
-        "compression": dataset.get("compression_codec"),
-        "encoding": dataset.get("encoding_name"),
+        "header": properties.get("first_row_as_header", False),
+        "sep": _parse_character_value(properties.get("column_delimiter", ",")),
+        "lineSep": _parse_character_value(properties.get("row_delimiter", "\n")),
+        "quote": _parse_character_value(properties.get("quote_char", '"')),
+        "escape": _parse_character_value(properties.get("escape_char", "\\")),
+        "nullValue": _parse_character_value(properties.get("null_value", "")),
+        "compression": properties.get("compression_codec"),
+        "encoding": properties.get("encoding_name"),
     }
 
 

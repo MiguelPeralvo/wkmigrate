@@ -95,7 +95,7 @@ _postgresql_type_mapping: dict[str, str] = {
     "timestamp": "timestamp",
     "time without time zone": "timestamp_ntz",
     "time with time zone": "timestamp_ntz",
-    "time": "time",
+    "time": "string",
     "interval": "string",
     "enum": "string",
     "money": "string",
