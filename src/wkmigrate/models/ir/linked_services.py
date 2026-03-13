@@ -87,12 +87,12 @@ class GcsLinkedService(LinkedService):
 
 
 @dataclass(slots=True)
-class AdlsLinkedService(LinkedService):
+class AzureBlobLinkedService(LinkedService):
     """
-    Linked-service metadata for Azure Data Lake Storage Gen2 (Blob Storage).
+    Linked-service metadata for Azure Blob Storage.
 
     Attributes:
-        storage_account_name: Storage account name for the ADLS endpoint.
+        storage_account_name: Storage account name for the Azure Blob endpoint.
         url: Fully qualified base URL for the storage account.
     """
 

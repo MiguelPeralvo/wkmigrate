@@ -11,7 +11,7 @@ from wkmigrate.utils import append_system_tags, extract_group
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.linked_services import (
     AbfsLinkedService,
-    AdlsLinkedService,
+    AzureBlobLinkedService,
     DatabricksClusterLinkedService,
     GcsLinkedService,
     S3LinkedService,
@@ -163,29 +163,31 @@ def translate_gcs_spec(gcs_spec: dict) -> GcsLinkedService | UnsupportedValue:
     )
 
 
-def translate_adls_spec(adls_spec: dict) -> AdlsLinkedService | UnsupportedValue:
+def translate_azure_blob_spec(azure_blob_spec: dict) -> AzureBlobLinkedService | UnsupportedValue:
     """
-    Parses an Azure Data Lake Storage Gen2 (Blob Storage) linked service definition into an ``AdlsLinkedService`` object.
+    Parses an Azure Blob Storage linked service definition into an ``AzureBlobLinkedService`` object.
 
     Args:
-        adls_spec: Linked-service definition from Azure Data Factory.
+        azure_blob_spec: Linked-service definition from Azure Data Factory.
 
     Returns:
-        ADLS linked-service metadata as an ``AdlsLinkedService`` object.
+        Azure Blob linked-service metadata as an ``AzureBlobLinkedService`` object.
     """
-    if not adls_spec:
-        return UnsupportedValue(value=adls_spec, message="Missing ADLS linked service definition")
+    if not azure_blob_spec:
+        return UnsupportedValue(value=azure_blob_spec, message="Missing Azure Blob linked service definition")
 
-    properties = adls_spec.get("properties", {})
+    properties = azure_blob_spec.get("properties", {})
     url = properties.get("url")
     if url is None:
-        return UnsupportedValue(value=adls_spec, message="Missing property 'url' in ADLS linked service definition")
+        return UnsupportedValue(
+            value=azure_blob_spec, message="Missing property 'url' in Azure Blob linked service definition"
+        )
 
     storage_account_name = properties.get("storage_account_name")
 
-    return AdlsLinkedService(
-        service_name=adls_spec.get("name", str(uuid4())),
-        service_type="adls",
+    return AzureBlobLinkedService(
+        service_name=azure_blob_spec.get("name", str(uuid4())),
+        service_type="azure_blob",
         url=url,
         storage_account_name=storage_account_name,
     )

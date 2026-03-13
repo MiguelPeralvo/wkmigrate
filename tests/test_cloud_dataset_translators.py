@@ -11,7 +11,7 @@ from __future__ import annotations
 from wkmigrate.models.ir.datasets import FileDataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.translators.dataset_translators import (
-    translate_adls_file_dataset,
+    translate_azure_blob_file_dataset,
     translate_dataset,
     translate_gcs_file_dataset,
     translate_s3_file_dataset,
@@ -78,6 +78,7 @@ class TestS3FileDataset:
         assert result.folder_path == "raw/data/events.parquet"
         assert result.service_name == "s3-linked-service"
         assert result.url == "https://s3.amazonaws.com"
+        assert result.provider_type == "s3"
 
     def test_translate_s3_dataset_csv(self) -> None:
         """Test S3 dataset translation with CSV (TextFormat) format."""
@@ -186,6 +187,7 @@ class TestGcsFileDataset:
         assert result.folder_path == "analytics/raw/events.parquet"
         assert result.service_name == "gcs-linked-service"
         assert result.url == "https://storage.googleapis.com"
+        assert result.provider_type == "gcs"
 
     def test_translate_gcs_dataset_json(self) -> None:
         """Test GCS dataset translation with JSON format."""
@@ -250,95 +252,97 @@ class TestGcsFileDataset:
 # --- Azure Data Lake Storage Gen2 dataset translation tests ---
 
 
-class TestAdlsFileDataset:
-    """Tests for ADLS file dataset translation."""
+class TestAzureBlobFileDataset:
+    """Tests for Azure Blob Storage file dataset translation."""
 
-    def test_translate_adls_dataset_parquet(self) -> None:
-        """Test ADLS dataset translation with Parquet format."""
+    def test_translate_azure_blob_dataset_parquet(self) -> None:
+        """Test Azure Blob dataset translation with Parquet format."""
         dataset = _build_cloud_dataset(
             dataset_type="AzureBlobStorageDataset",
-            dataset_name="adls_parquet_dataset",
-            bucket_name="adls-container",
+            dataset_name="blob_parquet_dataset",
+            bucket_name="blob-container",
             folder_path="warehouse/bronze",
             file_name="transactions.parquet",
             linked_service={
-                "name": "adls-linked-service",
+                "name": "blob-linked-service",
                 "properties": {
-                    "url": "https://myadls.blob.core.windows.net/",
-                    "storage_account_name": "myadls",
+                    "url": "https://myblob.blob.core.windows.net/",
+                    "storage_account_name": "myblob",
                 },
             },
             file_format={"type": "ParquetFormat"},
         )
-        # ADLS uses container key
+        # Azure Blob uses container key
         dataset["properties"]["location"]["container"] = dataset["properties"]["location"].pop("bucket_name")
-        result = translate_adls_file_dataset(dataset)
+        result = translate_azure_blob_file_dataset(dataset)
 
         assert isinstance(result, FileDataset)
-        assert result.dataset_name == "adls_parquet_dataset"
+        assert result.dataset_name == "blob_parquet_dataset"
         assert result.dataset_type == "Parquet"
-        assert result.container == "adls-container"
+        assert result.container == "blob-container"
         assert result.folder_path == "warehouse/bronze/transactions.parquet"
-        assert result.service_name == "adls-linked-service"
-        assert result.storage_account_name == "myadls"
-        assert result.url == "https://myadls.blob.core.windows.net/"
+        assert result.service_name == "blob-linked-service"
+        assert result.storage_account_name == "myblob"
+        assert result.url == "https://myblob.blob.core.windows.net/"
+        assert result.provider_type == "azure_blob"
 
-    def test_translate_adls_dataset_avro(self) -> None:
-        """Test ADLS dataset translation with Avro format."""
+    def test_translate_azure_blob_dataset_avro(self) -> None:
+        """Test Azure Blob dataset translation with Avro format."""
         dataset = _build_cloud_dataset(
             dataset_type="AzureBlobStorageDataset",
-            dataset_name="adls_avro_dataset",
+            dataset_name="blob_avro_dataset",
             bucket_name="avro-container",
             folder_path="raw",
             file_name="events.avro",
             linked_service={
-                "name": "adls-avro-service",
+                "name": "blob-avro-service",
                 "properties": {
                     "url": "https://myaccount.blob.core.windows.net/",
                 },
             },
             file_format={"type": "AvroFormat"},
         )
-        result = translate_adls_file_dataset(dataset)
+        result = translate_azure_blob_file_dataset(dataset)
 
         assert isinstance(result, FileDataset)
         assert result.dataset_type == "Avro"
+        assert result.provider_type == "azure_blob"
 
-    def test_translate_adls_dataset_missing_linked_service_url(self) -> None:
-        """Test ADLS dataset with linked service missing URL returns UnsupportedValue."""
+    def test_translate_azure_blob_dataset_missing_linked_service_url(self) -> None:
+        """Test Azure Blob dataset with linked service missing URL returns UnsupportedValue."""
         dataset = _build_cloud_dataset(
             dataset_type="AzureBlobStorageDataset",
-            dataset_name="adls_no_url",
+            dataset_name="blob_no_url",
             bucket_name="container",
             folder_path="data",
             file_name="file.parquet",
             linked_service={
-                "name": "adls-no-url-service",
+                "name": "blob-no-url-service",
                 "properties": {},
             },
         )
-        result = translate_adls_file_dataset(dataset)
+        result = translate_azure_blob_file_dataset(dataset)
 
         assert isinstance(result, UnsupportedValue)
         assert "url" in result.message.lower()
 
-    def test_translate_adls_dataset_null_returns_unsupported(self) -> None:
-        """Test null ADLS dataset returns UnsupportedValue."""
-        result = translate_adls_file_dataset({})
+    def test_translate_azure_blob_dataset_null_returns_unsupported(self) -> None:
+        """Test null Azure Blob dataset returns UnsupportedValue."""
+        result = translate_azure_blob_file_dataset({})
 
         assert isinstance(result, UnsupportedValue)
-        assert "Missing ADLS dataset definition" in result.message
+        assert "Missing Azure Blob dataset definition" in result.message
 
-    def test_translate_dataset_dispatches_adls(self) -> None:
+    def test_translate_dataset_dispatches_azure_blob(self) -> None:
         """Test that translate_dataset correctly dispatches AzureBlobStorageDataset."""
         dataset = _build_cloud_dataset(
             dataset_type="AzureBlobStorageDataset",
-            dataset_name="adls_dispatch",
+            dataset_name="blob_dispatch",
             bucket_name="container",
             folder_path="path",
             file_name="file.parquet",
             linked_service={
-                "name": "adls-svc",
+                "name": "blob-svc",
                 "properties": {
                     "url": "https://account.blob.core.windows.net/",
                 },
@@ -347,4 +351,5 @@ class TestAdlsFileDataset:
         result = translate_dataset(dataset)
 
         assert isinstance(result, FileDataset)
-        assert result.dataset_name == "adls_dispatch"
+        assert result.dataset_name == "blob_dispatch"
+        assert result.provider_type == "azure_blob"

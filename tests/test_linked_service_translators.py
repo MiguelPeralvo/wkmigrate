@@ -11,7 +11,7 @@ from __future__ import annotations
 from tests.conftest import get_fixture
 from wkmigrate.models.ir.linked_services import (
     AbfsLinkedService,
-    AdlsLinkedService,
+    AzureBlobLinkedService,
     DatabricksClusterLinkedService,
     GcsLinkedService,
     S3LinkedService,
@@ -20,7 +20,7 @@ from wkmigrate.models.ir.linked_services import (
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.translators.linked_service_translators import (
     translate_abfs_spec,
-    translate_adls_spec,
+    translate_azure_blob_spec,
     translate_databricks_cluster_spec,
     translate_gcs_spec,
     translate_s3_spec,
@@ -399,31 +399,31 @@ def test_gcs_null_input_returns_unsupported(linked_service_fixtures: list[dict])
 # --- Azure Data Lake Storage Gen2 linked service tests ---
 
 
-def test_full_adls_configuration(linked_service_fixtures: list[dict]) -> None:
-    """Test translation of ADLS linked service with full configuration."""
-    fixture = get_fixture(linked_service_fixtures, "adls_full")
-    result = translate_adls_spec(fixture["input"])
+def test_full_azure_blob_configuration(linked_service_fixtures: list[dict]) -> None:
+    """Test translation of Azure Blob linked service with full configuration."""
+    fixture = get_fixture(linked_service_fixtures, "azure_blob_full")
+    result = translate_azure_blob_spec(fixture["input"])
 
-    assert isinstance(result, AdlsLinkedService)
+    assert isinstance(result, AzureBlobLinkedService)
     assert result.service_name == fixture["expected"]["service_name"]
     assert result.service_type == fixture["expected"]["service_type"]
     assert result.url == fixture["expected"]["url"]
     assert result.storage_account_name == fixture["expected"]["storage_account_name"]
 
 
-def test_adls_missing_url_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
+def test_azure_blob_missing_url_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that missing URL returns UnsupportedValue."""
-    fixture = get_fixture(linked_service_fixtures, "adls_missing_url")
-    result = translate_adls_spec(fixture["input"])
+    fixture = get_fixture(linked_service_fixtures, "azure_blob_missing_url")
+    result = translate_azure_blob_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message
 
 
-def test_adls_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
+def test_azure_blob_null_input_returns_unsupported(linked_service_fixtures: list[dict]) -> None:
     """Test that null input returns UnsupportedValue."""
-    fixture = get_fixture(linked_service_fixtures, "adls_null")
-    result = translate_adls_spec(fixture["input"])
+    fixture = get_fixture(linked_service_fixtures, "azure_blob_null")
+    result = translate_azure_blob_spec(fixture["input"])
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message

@@ -318,41 +318,41 @@
     "expected_message": "Missing GCS linked service definition"
   },
   {
-    "id": "adls_full",
-    "description": "Azure Data Lake Storage Gen2 linked service - full configuration",
+    "id": "azure_blob_full",
+    "description": "Azure Blob Storage linked service - full configuration",
     "input": {
-      "name": "adls-storage-account",
+      "name": "blob-storage-account",
       "type": "Microsoft.DataFactory/factories/linkedservices",
       "properties": {
         "type": "AzureBlobStorage",
-        "url": "https://myadlsaccount.blob.core.windows.net/",
-        "storage_account_name": "myadlsaccount"
+        "url": "https://myblobaccount.blob.core.windows.net/",
+        "storage_account_name": "myblobaccount"
       }
     },
     "expected": {
-      "service_name": "adls-storage-account",
-      "service_type": "adls",
-      "url": "https://myadlsaccount.blob.core.windows.net/",
-      "storage_account_name": "myadlsaccount"
+      "service_name": "blob-storage-account",
+      "service_type": "azure_blob",
+      "url": "https://myblobaccount.blob.core.windows.net/",
+      "storage_account_name": "myblobaccount"
     }
   },
   {
-    "id": "adls_missing_url",
-    "description": "ADLS linked service - missing URL",
+    "id": "azure_blob_missing_url",
+    "description": "Azure Blob Storage linked service - missing URL",
     "input": {
-      "name": "adls-no-url",
+      "name": "blob-no-url",
       "properties": {
         "type": "AzureBlobStorage"
       }
     },
     "expected_unsupported": true,
-    "expected_message": "Missing property 'url' in ADLS linked service definition"
+    "expected_message": "Missing property 'url' in Azure Blob linked service definition"
   },
   {
-    "id": "adls_null",
-    "description": "Empty/null ADLS linked service",
+    "id": "azure_blob_null",
+    "description": "Empty/null Azure Blob Storage linked service",
     "input": null,
     "expected_unsupported": true,
-    "expected_message": "Missing ADLS linked service definition"
+    "expected_message": "Missing Azure Blob linked service definition"
   }
 ]

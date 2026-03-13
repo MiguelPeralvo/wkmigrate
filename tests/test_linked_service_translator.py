@@ -5,14 +5,14 @@ from contextlib import nullcontext as does_not_raise
 import pytest
 
 from wkmigrate.translators.linked_service_translators import (
-    translate_adls_spec,
+    translate_azure_blob_spec,
     translate_databricks_cluster_spec,
     translate_gcs_spec,
     translate_s3_spec,
     translate_sql_server_spec,
 )
 from wkmigrate.models.ir.linked_services import (
-    AdlsLinkedService,
+    AzureBlobLinkedService,
     DatabricksClusterLinkedService,
     GcsLinkedService,
     S3LinkedService,
@@ -282,47 +282,47 @@ def test_translate_gcs_spec_parses_result(linked_service_definition, expected_re
     [
         (
             None,
-            UnsupportedValue(value=None, message="Missing ADLS linked service definition"),
+            UnsupportedValue(value=None, message="Missing Azure Blob linked service definition"),
             does_not_raise(),
         ),
         (
             {},
-            UnsupportedValue(value={}, message="Missing ADLS linked service definition"),
+            UnsupportedValue(value={}, message="Missing Azure Blob linked service definition"),
             does_not_raise(),
         ),
         (
             {
-                "name": "adls-linked-service",
+                "name": "blob-linked-service",
                 "properties": {
-                    "url": "https://myadlsaccount.blob.core.windows.net/",
-                    "storage_account_name": "myadlsaccount",
+                    "url": "https://myblobaccount.blob.core.windows.net/",
+                    "storage_account_name": "myblobaccount",
                 },
             },
-            AdlsLinkedService(
-                service_name="adls-linked-service",
-                service_type="adls",
-                url="https://myadlsaccount.blob.core.windows.net/",
-                storage_account_name="myadlsaccount",
+            AzureBlobLinkedService(
+                service_name="blob-linked-service",
+                service_type="azure_blob",
+                url="https://myblobaccount.blob.core.windows.net/",
+                storage_account_name="myblobaccount",
             ),
             does_not_raise(),
         ),
         (
             {
-                "name": "adls-no-url",
+                "name": "blob-no-url",
                 "properties": {},
             },
             UnsupportedValue(
                 value={
-                    "name": "adls-no-url",
+                    "name": "blob-no-url",
                     "properties": {},
                 },
-                message="Missing property 'url' in ADLS linked service definition",
+                message="Missing property 'url' in Azure Blob linked service definition",
             ),
             does_not_raise(),
         ),
     ],
 )
-def test_translate_adls_spec_parses_result(linked_service_definition, expected_result, context):
+def test_translate_azure_blob_spec_parses_result(linked_service_definition, expected_result, context):
     with context:
-        result = translate_adls_spec(linked_service_definition)
+        result = translate_azure_blob_spec(linked_service_definition)
         assert result == expected_result

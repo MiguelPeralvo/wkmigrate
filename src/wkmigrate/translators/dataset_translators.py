@@ -6,6 +6,14 @@ objects for any unparsable inputs.
 """
 
 import json
+from wkmigrate.datasets import (
+    AZURE_BLOB_DATASET_TYPES,
+    DELTA_DATASET_TYPES,
+    FILE_DATASET_TYPES,
+    GCS_DATASET_TYPES,
+    S3_DATASET_TYPES,
+    SQL_DATASET_TYPES,
+)
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.datasets import (
     Dataset,
@@ -15,19 +23,13 @@ from wkmigrate.models.ir.datasets import (
 )
 from wkmigrate.translators.linked_service_translators import (
     translate_abfs_spec,
-    translate_adls_spec,
+    translate_azure_blob_spec,
     translate_databricks_cluster_spec,
     translate_gcs_spec,
     translate_s3_spec,
     translate_sql_server_spec,
 )
 
-_FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
-_S3_DATASET_TYPES = {"AmazonS3Dataset"}
-_GCS_DATASET_TYPES = {"GoogleCloudStorageDataset"}
-_ADLS_DATASET_TYPES = {"AzureBlobStorageDataset"}
-_SQL_DATASET_TYPES = {"AzureSqlTable"}
-_DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 _IGNORED_FORMAT_OPTIONS = {"dataset_name", "container", "folder_path"}
 
 
@@ -49,17 +51,17 @@ def translate_dataset(dataset: dict) -> Dataset | UnsupportedValue:
     if not dataset_type:
         return UnsupportedValue(value=dataset, message="Missing property 'type' in dataset properties")
 
-    if dataset_type in _FILE_DATASET_TYPES:
+    if dataset_type in FILE_DATASET_TYPES:
         return translate_file_dataset(dataset_type, dataset)
-    if dataset_type in _S3_DATASET_TYPES:
+    if dataset_type in S3_DATASET_TYPES:
         return translate_s3_file_dataset(dataset)
-    if dataset_type in _GCS_DATASET_TYPES:
+    if dataset_type in GCS_DATASET_TYPES:
         return translate_gcs_file_dataset(dataset)
-    if dataset_type in _ADLS_DATASET_TYPES:
-        return translate_adls_file_dataset(dataset)
-    if dataset_type in _SQL_DATASET_TYPES:
+    if dataset_type in AZURE_BLOB_DATASET_TYPES:
+        return translate_azure_blob_file_dataset(dataset)
+    if dataset_type in SQL_DATASET_TYPES:
         return translate_sql_server_dataset(dataset)
-    if dataset_type in _DELTA_DATASET_TYPES:
+    if dataset_type in DELTA_DATASET_TYPES:
         return translate_delta_table_dataset(dataset)
 
     return UnsupportedValue(value=dataset, message=f"Unsupported dataset type '{dataset_type}'")
@@ -104,6 +106,7 @@ def translate_file_dataset(dataset_type: str, dataset: dict) -> FileDataset | Un
         service_name=linked_service.service_name,
         url=linked_service.url,
         format_options=format_options,
+        provider_type="abfs",
     )
 
 
@@ -142,6 +145,7 @@ def translate_s3_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue:
         folder_path=file_path,
         service_name=linked_service.service_name,
         url=linked_service.service_url,
+        provider_type="s3",
     )
 
 
@@ -180,21 +184,22 @@ def translate_gcs_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue:
         folder_path=file_path,
         service_name=linked_service.service_name,
         url=linked_service.service_url,
+        provider_type="gcs",
     )
 
 
-def translate_adls_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue:
+def translate_azure_blob_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue:
     """
-    Translates an Azure Data Lake Storage Gen2 (Blob Storage) dataset definition into a ``FileDataset`` object.
+    Translates an Azure Blob Storage dataset definition into a ``FileDataset`` object.
 
     Args:
         dataset: Raw dataset definition from Azure Data Factory.
 
     Returns:
-        ADLS dataset as a ``FileDataset`` object.
+        Azure Blob dataset as a ``FileDataset`` object.
     """
     if not dataset:
-        return UnsupportedValue(value=dataset, message="Missing ADLS dataset definition")
+        return UnsupportedValue(value=dataset, message="Missing Azure Blob dataset definition")
 
     properties = dataset.get("properties", {})
     container_name = _parse_cloud_bucket_name(properties)
@@ -205,7 +210,7 @@ def translate_adls_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue
     if isinstance(file_path, UnsupportedValue):
         return UnsupportedValue(value=dataset, message=file_path.message)
 
-    linked_service = translate_adls_spec(_get_linked_service_definition(dataset))
+    linked_service = translate_azure_blob_spec(_get_linked_service_definition(dataset))
     if isinstance(linked_service, UnsupportedValue):
         return UnsupportedValue(value=dataset, message=linked_service.message)
 
@@ -219,6 +224,7 @@ def translate_adls_file_dataset(dataset: dict) -> FileDataset | UnsupportedValue
         storage_account_name=linked_service.storage_account_name,
         service_name=linked_service.service_name,
         url=linked_service.url,
+        provider_type="azure_blob",
     )
 
 
