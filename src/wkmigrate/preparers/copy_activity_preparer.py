@@ -18,7 +18,7 @@ from wkmigrate.datasets import (
     parse_spark_data_type,
 )
 from wkmigrate.code_generator import (
-    _get_file_uri,
+    get_file_uri,
     get_option_expressions,
     get_read_expression,
 )
@@ -229,13 +229,13 @@ def _get_write_expression(sink_definition: dict) -> str:
     sink_name = sink_definition.get("dataset_name")
     sink_type = sink_definition.get("type")
     if sink_type == "avro":
-        uri = _get_file_uri(sink_definition)
+        uri = get_file_uri(sink_definition)
         return rf"""{sink_name}_df.write.format("avro")  \
                         .mode("overwrite")  \
                         .save("{uri}")
                     """
     if sink_type == "csv":
-        uri = _get_file_uri(sink_definition)
+        uri = get_file_uri(sink_definition)
         return rf"""{sink_name}_df.write.format("csv")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
@@ -249,21 +249,21 @@ def _get_write_expression(sink_definition: dict) -> str:
                         .saveAsTable("hive_metastore.{database_name}.{table_name}")
                     """
     if sink_type == "json":
-        uri = _get_file_uri(sink_definition)
+        uri = get_file_uri(sink_definition)
         return rf"""{sink_name}_df.write.format("json")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
                         .save("{uri}")
                     """
     if sink_type == "orc":
-        uri = _get_file_uri(sink_definition)
+        uri = get_file_uri(sink_definition)
         return rf"""{sink_name}_df.write.format("orc")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
                         .save("{uri}")
                     """
     if sink_type == "parquet":
-        uri = _get_file_uri(sink_definition)
+        uri = get_file_uri(sink_definition)
         return rf"""{sink_name}_df.write.format("parquet")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \

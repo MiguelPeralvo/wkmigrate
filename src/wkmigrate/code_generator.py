@@ -210,7 +210,7 @@ def get_read_expression(source_definition: dict, source_query: str | None = None
     raise ValueError(f'Reading data from "{source_type}" not supported')
 
 
-def _get_file_uri(definition: dict) -> str:
+def get_file_uri(definition: dict) -> str:
     """
     Builds the cloud storage URI for a file dataset definition.
 
@@ -250,7 +250,7 @@ def get_file_read_expression(source_definition: dict) -> str:
     """
     source_name = source_definition["dataset_name"]
     source_type = source_definition["type"]
-    uri = _get_file_uri(source_definition)
+    uri = get_file_uri(source_definition)
 
     return f"""{source_name}_df = (
                         spark.read.format("{source_type}")
