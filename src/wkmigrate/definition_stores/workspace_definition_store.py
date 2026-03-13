@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
+import re
 from typing import Any
 import warnings
 from collections.abc import Iterable
@@ -40,9 +42,11 @@ from typing_extensions import deprecated
 from wkmigrate.definition_stores.definition_store import DefinitionStore
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.models.workflows.artifacts import NotebookArtifact
-from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
 from wkmigrate.models.workflows.artifacts import PreparedWorkflow
+from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
 from wkmigrate.preparers.preparer import prepare_workflow
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(slots=True)
@@ -91,6 +95,73 @@ class WorkspaceDefinitionStore(DefinitionStore):
         if self.host_name is None:
             raise ValueError('"host_name" must be provided when creating a WorkspaceDefinitionStore')
         self.workspace_client = self._login_workspace_client()
+
+    def to_jobs(self, pipeline_definitions: list[Pipeline]) -> list[int]:
+        """
+        Uploads artifacts and creates a Databricks job for each pipeline.
+
+        Args:
+            pipeline_definitions: List of ``Pipeline`` dataclasses to deploy.
+
+        Returns:
+            List of job identifiers registered in the workspace.
+        """
+        job_ids: list[int] = []
+        for pipeline_definition in pipeline_definitions:
+            try:
+                job_id = self.to_job(pipeline_definition)
+            except Exception:
+                logger.warning(  # pylint: disable=logging-too-many-args
+                    "Failed to create job for pipeline '%s', skipping",
+                    pipeline_definition.name,
+                    exc_info=True,
+                )
+                continue
+            if job_id is not None:
+                job_ids.append(job_id)
+        return job_ids
+
+    def to_asset_bundles(
+        self,
+        pipeline_definitions: list[Pipeline],
+        bundle_directory: str,
+        download_notebooks: bool = True,
+    ) -> None:
+        """
+        Creates a Databricks asset bundle for each pipeline inside a shared parent directory.
+
+        Each pipeline is written to a subdirectory named after the pipeline.
+
+        Args:
+            pipeline_definitions: List of ``Pipeline`` dataclasses to export.
+            bundle_directory: Parent directory for all generated bundles.
+            download_notebooks: If True, downloads referenced notebooks from the workspace.
+        """
+        bundle_dir = os.path.abspath(bundle_directory)
+        seen_names: set[str] = set()
+        for pipeline_definition in pipeline_definitions:
+            safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", pipeline_definition.name)
+            if not safe_name:
+                raise ValueError(f"Pipeline name {pipeline_definition.name!r} is empty after sanitization")
+            if safe_name in seen_names:
+                suffix = 1
+                while f"{safe_name}_{suffix}" in seen_names:
+                    suffix += 1
+                safe_name = f"{safe_name}_{suffix}"
+                logger.warning(  # pylint: disable=logging-too-many-args
+                    "Sanitized pipeline name collides with a previous pipeline; renaming to '%s'",
+                    safe_name,
+                )
+            seen_names.add(safe_name)
+            sub_directory = os.path.join(bundle_dir, safe_name)
+            try:
+                self.to_asset_bundle(pipeline_definition, sub_directory, download_notebooks=download_notebooks)
+            except Exception:
+                logger.warning(  # pylint: disable=logging-too-many-args
+                    "Failed to create asset bundle for pipeline '%s', skipping",
+                    pipeline_definition.name,
+                    exc_info=True,
+                )
 
     def to_job(self, pipeline_definition: Pipeline) -> int | None:
         """
