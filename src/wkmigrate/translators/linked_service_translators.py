@@ -9,7 +9,14 @@ from uuid import uuid4
 from wkmigrate.enums.init_script_type import InitScriptType
 from wkmigrate.utils import append_system_tags, extract_group
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.models.ir.linked_services import AbfsLinkedService, DatabricksClusterLinkedService, SqlLinkedService
+from wkmigrate.models.ir.linked_services import (
+    AbfsLinkedService,
+    AdlsLinkedService,
+    DatabricksClusterLinkedService,
+    GcsLinkedService,
+    S3LinkedService,
+    SqlLinkedService,
+)
 
 
 def translate_abfs_spec(abfs_spec: dict) -> AbfsLinkedService | UnsupportedValue:
@@ -109,6 +116,78 @@ def translate_sql_server_spec(sql_server_spec: dict) -> SqlLinkedService | Unsup
         database=properties.get("database"),
         user_name=properties.get("user_name"),
         authentication_type=properties.get("authentication_type"),
+    )
+
+
+def translate_s3_spec(s3_spec: dict) -> S3LinkedService | UnsupportedValue:
+    """
+    Parses an Amazon S3 linked service definition into an ``S3LinkedService`` object.
+
+    Args:
+        s3_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        S3 linked-service metadata as an ``S3LinkedService`` object.
+    """
+    if not s3_spec:
+        return UnsupportedValue(value=s3_spec, message="Missing S3 linked service definition")
+
+    properties = s3_spec.get("properties", {})
+    return S3LinkedService(
+        service_name=s3_spec.get("name", str(uuid4())),
+        service_type="s3",
+        access_key_id=properties.get("access_key_id"),
+        service_url=properties.get("service_url"),
+    )
+
+
+def translate_gcs_spec(gcs_spec: dict) -> GcsLinkedService | UnsupportedValue:
+    """
+    Parses a Google Cloud Storage linked service definition into a ``GcsLinkedService`` object.
+
+    Args:
+        gcs_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        GCS linked-service metadata as a ``GcsLinkedService`` object.
+    """
+    if not gcs_spec:
+        return UnsupportedValue(value=gcs_spec, message="Missing GCS linked service definition")
+
+    properties = gcs_spec.get("properties", {})
+    return GcsLinkedService(
+        service_name=gcs_spec.get("name", str(uuid4())),
+        service_type="gcs",
+        project_id=properties.get("project_id"),
+        service_url=properties.get("service_url"),
+    )
+
+
+def translate_adls_spec(adls_spec: dict) -> AdlsLinkedService | UnsupportedValue:
+    """
+    Parses an Azure Data Lake Storage Gen2 (Blob Storage) linked service definition into an ``AdlsLinkedService`` object.
+
+    Args:
+        adls_spec: Linked-service definition from Azure Data Factory.
+
+    Returns:
+        ADLS linked-service metadata as an ``AdlsLinkedService`` object.
+    """
+    if not adls_spec:
+        return UnsupportedValue(value=adls_spec, message="Missing ADLS linked service definition")
+
+    properties = adls_spec.get("properties", {})
+    url = properties.get("url")
+    if url is None:
+        return UnsupportedValue(value=adls_spec, message="Missing property 'url' in ADLS linked service definition")
+
+    storage_account_name = properties.get("storage_account_name")
+
+    return AdlsLinkedService(
+        service_name=adls_spec.get("name", str(uuid4())),
+        service_type="adls",
+        url=url,
+        storage_account_name=storage_account_name,
     )
 
 

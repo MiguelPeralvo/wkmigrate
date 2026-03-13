@@ -5,10 +5,19 @@ from contextlib import nullcontext as does_not_raise
 import pytest
 
 from wkmigrate.translators.linked_service_translators import (
+    translate_adls_spec,
     translate_databricks_cluster_spec,
+    translate_gcs_spec,
+    translate_s3_spec,
     translate_sql_server_spec,
 )
-from wkmigrate.models.ir.linked_services import DatabricksClusterLinkedService, SqlLinkedService
+from wkmigrate.models.ir.linked_services import (
+    AdlsLinkedService,
+    DatabricksClusterLinkedService,
+    GcsLinkedService,
+    S3LinkedService,
+    SqlLinkedService,
+)
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
@@ -169,4 +178,151 @@ def test_translate_cluster_spec_parses_result(linked_service_definition, expecte
 def test_translate_sql_server_spec_parses_result(linked_service_definition, expected_result, context):
     with context:
         result = translate_sql_server_spec(linked_service_definition)
+        assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "linked_service_definition, expected_result, context",
+    [
+        (
+            None,
+            UnsupportedValue(value=None, message="Missing S3 linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {},
+            UnsupportedValue(value={}, message="Missing S3 linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "s3-linked-service",
+                "properties": {
+                    "access_key_id": "MY_ACCESS_KEY_ID",
+                    "service_url": "https://s3.amazonaws.com",
+                },
+            },
+            S3LinkedService(
+                service_name="s3-linked-service",
+                service_type="s3",
+                access_key_id="MY_ACCESS_KEY_ID",
+                service_url="https://s3.amazonaws.com",
+            ),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "s3-minimal",
+                "properties": {},
+            },
+            S3LinkedService(
+                service_name="s3-minimal",
+                service_type="s3",
+            ),
+            does_not_raise(),
+        ),
+    ],
+)
+def test_translate_s3_spec_parses_result(linked_service_definition, expected_result, context):
+    with context:
+        result = translate_s3_spec(linked_service_definition)
+        assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "linked_service_definition, expected_result, context",
+    [
+        (
+            None,
+            UnsupportedValue(value=None, message="Missing GCS linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {},
+            UnsupportedValue(value={}, message="Missing GCS linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "gcs-linked-service",
+                "properties": {
+                    "project_id": "my-gcp-project",
+                    "service_url": "https://storage.googleapis.com",
+                },
+            },
+            GcsLinkedService(
+                service_name="gcs-linked-service",
+                service_type="gcs",
+                project_id="my-gcp-project",
+                service_url="https://storage.googleapis.com",
+            ),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "gcs-minimal",
+                "properties": {},
+            },
+            GcsLinkedService(
+                service_name="gcs-minimal",
+                service_type="gcs",
+            ),
+            does_not_raise(),
+        ),
+    ],
+)
+def test_translate_gcs_spec_parses_result(linked_service_definition, expected_result, context):
+    with context:
+        result = translate_gcs_spec(linked_service_definition)
+        assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "linked_service_definition, expected_result, context",
+    [
+        (
+            None,
+            UnsupportedValue(value=None, message="Missing ADLS linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {},
+            UnsupportedValue(value={}, message="Missing ADLS linked service definition"),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "adls-linked-service",
+                "properties": {
+                    "url": "https://myadlsaccount.blob.core.windows.net/",
+                    "storage_account_name": "myadlsaccount",
+                },
+            },
+            AdlsLinkedService(
+                service_name="adls-linked-service",
+                service_type="adls",
+                url="https://myadlsaccount.blob.core.windows.net/",
+                storage_account_name="myadlsaccount",
+            ),
+            does_not_raise(),
+        ),
+        (
+            {
+                "name": "adls-no-url",
+                "properties": {},
+            },
+            UnsupportedValue(
+                value={
+                    "name": "adls-no-url",
+                    "properties": {},
+                },
+                message="Missing property 'url' in ADLS linked service definition",
+            ),
+            does_not_raise(),
+        ),
+    ],
+)
+def test_translate_adls_spec_parses_result(linked_service_definition, expected_result, context):
+    with context:
+        result = translate_adls_spec(linked_service_definition)
         assert result == expected_result

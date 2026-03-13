@@ -17,6 +17,9 @@ from wkmigrate.models.workflows.instructions import SecretInstruction
 from wkmigrate.utils import parse_mapping
 
 FILE_DATASET_TYPES = {"Avro", "DelimitedText", "Json", "Orc", "Parquet"}
+S3_DATASET_TYPES = {"AmazonS3Dataset"}
+GCS_DATASET_TYPES = {"GoogleCloudStorageDataset"}
+ADLS_DATASET_TYPES = {"AzureBlobStorageDataset"}
 SQL_DATASET_TYPES = {"AzureSqlTable"}
 DELTA_DATASET_TYPES = {"AzureDatabricksDeltaLakeDataset"}
 
@@ -27,6 +30,9 @@ DATASET_SECRETS: dict[str, list[str]] = {
     "json": ["storage_account_key"],
     "orc": ["storage_account_key"],
     "parquet": ["storage_account_key"],
+    "s3": ["access_key_id", "secret_access_key"],
+    "gcs": ["service_account_key"],
+    "adls": ["storage_account_key"],
     "sqlserver": ["host", "database", "user_name", "password"],
 }
 

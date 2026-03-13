@@ -236,5 +236,123 @@
     "input": null,
     "expected_unsupported": true,
     "expected_message": "Missing ABFS linked service definition"
+  },
+  {
+    "id": "s3_full",
+    "description": "Amazon S3 linked service - full configuration",
+    "input": {
+      "name": "s3-storage-account",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "AmazonS3",
+        "access_key_id": "MY_ACCESS_KEY_ID",
+        "service_url": "https://s3.amazonaws.com"
+      }
+    },
+    "expected": {
+      "service_name": "s3-storage-account",
+      "service_type": "s3",
+      "access_key_id": "MY_ACCESS_KEY_ID",
+      "service_url": "https://s3.amazonaws.com"
+    }
+  },
+  {
+    "id": "s3_minimal",
+    "description": "Amazon S3 linked service - minimal configuration",
+    "input": {
+      "name": "s3-minimal",
+      "properties": {
+        "type": "AmazonS3"
+      }
+    },
+    "expected": {
+      "service_name": "s3-minimal",
+      "service_type": "s3"
+    }
+  },
+  {
+    "id": "s3_null",
+    "description": "Empty/null S3 linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing S3 linked service definition"
+  },
+  {
+    "id": "gcs_full",
+    "description": "Google Cloud Storage linked service - full configuration",
+    "input": {
+      "name": "gcs-storage-account",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "GoogleCloudStorage",
+        "project_id": "my-gcp-project-123",
+        "service_url": "https://storage.googleapis.com"
+      }
+    },
+    "expected": {
+      "service_name": "gcs-storage-account",
+      "service_type": "gcs",
+      "project_id": "my-gcp-project-123",
+      "service_url": "https://storage.googleapis.com"
+    }
+  },
+  {
+    "id": "gcs_minimal",
+    "description": "Google Cloud Storage linked service - minimal configuration",
+    "input": {
+      "name": "gcs-minimal",
+      "properties": {
+        "type": "GoogleCloudStorage"
+      }
+    },
+    "expected": {
+      "service_name": "gcs-minimal",
+      "service_type": "gcs"
+    }
+  },
+  {
+    "id": "gcs_null",
+    "description": "Empty/null GCS linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing GCS linked service definition"
+  },
+  {
+    "id": "adls_full",
+    "description": "Azure Data Lake Storage Gen2 linked service - full configuration",
+    "input": {
+      "name": "adls-storage-account",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "properties": {
+        "type": "AzureBlobStorage",
+        "url": "https://myadlsaccount.blob.core.windows.net/",
+        "storage_account_name": "myadlsaccount"
+      }
+    },
+    "expected": {
+      "service_name": "adls-storage-account",
+      "service_type": "adls",
+      "url": "https://myadlsaccount.blob.core.windows.net/",
+      "storage_account_name": "myadlsaccount"
+    }
+  },
+  {
+    "id": "adls_missing_url",
+    "description": "ADLS linked service - missing URL",
+    "input": {
+      "name": "adls-no-url",
+      "properties": {
+        "type": "AzureBlobStorage"
+      }
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing property 'url' in ADLS linked service definition"
+  },
+  {
+    "id": "adls_null",
+    "description": "Empty/null ADLS linked service",
+    "input": null,
+    "expected_unsupported": true,
+    "expected_message": "Missing ADLS linked service definition"
   }
 ]
