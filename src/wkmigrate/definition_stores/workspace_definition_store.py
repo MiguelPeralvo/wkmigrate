@@ -88,6 +88,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
             "catalog",
             "schema",
             "workspace_url",
+            "credentials_scope",
         }
     )
     _valid_compute_types = frozenset({"serverless", "classic"})
