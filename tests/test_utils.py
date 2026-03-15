@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.utils import parse_authentication
+from wkmigrate.utils import parse_activity_timeout_string, parse_authentication
 
 
 def test_parse_authentication_none_returns_none() -> None:
@@ -44,3 +46,79 @@ def test_parse_authentication_missing_username_returns_unsupported() -> None:
 
     assert isinstance(result, UnsupportedValue)
     assert "Missing value 'username'" in result.message
+
+
+# --- Timeout parsing tests (fix for #36) ---
+
+
+def test_timeout_zero_day_twelve_hours() -> None:
+    """0.12:00:00 is 12 hours = 43200 seconds."""
+    assert parse_activity_timeout_string("0.12:00:00") == 43200
+
+
+def test_timeout_one_day() -> None:
+    """1.00:00:00 is 1 day = 86400 seconds."""
+    assert parse_activity_timeout_string("1.00:00:00") == 86400
+
+
+def test_timeout_two_days_five_hours() -> None:
+    """2.05:00:00 is 2 days 5 hours = 190800 seconds."""
+    assert parse_activity_timeout_string("2.05:00:00") == 190800
+
+
+def test_timeout_twelve_days_complex() -> None:
+    """12.05:30:15 is 12 days 5 hours 30 min 15 sec = 1056615 seconds."""
+    assert parse_activity_timeout_string("12.05:30:15") == 12 * 86400 + 5 * 3600 + 30 * 60 + 15
+
+
+def test_timeout_no_day_prefix() -> None:
+    """00:30:00 (no day prefix) is 30 minutes = 1800 seconds."""
+    assert parse_activity_timeout_string("00:30:00") == 1800
+
+
+def test_timeout_no_day_prefix_hours() -> None:
+    """12:00:00 (no day prefix) is 12 hours = 43200 seconds."""
+    assert parse_activity_timeout_string("12:00:00") == 43200
+
+
+def test_timeout_with_prefix() -> None:
+    """Prefix '0.' is prepended before parsing."""
+    assert parse_activity_timeout_string("12:00:00", prefix="0.") == 43200
+
+
+def test_timeout_seven_days() -> None:
+    """7.00:00:00 is 7 days = 604800 seconds."""
+    assert parse_activity_timeout_string("7.00:00:00") == 604800
+
+
+def test_timeout_large_day_count() -> None:
+    """30.00:00:00 is 30 days — should work beyond calendar day limits."""
+    assert parse_activity_timeout_string("30.00:00:00") == 30 * 86400
+
+
+def test_timeout_999_days() -> None:
+    """999.23:59:59 — large but valid ADF timeout."""
+    assert parse_activity_timeout_string("999.23:59:59") == 999 * 86400 + 23 * 3600 + 59 * 60 + 59
+
+
+def test_timeout_invalid_format_raises() -> None:
+    """Invalid format raises ValueError."""
+    with pytest.raises(ValueError, match="Invalid timeout format"):
+        parse_activity_timeout_string("abc")
+
+
+def test_timeout_empty_string_raises() -> None:
+    """Empty string raises ValueError."""
+    with pytest.raises(ValueError, match="Invalid timeout format"):
+        parse_activity_timeout_string("")
+
+
+def test_timeout_zero_raises() -> None:
+    """All-zero timeout raises ValueError."""
+    with pytest.raises(ValueError, match="Timeout must be positive"):
+        parse_activity_timeout_string("0.00:00:00")
+
+
+def test_timeout_only_seconds() -> None:
+    """00:00:30 is 30 seconds."""
+    assert parse_activity_timeout_string("00:00:30") == 30

@@ -76,9 +76,18 @@ def append_system_tags(tags: dict | None) -> dict:
     return tags
 
 
+_TIMEOUT_PATTERN = re.compile(r"^(?:(\d+)\.)?((\d{1,2}):(\d{2}):(\d{2}))$")
+
+
 def parse_activity_timeout_string(timeout_string: str, prefix: str = "") -> int:
     """
-    Parses a timeout string in the format ``d.hh:mm:ss`` into seconds.
+    Parses a timeout string in the format ``d.hh:mm:ss`` or ``hh:mm:ss`` into seconds.
+
+    Supports ADF timeout formats including:
+    - ``"0.12:00:00"`` (12 hours)
+    - ``"1.00:00:00"`` (1 day)
+    - ``"2.05:30:00"`` (2 days, 5 hours, 30 minutes)
+    - ``"00:30:00"`` (30 minutes, no day prefix)
 
     Args:
         timeout_string: Timeout string from the activity policy.
@@ -86,29 +95,26 @@ def parse_activity_timeout_string(timeout_string: str, prefix: str = "") -> int:
 
     Returns:
         Total seconds represented by the timeout.
+
+    Raises:
+        ValueError: If the timeout string is not in a recognised format or represents zero/negative duration.
     """
     if prefix:
         timeout_string = f"{prefix}{timeout_string}"
 
-    if timeout_string[:2] == "0.":
-        # Parse the timeout string to HH:MM:SS format:
-        timeout_string = timeout_string[2:]
-        time_format = "%H:%M:%S"
-        date_time = datetime.strptime(timeout_string, time_format)
-        time_delta = timedelta(hours=date_time.hour, minutes=date_time.minute, seconds=date_time.second)
+    match = _TIMEOUT_PATTERN.match(timeout_string)
+    if not match:
+        raise ValueError(f"Invalid timeout format: '{timeout_string}'. Expected 'd.hh:mm:ss' or 'hh:mm:ss'.")
 
-    else:
-        # Parse the timeout string to DD.HH:MM:SS format:
-        timeout_string = timeout_string.zfill(11)
-        time_format = "%d.%H:%M:%S"
-        date_time = datetime.strptime(timeout_string, time_format)
-        time_delta = timedelta(
-            days=date_time.day,
-            hours=date_time.hour,
-            minutes=date_time.minute,
-            seconds=date_time.second,
-        )
-    return int(time_delta.total_seconds())
+    days = int(match.group(1)) if match.group(1) is not None else 0
+    hours = int(match.group(3))
+    minutes = int(match.group(4))
+    seconds = int(match.group(5))
+
+    total = days * 86400 + hours * 3600 + minutes * 60 + seconds
+    if total <= 0:
+        raise ValueError(f"Timeout must be positive: '{timeout_string}'")
+    return total
 
 
 def parse_authentication(secret_key: str, authentication: dict | None) -> Authentication | UnsupportedValue | None:
