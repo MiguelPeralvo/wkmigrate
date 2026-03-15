@@ -54,7 +54,7 @@ def get_option_expressions(
 
     Args:
         dataset_definition: Dataset definition dictionary.
-        credentials_scope: Name of the Databricks secret scope for credentials.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         List of Python source lines that creates an options dictionary.
@@ -76,7 +76,7 @@ def get_file_options(
     Args:
         dataset_definition: Dataset definition dictionary.
         file_type: File type (for example ``"csv"`` or ``"parquet"``).
-        credentials_scope: Name of the Databricks secret scope for credentials.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         List of Python source lines that create the options dictionary.
@@ -113,7 +113,7 @@ def get_database_options(
     Args:
         dataset_definition: Dataset definition dictionary.
         database_type: Database type (for example ``"sqlserver"``).
-        credentials_scope: Name of the Databricks secret scope for credentials.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         List of Python source lines that create the options dictionary.
@@ -332,7 +332,7 @@ def _get_authentication_lines(
         activity_name: Logical name of the activity being translated.
         activity_type: Activity type string emitted by ADF.
         authentication: Parsed authentication configuration.
-        credentials_scope: Name of the Databricks secret scope for credentials.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         List of Python source lines to append to the notebook script.
@@ -355,7 +355,7 @@ def _get_basic_authentication_lines(
 
     Args:
         authentication: Parsed authentication configuration.
-        credentials_scope: Name of the Databricks secret scope for credentials.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         List of Python source lines to append to the notebook script.
