@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.utils import parse_activity_timeout_string, parse_authentication
+from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.utils import DEFAULT_TIMEOUT_SECONDS, parse_activity_timeout_string, parse_authentication
 
 
 def test_parse_authentication_none_returns_none() -> None:
@@ -101,22 +104,31 @@ def test_timeout_999_days() -> None:
     assert parse_activity_timeout_string("999.23:59:59") == 999 * 86400 + 23 * 3600 + 59 * 60 + 59
 
 
-def test_timeout_invalid_format_raises() -> None:
-    """Invalid format raises ValueError."""
-    with pytest.raises(ValueError, match="Invalid timeout format"):
-        parse_activity_timeout_string("abc")
+def test_timeout_invalid_format_warns_and_returns_default() -> None:
+    """Invalid format emits NotTranslatableWarning and returns default."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = parse_activity_timeout_string("abc")
+    assert result == DEFAULT_TIMEOUT_SECONDS
+    assert any(issubclass(w.category, NotTranslatableWarning) for w in caught)
 
 
-def test_timeout_empty_string_raises() -> None:
-    """Empty string raises ValueError."""
-    with pytest.raises(ValueError, match="Invalid timeout format"):
-        parse_activity_timeout_string("")
+def test_timeout_empty_string_warns_and_returns_default() -> None:
+    """Empty string emits NotTranslatableWarning and returns default."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = parse_activity_timeout_string("")
+    assert result == DEFAULT_TIMEOUT_SECONDS
+    assert any(issubclass(w.category, NotTranslatableWarning) for w in caught)
 
 
-def test_timeout_zero_raises() -> None:
-    """All-zero timeout raises ValueError."""
-    with pytest.raises(ValueError, match="Timeout must be positive"):
-        parse_activity_timeout_string("0.00:00:00")
+def test_timeout_zero_warns_and_returns_default() -> None:
+    """All-zero timeout emits NotTranslatableWarning and returns default."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = parse_activity_timeout_string("0.00:00:00")
+    assert result == DEFAULT_TIMEOUT_SECONDS
+    assert any(issubclass(w.category, NotTranslatableWarning) for w in caught)
 
 
 def test_timeout_only_seconds() -> None:

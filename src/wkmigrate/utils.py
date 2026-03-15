@@ -6,6 +6,7 @@ metadata (e.g. appending system tags).
 """
 
 import re
+import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from importlib import import_module
@@ -14,6 +15,9 @@ from typing import Any
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.pipeline import Activity, Authentication, DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.not_translatable import NotTranslatableWarning
+
+DEFAULT_TIMEOUT_SECONDS = 43200
 
 
 def translate(items: dict | None, mapping: dict) -> dict | None:
@@ -89,22 +93,30 @@ def parse_activity_timeout_string(timeout_string: str, prefix: str = "") -> int:
     - ``"2.05:30:00"`` (2 days, 5 hours, 30 minutes)
     - ``"00:30:00"`` (30 minutes, no day prefix)
 
+    When the timeout string cannot be parsed or represents a zero/negative duration,
+    a ``NotTranslatableWarning`` is emitted and the ADF default of 12 hours
+    (``DEFAULT_TIMEOUT_SECONDS``) is returned instead of raising an exception.
+
     Args:
         timeout_string: Timeout string from the activity policy.
         prefix: Prefix to add to the timeout string to align with the format 'd.hh:mm:ss'.
 
     Returns:
-        Total seconds represented by the timeout.
+        Total seconds represented by the timeout, or ``DEFAULT_TIMEOUT_SECONDS``
+        when the value cannot be parsed.
 
-    Raises:
-        ValueError: If the timeout string is not in a recognised format or represents zero/negative duration.
+    Warns:
+        NotTranslatableWarning: If the timeout string is not in a recognised format
+            or represents zero/negative duration.
     """
     if prefix:
         timeout_string = f"{prefix}{timeout_string}"
 
     match = _TIMEOUT_PATTERN.match(timeout_string)
     if not match:
-        raise ValueError(f"Invalid timeout format: '{timeout_string}'. Expected 'd.hh:mm:ss' or 'hh:mm:ss'.")
+        msg = f"Invalid timeout format: '{timeout_string}'. Expected 'd.hh:mm:ss' or 'hh:mm:ss'."
+        warnings.warn(NotTranslatableWarning("timeout", msg))
+        return DEFAULT_TIMEOUT_SECONDS
 
     days = int(match.group(1)) if match.group(1) is not None else 0
     hours = int(match.group(3))
@@ -113,7 +125,9 @@ def parse_activity_timeout_string(timeout_string: str, prefix: str = "") -> int:
 
     total = days * 86400 + hours * 3600 + minutes * 60 + seconds
     if total <= 0:
-        raise ValueError(f"Timeout must be positive: '{timeout_string}'")
+        msg = f"Timeout must be positive: '{timeout_string}'"
+        warnings.warn(NotTranslatableWarning("timeout", msg))
+        return DEFAULT_TIMEOUT_SECONDS
     return total
 
 
