@@ -204,6 +204,7 @@ and publishes the response body and status code as Databricks task values.
 - `disable_cert_validation` - When ``True``, TLS certificate verification is skipped.
 - `http_request_timeout_seconds` - Optional HTTP request timeout in seconds.
 - `turn_off_async` - When ``True``, noted in the notebook as a comment for visibility.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:

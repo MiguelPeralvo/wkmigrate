@@ -46,9 +46,7 @@ def get_set_variable_notebook_content(variable_name: str, variable_value: str) -
     return autopep8.fix_code("\n".join(script_lines))
 
 
-def get_option_expressions(
-    dataset_definition: dict, credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
-) -> list[str]:
+def get_option_expressions(dataset_definition: dict, credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE) -> list[str]:
     """
     Generates code to create a Spark data source options dictionary for the specified dataset definition.
 
@@ -267,6 +265,7 @@ def get_web_activity_notebook_content(
         disable_cert_validation: When ``True``, TLS certificate verification is skipped.
         http_request_timeout_seconds: Optional HTTP request timeout in seconds.
         turn_off_async: When ``True``, noted in the notebook as a comment for visibility.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         Formatted Python notebook source as a ``str``.
@@ -297,9 +296,7 @@ def get_web_activity_notebook_content(
         script_lines.append(f'kwargs["timeout"] = {http_request_timeout_seconds}')
 
     if authentication:
-        script_lines.extend(
-            _get_authentication_lines(activity_name, activity_type, authentication, credentials_scope)
-        )
+        script_lines.extend(_get_authentication_lines(activity_name, activity_type, authentication, credentials_scope))
 
     if turn_off_async:
         script_lines.append("")
