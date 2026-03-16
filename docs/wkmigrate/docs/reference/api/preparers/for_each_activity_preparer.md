@@ -14,7 +14,9 @@ and nested activity tasks and artifacts.
 ```python
 def prepare_for_each_activity(
         activity: ForEachActivity,
-        default_files_to_delta_sinks: bool | None) -> PreparedActivity
+        default_files_to_delta_sinks: bool | None,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedActivity
 ```
 
 Builds the task payload for a ForEach activity.
@@ -23,6 +25,7 @@ Builds the task payload for a ForEach activity.
 
 - `activity` - Activity definition emitted by the translators
 - `default_files_to_delta_sinks` - Optional override for DLT generation
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:

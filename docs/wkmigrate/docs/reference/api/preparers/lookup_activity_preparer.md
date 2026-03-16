@@ -13,7 +13,10 @@ a Databricks task value using ``dbutils.jobs.taskValues.set()``.
 #### prepare\_lookup\_activity
 
 ```python
-def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity
+def prepare_lookup_activity(
+        activity: LookupActivity,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedActivity
 ```
 
 Builds tasks and artifacts for a Lookup activity.
@@ -29,6 +32,7 @@ The resulting notebook:
 **Arguments**:
 
 - `activity` - Activity definition emitted by the translators.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:

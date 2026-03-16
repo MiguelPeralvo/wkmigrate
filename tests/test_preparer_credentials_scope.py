@@ -158,7 +158,9 @@ def test_prepare_workflow_custom_scope_threads_to_lookup() -> None:
 
 @pytest.fixture
 def store(mock_workspace_client) -> WorkspaceDefinitionStore:  # noqa: ARG001
-    return WorkspaceDefinitionStore(authentication_type="pat", host_name="https://adb-123.azuredatabricks.net", pat="TOKEN")
+    return WorkspaceDefinitionStore(
+        authentication_type="pat", host_name="https://adb-123.azuredatabricks.net", pat="TOKEN"
+    )
 
 
 def test_effective_credentials_scope_returns_default(store: WorkspaceDefinitionStore) -> None:
@@ -180,9 +182,7 @@ def test_store_threads_credentials_scope_to_prepared_workflow(store: WorkspaceDe
 
     captured_calls: list[dict] = []
 
-    original_prepare = __import__(
-        "wkmigrate.preparers.preparer", fromlist=["prepare_workflow"]
-    ).prepare_workflow
+    original_prepare = __import__("wkmigrate.preparers.preparer", fromlist=["prepare_workflow"]).prepare_workflow
 
     def spy_prepare_workflow(**kwargs):
         captured_calls.append(kwargs)

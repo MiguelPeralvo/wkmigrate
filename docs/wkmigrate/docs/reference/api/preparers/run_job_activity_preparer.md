@@ -14,7 +14,9 @@ and tasks of the job to be run.
 ```python
 def prepare_run_job_activity(
         activity: RunJobActivity,
-        default_files_to_delta_sinks: bool | None) -> PreparedActivity
+        default_files_to_delta_sinks: bool | None,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedActivity
 ```
 
 Builds the task payload for a Run Job activity.
@@ -23,6 +25,7 @@ Builds the task payload for a Run Job activity.
 
 - `activity` - Activity definition emitted by the translators
 - `default_files_to_delta_sinks` - Optional override for DLT generation of inner activities.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:
