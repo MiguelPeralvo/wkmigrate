@@ -111,24 +111,6 @@ Uploads artifacts and creates a Databricks job for each pipeline.
 
   List of job identifiers registered in the workspace.
 
-#### to\_asset\_bundles
-
-```python
-def to_asset_bundles(pipeline_definitions: list[Pipeline],
-                     bundle_directory: str,
-                     download_notebooks: bool = True) -> None
-```
-
-Creates a Databricks asset bundle for each pipeline inside a shared parent directory.
-
-Each pipeline is written to a subdirectory named after the pipeline.
-
-**Arguments**:
-
-- `pipeline_definitions` - List of ``Pipeline`` dataclasses to export.
-- `bundle_directory` - Parent directory for all generated bundles.
-- `download_notebooks` - If True, downloads referenced notebooks from the workspace.
-
 #### to\_job
 
 ```python
@@ -150,6 +132,44 @@ Uploads artifacts and creates a Databricks job.
 **Raises**:
 
 - `ValueError` - If the job cannot be created.
+
+#### to\_asset\_bundles
+
+```python
+def to_asset_bundles(pipeline_definitions: list[Pipeline],
+                     bundle_directory: str,
+                     download_notebooks: bool = True) -> None
+```
+
+Creates a Databricks asset bundle for each pipeline inside a shared parent directory.
+
+Each pipeline is written to a subdirectory named after the pipeline.
+
+**Arguments**:
+
+- `pipeline_definitions` - List of ``Pipeline`` dataclasses to export.
+- `bundle_directory` - Parent directory for all generated bundles.
+- `download_notebooks` - If True, downloads referenced notebooks from the workspace.
+
+#### to\_asset\_bundle
+
+```python
+def to_asset_bundle(pipeline_definition: Pipeline | dict,
+                    bundle_directory: str,
+                    download_notebooks: bool = True) -> None
+```
+
+Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
+
+When ``download_notebooks`` is True, workspace notebook paths are extracted
+using the original (pre-rewrite) paths so that downloads succeed.  The
+``root_path`` rewrite is applied after the download-path mapping.
+
+**Arguments**:
+
+- `pipeline_definition` - Prepared pipeline as a ``Pipeline`` or raw dictionary payload.
+- `bundle_directory` - Destination directory for the bundle artifacts.
+- `download_notebooks` - If True, downloads referenced notebooks from the workspace to the bundle.
 
 #### dump
 
@@ -188,24 +208,4 @@ Creates a Databricks asset bundle containing the workflow definition, notebooks,
 
 - `pipeline_definition` - Prepared pipeline as a ``Pipeline``.
 - `local_directory` - Destination directory for generated artifacts.
-
-#### to\_asset\_bundle
-
-```python
-def to_asset_bundle(pipeline_definition: Pipeline | dict,
-                    bundle_directory: str,
-                    download_notebooks: bool = True) -> None
-```
-
-Creates a Databricks asset bundle containing the workflow definition, notebooks, secrets, and unsupported nodes.
-
-When ``download_notebooks`` is True, workspace notebook paths are extracted
-using the original (pre-rewrite) paths so that downloads succeed.  The
-``root_path`` rewrite is applied after the download-path mapping.
-
-**Arguments**:
-
-- `pipeline_definition` - Prepared pipeline as a ``Pipeline`` or raw dictionary payload.
-- `bundle_directory` - Destination directory for the bundle artifacts.
-- `download_notebooks` - If True, downloads referenced notebooks from the workspace to the bundle.
 
