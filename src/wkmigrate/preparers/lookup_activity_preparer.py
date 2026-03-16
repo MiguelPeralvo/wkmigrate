@@ -12,14 +12,17 @@ from __future__ import annotations
 import autopep8  # type: ignore
 
 from wkmigrate.parsers.dataset_parsers import collect_data_source_secrets, merge_dataset_definition
-from wkmigrate.code_generator import get_option_expressions, get_read_expression
+from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE, get_option_expressions, get_read_expression
 from wkmigrate.models.ir.pipeline import LookupActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity:
+def prepare_lookup_activity(
+    activity: LookupActivity,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+) -> PreparedActivity:
     """
     Builds tasks and artifacts for a Lookup activity.
 
@@ -33,6 +36,7 @@ def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity:
 
     Args:
         activity: Activity definition emitted by the translators.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         PreparedActivity containing the notebook task configuration and artifacts.
@@ -46,6 +50,7 @@ def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity:
         source_definition=source_definition,
         first_row_only=activity.first_row_only,
         source_query=activity.source_query,
+        credentials_scope=credentials_scope,
     )
 
     base_task = get_base_task(activity)
@@ -67,6 +72,7 @@ def _create_lookup_notebook(
     source_definition: dict,
     first_row_only: bool,
     source_query: str | None,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
 ) -> tuple[str, NotebookArtifact]:
     """
     Generates a Python notebook that reads data with Spark and sets a task value.
@@ -75,6 +81,7 @@ def _create_lookup_notebook(
         source_definition: Merged source dataset + properties dictionary.
         first_row_only: Whether to limit results to the first row.
         source_query: Optional SQL query for database sources.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         Tuple of ``(notebook_path, NotebookArtifact)``.
@@ -85,7 +92,7 @@ def _create_lookup_notebook(
         "",
         "# Set the source options:",
     ]
-    script_lines.extend(get_option_expressions(source_definition))
+    script_lines.extend(get_option_expressions(source_definition, credentials_scope))
 
     script_lines.append("")
     script_lines.append("# Read from the source:")

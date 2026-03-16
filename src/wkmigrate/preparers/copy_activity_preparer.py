@@ -22,6 +22,7 @@ from wkmigrate.code_generator import (
     get_option_expressions,
     get_read_expression,
 )
+from wkmigrate.parsers.dataset_parsers import DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.models.ir.pipeline import CopyActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
 from wkmigrate.models.workflows.instructions import PipelineInstruction
@@ -32,6 +33,7 @@ from wkmigrate.utils import parse_mapping
 def prepare_copy_activity(
     activity: CopyActivity,
     default_files_to_delta_sinks: bool | None,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
 ) -> PreparedActivity:
     """
     Builds tasks and artifacts for a Copy activity.
@@ -39,6 +41,7 @@ def prepare_copy_activity(
     Args:
         activity: Activity definition emitted by the translators.
         default_files_to_delta_sinks: Optional override for DLT generation.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         PreparedActivity containing task configuration and artifacts.
@@ -62,6 +65,7 @@ def prepare_copy_activity(
         sink_definition,
         column_mapping,
         files_to_delta_sinks,
+        credentials_scope,
     )
 
     base_task = get_base_task(activity)
@@ -107,6 +111,7 @@ def _create_copy_data_notebook(
     sink_definition: dict,
     column_mapping: list[dict],
     files_to_delta_sinks: bool,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
 ) -> tuple[str, NotebookArtifact]:
     """
     Generates a Python notebook that copies data between datasets.
@@ -116,6 +121,7 @@ def _create_copy_data_notebook(
         sink_definition: Merged sink dataset definition dictionary.
         column_mapping: Column-level mappings from source to sink.
         files_to_delta_sinks: Whether to generate a DLT materialised-view definition.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         Tuple of ``(notebook_path, NotebookArtifact)``.
@@ -127,10 +133,10 @@ def _create_copy_data_notebook(
         "",
         "# Set the source options:",
     ]
-    script_lines.extend(get_option_expressions(source_definition))
+    script_lines.extend(get_option_expressions(source_definition, credentials_scope))
     if not files_to_delta_sinks:
         script_lines.append("# Set the target options:")
-        script_lines.extend(get_option_expressions(sink_definition))
+        script_lines.extend(get_option_expressions(sink_definition, credentials_scope))
         script_lines.append("# Read from the source:")
         script_lines.append(get_read_expression(source_definition))
         script_lines.append("# Map the source columns to the target columns:")
