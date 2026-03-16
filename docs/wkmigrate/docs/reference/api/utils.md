@@ -64,11 +64,10 @@ Appends the ``CREATED_BY_WKMIGRATE`` system tag to a set of job tags.
 
 - `dict` - Updated tag dictionary.
 
-#### parse\_activity\_timeout\_string
+#### parse\_timeout\_string
 
 ```python
-def parse_activity_timeout_string(timeout_string: str,
-                                  prefix: str = "") -> int
+def parse_timeout_string(timeout_string: str, prefix: str = "") -> int
 ```
 
 Parses a timeout string in the format ``d.hh:mm:ss`` or ``hh:mm:ss`` into seconds.

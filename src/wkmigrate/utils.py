@@ -8,7 +8,6 @@ metadata (e.g. appending system tags).
 import re
 import warnings
 from collections.abc import Callable
-from datetime import datetime, timedelta
 from importlib import import_module
 from typing import Any
 
@@ -83,7 +82,7 @@ def append_system_tags(tags: dict | None) -> dict:
 _TIMEOUT_PATTERN = re.compile(r"^(?:(\d+)\.)?((\d{1,2}):(\d{2}):(\d{2}))$")
 
 
-def parse_activity_timeout_string(timeout_string: str, prefix: str = "") -> int:
+def parse_timeout_string(timeout_string: str, prefix: str = "") -> int:
     """
     Parses a timeout string in the format ``d.hh:mm:ss`` or ``hh:mm:ss`` into seconds.
 

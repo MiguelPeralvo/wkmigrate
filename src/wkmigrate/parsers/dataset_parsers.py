@@ -8,7 +8,7 @@ for any unparsable inputs.
 import json
 from wkmigrate.enums.isolation_level import IsolationLevel
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.utils import parse_activity_timeout_string
+from wkmigrate.utils import parse_timeout_string
 
 
 def parse_format_options(dataset: dict) -> dict | UnsupportedValue:
@@ -233,7 +233,7 @@ def _parse_query_timeout_seconds(properties: dict | None) -> int | UnsupportedVa
     query_timeout = properties.get("query_timeout")
     if query_timeout is None:
         return 0
-    return parse_activity_timeout_string(query_timeout)
+    return parse_timeout_string(query_timeout)
 
 
 def _parse_query_isolation_level(properties: dict | None) -> str | None:
@@ -252,8 +252,6 @@ def _parse_query_isolation_level(properties: dict | None) -> str | None:
     if isolation_level is None:
         return "READ_COMMITTED"
     return IsolationLevel(isolation_level).name
-
-
 
 
 def _parse_character_value(char: str) -> str:
