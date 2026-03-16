@@ -113,8 +113,11 @@ def parse_timeout_string(timeout_string: str, prefix: str = "") -> int:
 
     match = _TIMEOUT_PATTERN.match(timeout_string)
     if not match:
-        msg = f"Invalid timeout format: '{timeout_string}'. Expected 'd.hh:mm:ss' or 'hh:mm:ss'."
-        warnings.warn(NotTranslatableWarning("timeout", msg))
+        warnings.warn(
+            NotTranslatableWarning(
+                "timeout", f"Invalid timeout format: '{timeout_string}'. Expected 'd.hh:mm:ss' or 'hh:mm:ss'."
+            )
+        )
         return DEFAULT_TIMEOUT_SECONDS
 
     days = int(match.group(1)) if match.group(1) is not None else 0
@@ -124,8 +127,7 @@ def parse_timeout_string(timeout_string: str, prefix: str = "") -> int:
 
     total = days * 86400 + hours * 3600 + minutes * 60 + seconds
     if total <= 0:
-        msg = f"Timeout must be positive: '{timeout_string}'"
-        warnings.warn(NotTranslatableWarning("timeout", msg))
+        warnings.warn(NotTranslatableWarning("timeout", f"Timeout must be positive: '{timeout_string}'"))
         return DEFAULT_TIMEOUT_SECONDS
     return total
 
