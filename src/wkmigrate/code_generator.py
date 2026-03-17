@@ -11,11 +11,9 @@ from typing import Any
 
 import autopep8  # type: ignore
 
-from wkmigrate.datasets import DATASET_OPTIONS, DATASET_SECRETS
+from wkmigrate.datasets import DATASET_OPTIONS, DATASET_PROVIDER_SECRETS, DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
-
-DEFAULT_CREDENTIALS_SCOPE = "wkmigrate_credentials_scope"
 
 
 def get_set_variable_notebook_content(variable_name: str, variable_value: str) -> str:
@@ -81,6 +79,7 @@ def get_file_options(
     """
     dataset_name = dataset_definition["dataset_name"]
     service_name = dataset_definition["service_name"]
+    provider_type = dataset_definition.get("provider_type", "abfs")
     config_lines = [
         rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
         for option in DATASET_OPTIONS.get(file_type, [])
@@ -89,16 +88,7 @@ def get_file_options(
     if "records_per_file" in dataset_definition:
         records_per_file = dataset_definition.get("records_per_file")
         config_lines.append(f'spark.conf.set("spark.sql.files.maxRecordsPerFile", "{records_per_file}")')
-    config_lines.append(
-        f"""spark.conf.set(
-                "fs.azure.account.key.{dataset_definition.get('storage_account_name')}.dfs.core.windows.net",
-                    dbutils.secrets.get(
-                        scope="{credentials_scope}",
-                        key="{service_name}_storage_account_key"
-                )
-            )
-            """
-    )
+    config_lines.extend(_get_file_credential_lines(dataset_definition, service_name, provider_type, credentials_scope))
     return [f"{dataset_name}_options = {{}}", *config_lines]
 
 
@@ -124,7 +114,7 @@ def get_database_options(
                 key="{service_name}_{secret}"
             )
             """
-        for secret in DATASET_SECRETS[database_type]
+        for secret in DATASET_PROVIDER_SECRETS[database_type]
     ]
     options_lines = [
         f"""{dataset_name}_options["{option}"] = '{dataset_definition.get(option)}'"""
@@ -160,6 +150,34 @@ def get_read_expression(source_definition: dict, source_query: str | None = None
     raise ValueError(f'Reading data from "{source_type}" not supported')
 
 
+def get_file_uri(definition: dict) -> str:
+    """
+    Builds the cloud storage URI for a file dataset definition.
+
+    Args:
+        definition: Dataset definition dictionary containing provider_type, container,
+            folder_path, and (for Azure) storage_account_name.
+
+    Returns:
+        Cloud storage URI string (for example ``s3a://bucket/path`` or
+        ``abfss://container@account.dfs.core.windows.net/path``).
+    """
+    provider_type = definition.get("provider_type", "abfs")
+    container = definition.get("container", "")
+    folder_path = definition.get("folder_path", "")
+
+    if provider_type == "s3":
+        return f"s3a://{container}/{folder_path}"
+    if provider_type == "gcs":
+        return f"gs://{container}/{folder_path}"
+    if provider_type == "azure_blob":
+        storage_account_name = definition.get("storage_account_name", "")
+        return f"wasbs://{container}@{storage_account_name}.blob.core.windows.net/{folder_path}"
+    # Default: ABFS (ADLS Gen2)
+    storage_account_name = definition.get("storage_account_name", "")
+    return f"abfss://{container}@{storage_account_name}.dfs.core.windows.net/{folder_path}"
+
+
 def get_file_read_expression(source_definition: dict) -> str:
     """
     Generates code to read data from a file dataset into a DataFrame.
@@ -172,14 +190,12 @@ def get_file_read_expression(source_definition: dict) -> str:
     """
     source_name = source_definition["dataset_name"]
     source_type = source_definition["type"]
-    container_name = source_definition["container"]
-    storage_account_name = source_definition["storage_account_name"]
-    folder_path = source_definition["folder_path"]
+    uri = get_file_uri(source_definition)
 
-    return f"""{source_name}_df = ( 
+    return f"""{source_name}_df = (
                         spark.read.format("{source_type}")
                             .options(**{source_name}_options)
-                            .load("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                            .load("{uri}")
                         )
                     """
 
@@ -314,6 +330,84 @@ def get_web_activity_notebook_content(
         ]
     )
     return autopep8.fix_code("\n".join(script_lines))
+
+
+def _get_file_credential_lines(
+    dataset_definition: dict, service_name: str, provider_type: str, credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> list[str]:
+    """
+    Generates Spark configuration lines for cloud storage credentials.
+
+    Args:
+        dataset_definition: Dataset definition dictionary.
+        service_name: Linked service name used as a secret key prefix.
+        provider_type: Cloud provider identifier (``"abfs"``, ``"s3"``, ``"gcs"``, or ``"azure_blob"``).
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
+
+    Returns:
+        List of Python source lines that configure Spark credentials.
+    """
+    if provider_type == "s3":
+        return [
+            f"""spark.conf.set(
+                "fs.s3a.access.key",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_access_key_id"
+                )
+            )
+            """,
+            f"""spark.conf.set(
+                "fs.s3a.secret.key",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_secret_access_key"
+                )
+            )
+            """,
+        ]
+    if provider_type == "gcs":
+        return [
+            f"""spark.conf.set(
+                "fs.gs.hmac.key.access",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_access_key_id"
+                )
+            )
+            """,
+            f"""spark.conf.set(
+                "fs.gs.hmac.key.secret",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_secret_access_key"
+                )
+            )
+            """,
+        ]
+    if provider_type == "azure_blob":
+        storage_account_name = dataset_definition.get("storage_account_name")
+        return [
+            f"""spark.conf.set(
+                "fs.azure.account.key.{storage_account_name}.blob.core.windows.net",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_storage_account_key"
+                )
+            )
+            """,
+        ]
+    # Default: ABFS (ADLS Gen2)
+    return [
+        f"""spark.conf.set(
+                "fs.azure.account.key.{dataset_definition.get('storage_account_name')}.dfs.core.windows.net",
+                    dbutils.secrets.get(
+                        scope="{credentials_scope}",
+                        key="{service_name}_storage_account_key"
+                )
+            )
+            """,
+    ]
 
 
 def _get_authentication_lines(

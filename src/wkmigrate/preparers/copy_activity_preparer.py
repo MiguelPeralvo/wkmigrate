@@ -18,6 +18,7 @@ from wkmigrate.datasets import (
     parse_spark_data_type,
 )
 from wkmigrate.code_generator import (
+    get_file_uri,
     get_option_expressions,
     get_read_expression,
 )
@@ -228,21 +229,15 @@ def _get_write_expression(sink_definition: dict) -> str:
     sink_name = sink_definition.get("dataset_name")
     sink_type = sink_definition.get("type")
     if sink_type == "avro":
-        container_name = sink_definition.get("container")
-        storage_account_name = sink_definition.get("storage_account_name")
-        folder_path = sink_definition.get("folder_path")
         return rf"""{sink_name}_df.write.format("avro")  \
                         .mode("overwrite")  \
-                        .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        .save("{get_file_uri(sink_definition)}")
                     """
     if sink_type == "csv":
-        container_name = sink_definition.get("container")
-        storage_account_name = sink_definition.get("storage_account_name")
-        folder_path = sink_definition.get("folder_path")
         return rf"""{sink_name}_df.write.format("csv")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
-                        .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        .save("{get_file_uri(sink_definition)}")
                     """
     if sink_type == "delta":
         database_name = sink_definition.get("database_name")
@@ -252,31 +247,22 @@ def _get_write_expression(sink_definition: dict) -> str:
                         .saveAsTable("hive_metastore.{database_name}.{table_name}")
                     """
     if sink_type == "json":
-        container_name = sink_definition.get("container")
-        storage_account_name = sink_definition.get("storage_account_name")
-        folder_path = sink_definition.get("folder_path")
         return rf"""{sink_name}_df.write.format("json")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
-                        .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        .save("{get_file_uri(sink_definition)}")
                     """
     if sink_type == "orc":
-        container_name = sink_definition.get("container")
-        storage_account_name = sink_definition.get("storage_account_name")
-        folder_path = sink_definition.get("folder_path")
         return rf"""{sink_name}_df.write.format("orc")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
-                        .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        .save("{get_file_uri(sink_definition)}")
                     """
     if sink_type == "parquet":
-        container_name = sink_definition.get("container")
-        storage_account_name = sink_definition.get("storage_account_name")
-        folder_path = sink_definition.get("folder_path")
         return rf"""{sink_name}_df.write.format("parquet")  \
                         .options(**{sink_name}_options)  \
                         .mode("overwrite")  \
-                        .save("abfss://{container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}")
+                        .save("{get_file_uri(sink_definition)}")
                     """
     if sink_type == "sqlserver":
         return rf"""{sink_name}_df.write.format("jdbc")  \
