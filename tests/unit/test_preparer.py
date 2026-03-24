@@ -1,15 +1,6 @@
-"""Tests verifying that credentials_scope flows from preparers through to generated notebook content.
-
-These tests cover the wiring added in issue #43: WorkspaceDefinitionStore.set_option(
-"credentials_scope", ...) must propagate automatically through prepare_workflow →
-prepare_activity → individual preparers → code-generator calls.
-"""
+"""Unit tests for the preparer layer (workflow and activity preparation)."""
 
 from __future__ import annotations
-
-from unittest.mock import patch
-
-import pytest
 
 from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.definition_stores.workspace_definition_store import WorkspaceDefinitionStore
@@ -22,7 +13,6 @@ from wkmigrate.models.ir.pipeline import (
 from wkmigrate.preparers.lookup_activity_preparer import prepare_lookup_activity
 from wkmigrate.preparers.preparer import prepare_workflow
 from wkmigrate.preparers.web_activity_preparer import prepare_web_activity
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -120,16 +110,6 @@ def test_web_preparer_custom_scope_in_notebook() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_pipeline_with_lookup() -> Pipeline:
-    return Pipeline(
-        name="test_pipeline",
-        tasks=[_make_lookup_activity()],
-        parameters=None,
-        schedule=None,
-        tags={},
-    )
-
-
 def test_prepare_workflow_default_scope_threads_to_lookup() -> None:
     """prepare_workflow uses DEFAULT_CREDENTIALS_SCOPE in generated notebooks by default."""
     pipeline = _make_pipeline_with_lookup()
@@ -152,47 +132,52 @@ def test_prepare_workflow_custom_scope_threads_to_lookup() -> None:
 
 
 # ---------------------------------------------------------------------------
-# WorkspaceDefinitionStore._effective_credentials_scope
+# WorkspaceDefinitionStore.options (credentials_scope)
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def store(mock_workspace_client) -> WorkspaceDefinitionStore:  # noqa: ARG001
-    return WorkspaceDefinitionStore(
-        authentication_type="pat", host_name="https://adb-123.azuredatabricks.net", pat="TOKEN"
+def test_credentials_scope_option_defaults_when_unset(
+    workspace_definition_store: WorkspaceDefinitionStore,
+) -> None:
+    """When credentials_scope is not set, options expose the default via get()."""
+    assert (
+        workspace_definition_store.options.get("credentials_scope", DEFAULT_CREDENTIALS_SCOPE)
+        == DEFAULT_CREDENTIALS_SCOPE
     )
 
 
-def test_effective_credentials_scope_returns_default(store: WorkspaceDefinitionStore) -> None:
-    """_effective_credentials_scope returns the default scope when option is not set."""
-    assert store._effective_credentials_scope() == DEFAULT_CREDENTIALS_SCOPE
+def test_credentials_scope_option_reflects_set_option(
+    workspace_definition_store: WorkspaceDefinitionStore,
+) -> None:
+    """After set_option, credentials_scope is readable from options."""
+    workspace_definition_store.set_option("credentials_scope", "prod_secrets")
+
+    assert workspace_definition_store.options.get("credentials_scope") == "prod_secrets"
 
 
-def test_effective_credentials_scope_returns_custom(store: WorkspaceDefinitionStore) -> None:
-    """_effective_credentials_scope returns the configured scope after set_option."""
-    store.set_option("credentials_scope", "prod_secrets")
-
-    assert store._effective_credentials_scope() == "prod_secrets"
-
-
-def test_store_threads_credentials_scope_to_prepared_workflow(store: WorkspaceDefinitionStore) -> None:
-    """WorkspaceDefinitionStore passes credentials_scope from options into prepare_workflow."""
-    store.set_option("credentials_scope", "store_vault")
+def test_workspace_store_credentials_scope_appears_in_prepared_notebook(
+    workspace_definition_store: WorkspaceDefinitionStore,
+) -> None:
+    """Configured credentials_scope is reflected in notebook content from _prepare_workflow."""
+    workspace_definition_store.set_option("credentials_scope", "store_vault")
     pipeline = _make_pipeline_with_lookup()
 
-    captured_calls: list[dict] = []
+    prepared = workspace_definition_store._prepare_workflow(pipeline)
 
-    original_prepare = __import__("wkmigrate.preparers.preparer", fromlist=["prepare_workflow"]).prepare_workflow
+    notebook_content = prepared.activities[0].notebooks[0].content
+    assert 'scope="store_vault"' in notebook_content
 
-    def spy_prepare_workflow(**kwargs):
-        captured_calls.append(kwargs)
-        return original_prepare(**kwargs)
 
-    with patch(
-        "wkmigrate.definition_stores.workspace_definition_store.prepare_workflow",
-        side_effect=spy_prepare_workflow,
-    ):
-        store._prepare_workflow(pipeline)
+# ---------------------------------------------------------------------------
+# Pipeline fixtures (kept at end for readability)
+# ---------------------------------------------------------------------------
 
-    assert len(captured_calls) == 1
-    assert captured_calls[0]["credentials_scope"] == "store_vault"
+
+def _make_pipeline_with_lookup() -> Pipeline:
+    return Pipeline(
+        name="test_pipeline",
+        tasks=[_make_lookup_activity()],
+        parameters=None,
+        schedule=None,
+        tags={},
+    )
