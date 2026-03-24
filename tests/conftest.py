@@ -407,7 +407,9 @@ def mock_workspace_client() -> MockWorkspaceClient:
 
 
 @pytest.fixture
-def workspace_definition_store(mock_workspace_client) -> workspace_definition_store_module.WorkspaceDefinitionStore:  # noqa: ARG001
+def workspace_definition_store(
+    mock_workspace_client,
+) -> workspace_definition_store_module.WorkspaceDefinitionStore:  # noqa: ARG001
     """Return a ``WorkspaceDefinitionStore`` wired to the mock workspace client."""
     return workspace_definition_store_module.WorkspaceDefinitionStore(
         authentication_type="pat",
