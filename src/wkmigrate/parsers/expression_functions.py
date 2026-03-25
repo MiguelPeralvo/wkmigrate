@@ -170,6 +170,42 @@ def _emit_empty(args: list[str]) -> str | UnsupportedValue:
     return f"(len({args[0]}) == 0)"
 
 
+def _emit_utc_now(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("utcNow", args, 0, 0):
+        return error
+    return "_wkmigrate_utc_now()"
+
+
+def _emit_format_datetime(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("formatDateTime", args, 2, 2):
+        return error
+    return f"_wkmigrate_format_datetime({args[0]}, {args[1]})"
+
+
+def _emit_add_days(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addDays", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_days({args[0]}, {args[1]})"
+
+
+def _emit_add_hours(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addHours", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_hours({args[0]}, {args[1]})"
+
+
+def _emit_start_of_day(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("startOfDay", args, 1, 1):
+        return error
+    return f"_wkmigrate_start_of_day({args[0]})"
+
+
+def _emit_convert_time_zone(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("convertTimeZone", args, 3, 3):
+        return error
+    return f"_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]})"
+
+
 FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "concat": _emit_concat,
     "substring": _emit_substring,
@@ -212,4 +248,10 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "array": _emit_array,
     "coalesce": _emit_coalesce,
     "empty": _emit_empty,
+    "utcnow": _emit_utc_now,
+    "formatdatetime": _emit_format_datetime,
+    "adddays": _emit_add_days,
+    "addhours": _emit_add_hours,
+    "startofday": _emit_start_of_day,
+    "converttimezone": _emit_convert_time_zone,
 }
