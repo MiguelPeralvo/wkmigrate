@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from wkmigrate.runtime.datetime_helpers import (
     add_days,
     add_hours,
@@ -58,11 +60,9 @@ def test_convert_time_zone_with_naive_datetime() -> None:
 
 def test_convert_time_zone_invalid_timezone_raises_value_error() -> None:
     dt_utc = datetime(2026, 3, 25, 12, 0, 0, tzinfo=timezone.utc)
-    try:
+    with pytest.raises(ValueError) as exc:
         convert_time_zone(dt_utc, "Invalid/Zone", "UTC")
-        assert False, "Expected ValueError for invalid source timezone"
-    except ValueError as exc:
-        assert "Invalid source timezone" in str(exc)
+    assert "Invalid source timezone" in str(exc.value)
 
 
 def test_format_datetime_literal_text_and_zero_milliseconds() -> None:
