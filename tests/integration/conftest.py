@@ -1411,6 +1411,87 @@ def set_variable_pipeline(
 
 
 @pytest.fixture(scope="session")
+def complex_expression_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    adf_factory: Factory,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline that exercises complex expression translation paths."""
+
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_run_date",
+                    variable_name="run_date",
+                    value={
+                        "type": "Expression",
+                        "value": "@formatDateTime(utcNow(), 'yyyy-MM-dd')",
+                    },
+                    depends_on=[],
+                ),
+                IfConditionActivity(
+                    name="check_not_prod",
+                    expression=Expression(
+                        type="Expression",
+                        value="@not(equals(pipeline().parameters.env, 'prod'))",
+                    ),
+                    if_true_activities=[
+                        DatabricksNotebookActivity(
+                            name="non_prod_notebook",
+                            notebook_path="/Shared/non_prod",
+                            depends_on=[],
+                            policy=ActivityPolicy(timeout="0.01:00:00"),
+                        ),
+                    ],
+                    if_false_activities=[],
+                    depends_on=[],
+                ),
+                ForEachActivity(
+                    name="foreach_concat_items",
+                    is_sequential=False,
+                    batch_count=2,
+                    items=Expression(
+                        type="Expression",
+                        value="@createArray(concat('a', '1'), concat('b', '2'))",
+                    ),
+                    activities=[
+                        DatabricksNotebookActivity(
+                            name="foreach_inner_notebook",
+                            notebook_path="/Shared/foreach_inner",
+                            depends_on=[],
+                            policy=ActivityPolicy(timeout="0.01:00:00"),
+                        ),
+                    ],
+                    depends_on=[],
+                ),
+                WebActivity(
+                    name="dynamic_web_call",
+                    method="GET",
+                    url=Expression(
+                        type="Expression",
+                        value="@concat('https://api.example.com/', pipeline().parameters.version)",
+                    ),
+                    depends_on=[],
+                    policy=ActivityPolicy(timeout="0.00:05:00"),
+                ),
+            ],
+            parameters={
+                "env": {"type": "String", "defaultValue": "dev"},
+                "version": {"type": "String", "defaultValue": "v1"},
+            },
+            variables={
+                "run_date": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
 def factory_client(azure_config: AzureTestConfig) -> FactoryClient:
     """Create a ``FactoryClient`` connected to the test Azure Data Factory.
 
