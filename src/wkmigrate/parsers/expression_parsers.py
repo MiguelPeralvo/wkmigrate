@@ -1,7 +1,43 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.expression_emitter import emit
+from wkmigrate.parsers.expression_emitter import emit_with_imports
 from wkmigrate.parsers.expression_parser import parse_expression
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedExpression:
+    """Result of resolving an ADF value to a Python expression string."""
+
+    code: str
+    is_dynamic: bool
+    required_imports: frozenset[str]
+
+
+def get_literal_or_expression(
+    value: str | dict | int | float | bool,
+    context: TranslationContext | None = None,
+) -> ResolvedExpression | UnsupportedValue:
+    """Resolve an ADF property value into Python expression code."""
+
+    if isinstance(value, dict):
+        if value.get("type") != "Expression":
+            return UnsupportedValue(value=value, message=f"Unsupported variable value type '{value.get('type')}'")
+        expression = value.get("value")
+        if not expression:
+            return UnsupportedValue(value=value, message="Missing property 'value' of expression")
+        return _resolve_expression_string(str(expression), context)
+
+    if not isinstance(value, str):
+        return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
+
+    if not value.startswith("@"):
+        return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
+
+    return _resolve_expression_string(value, context)
 
 
 def parse_variable_value(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
@@ -26,21 +62,22 @@ def parse_variable_value(value: str | dict | int | float | bool, context: Transl
         A Python expression string suitable for embedding in a generated notebook, or an `UnsupportedValue` when the
         expression cannot be translated.
     """
-    if isinstance(value, dict):
-        if value.get("type") != "Expression":
-            return UnsupportedValue(value=value, message=f"Unsupported variable value type '{value.get('type')}'")
-        expression = value.get("value", "")
-        if not expression:
-            return UnsupportedValue(value=value, message="Missing property 'value' of expression")
-        return _parse_expression_string(expression, context)
-
-    if not isinstance(value, str):
-        return repr(value)
-
-    return _parse_expression_string(value, context)
+    resolved = get_literal_or_expression(value, context)
+    if isinstance(resolved, UnsupportedValue):
+        return resolved
+    return resolved.code
 
 
-def _parse_expression_string(expression: str, context: TranslationContext) -> str | UnsupportedValue:
+def resolve_expression(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
+    """Resolve a raw value or ADF expression payload into a Python expression string."""
+
+    return parse_variable_value(value, context)
+
+
+def _resolve_expression_string(
+    expression: str,
+    context: TranslationContext | None,
+) -> ResolvedExpression | UnsupportedValue:
     """
     Parses an expression string into a Python code snippet.
 
@@ -53,14 +90,18 @@ def _parse_expression_string(expression: str, context: TranslationContext) -> st
     """
 
     if not expression.startswith("@"):
-        return repr(expression)
+        return ResolvedExpression(code=repr(expression), is_dynamic=False, required_imports=frozenset())
 
     parsed = parse_expression(expression)
     if isinstance(parsed, UnsupportedValue):
         return parsed
 
-    emitted = emit(parsed, context)
+    emitted = emit_with_imports(parsed, context)
     if isinstance(emitted, UnsupportedValue):
         return emitted
 
-    return emitted
+    return ResolvedExpression(
+        code=emitted.expression,
+        is_dynamic=True,
+        required_imports=frozenset(emitted.required_imports),
+    )
