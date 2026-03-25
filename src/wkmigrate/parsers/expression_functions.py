@@ -109,6 +109,12 @@ def _emit_not(args: list[str]) -> str | UnsupportedValue:
     return f"(not {args[0]})"
 
 
+def _emit_div(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("div", args, 2, 2):
+        return error
+    return f"int({args[0]} / {args[1]})"
+
+
 def _emit_cast(cast_name: str, py_cast: str) -> FunctionEmitter:
     def _emit(args: list[str]) -> str | UnsupportedValue:
         if error := _require_arity(cast_name, args, 1, 1):
@@ -147,15 +153,17 @@ def _emit_skip(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_union(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("union", args, 2, 2):
+    if error := _require_arity("union", args, 2):
         return error
-    return f"list(set({args[0]}) | set({args[1]}))"
+    flattened = " + ".join(f"list({arg})" for arg in args)
+    return f"list(dict.fromkeys({flattened}))"
 
 
 def _emit_intersection(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("intersection", args, 2, 2):
+    if error := _require_arity("intersection", args, 2):
         return error
-    return f"list(set({args[0]}) & set({args[1]}))"
+    membership_checks = " and ".join(f"x in set({arg})" for arg in args[1:])
+    return f"list(dict.fromkeys([x for x in {args[0]} if {membership_checks}]))"
 
 
 def _emit_coalesce(args: list[str]) -> str | UnsupportedValue:
@@ -186,7 +194,7 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "add": _emit_binary_operator("add", "+"),
     "sub": _emit_binary_operator("sub", "-"),
     "mul": _emit_binary_operator("mul", "*"),
-    "div": _emit_binary_operator("div", "/"),
+    "div": _emit_div,
     "mod": _emit_binary_operator("mod", "%"),
     "equals": _emit_binary_operator("equals", "=="),
     "not": _emit_not,
