@@ -11,7 +11,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
-from wkmigrate.parsers.expression_parsers import resolve_expression
+from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 
 
 def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:
@@ -31,12 +31,15 @@ def translate_notebook_activity(activity: dict, base_kwargs: dict) -> Databricks
     return DatabricksNotebookActivity(
         **base_kwargs,
         notebook_path=notebook_path,
-        base_parameters=_parse_notebook_parameters(activity.get("base_parameters")),
+        base_parameters=_parse_notebook_parameters(activity.get("base_parameters"), TranslationContext()),
         linked_service_definition=activity.get("linked_service_definition"),
     )
 
 
-def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
+def _parse_notebook_parameters(
+    parameters: dict | None,
+    context: TranslationContext,
+) -> dict | None:
     """
     Parses task parameters in a Databricks notebook activity definition.
 
@@ -53,44 +56,20 @@ def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
         return None
     # Parse the parameters:
     parsed_parameters = {}
-    context = TranslationContext()
     for name, value in parameters.items():
-        if _is_expression_candidate(value):
-            resolved = resolve_expression(value, context)
-            if isinstance(resolved, UnsupportedValue):
-                warnings.warn(
-                    NotTranslatableWarning(
-                        f"parameters.{name}",
-                        f'Could not resolve expression for parameter {name}, setting to ""',
-                    ),
-                    stacklevel=3,
-                )
-                parsed_parameters[name] = ""
-                continue
-            parsed_parameters[name] = _normalize_parameter_value(resolved)
-            continue
-
-        if not isinstance(value, str):
+        resolved = get_literal_or_expression(value, context)
+        if isinstance(resolved, UnsupportedValue):
             warnings.warn(
                 NotTranslatableWarning(
                     f"parameters.{name}",
-                    f'Could not resolve default value for parameter {name}, setting to ""',
+                    f'Could not resolve value for parameter {name}, setting to ""',
                 ),
                 stacklevel=3,
             )
-            value = ""
-        parsed_parameters[name] = value
+            parsed_parameters[name] = ""
+            continue
+        parsed_parameters[name] = _normalize_parameter_value(resolved.code)
     return parsed_parameters
-
-
-def _is_expression_candidate(value: object) -> bool:
-    """Return True for expression-shaped values."""
-
-    if isinstance(value, str):
-        return value.startswith("@")
-    if isinstance(value, dict):
-        return value.get("type") == "Expression"
-    return False
 
 
 def _normalize_parameter_value(value: str) -> str:
