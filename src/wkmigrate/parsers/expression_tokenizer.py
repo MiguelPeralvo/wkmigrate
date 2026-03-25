@@ -81,6 +81,14 @@ def tokenize(expression: str) -> list[Token] | UnsupportedValue:
             tokens.append(Token(token_type=TokenType.STRING, value=value, position=start))
             continue
 
+        if char == '"':
+            parsed = _read_double_quoted_string(expression, idx)
+            if isinstance(parsed, UnsupportedValue):
+                return parsed
+            value, idx = parsed
+            tokens.append(Token(token_type=TokenType.STRING, value=value, position=idx))
+            continue
+
         if char.isdigit() or (char == "-" and idx + 1 < length and expression[idx + 1].isdigit()):
             start = idx
             parsed = _read_number_literal(expression, idx)
