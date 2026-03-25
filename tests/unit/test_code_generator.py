@@ -12,6 +12,7 @@ from wkmigrate.code_generator import (
     get_database_options,
     get_file_options,
     get_option_expressions,
+    get_set_variable_notebook_content,
     get_web_activity_notebook_content,
 )
 from wkmigrate.models.ir.pipeline import Authentication
@@ -174,3 +175,25 @@ def test_web_activity_auth_uses_custom_scope() -> None:
     )
     assert 'scope="enterprise_vault"' in content
     assert "wkmigrate_credentials_scope" not in content
+
+
+def test_set_variable_notebook_inlines_datetime_helpers() -> None:
+    """Datetime helpers are inlined when emitted expression references them."""
+    content = get_set_variable_notebook_content(
+        variable_name="runDate",
+        variable_value="_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')",
+    )
+
+    assert "def _wkmigrate_utc_now" in content
+    assert "def _wkmigrate_format_datetime" in content
+    assert "from zoneinfo import ZoneInfo" in content
+
+
+def test_set_variable_notebook_skips_datetime_helpers_for_simple_values() -> None:
+    """Datetime helper block is omitted for simple expressions."""
+    content = get_set_variable_notebook_content(
+        variable_name="name",
+        variable_value="'alice'",
+    )
+
+    assert "def _wkmigrate_utc_now" not in content
