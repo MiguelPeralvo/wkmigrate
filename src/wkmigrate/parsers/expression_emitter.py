@@ -44,7 +44,7 @@ class EmittedExpression:
     required_imports: tuple[str, ...] = ()
 
 
-def emit(node: AstNode, context: TranslationContext) -> str | UnsupportedValue:
+def emit(node: AstNode, context: TranslationContext | None = None) -> str | UnsupportedValue:
     """Emit a Python expression string for an AST node."""
 
     emitted = emit_with_imports(node, context)
@@ -53,7 +53,7 @@ def emit(node: AstNode, context: TranslationContext) -> str | UnsupportedValue:
     return emitted.expression
 
 
-def emit_with_imports(node: AstNode, context: TranslationContext) -> EmittedExpression | UnsupportedValue:
+def emit_with_imports(node: AstNode, context: TranslationContext | None = None) -> EmittedExpression | UnsupportedValue:
     """Emit Python expression and import metadata for an AST node."""
 
     emitter = _Emitter(context=context)
@@ -67,7 +67,7 @@ def emit_with_imports(node: AstNode, context: TranslationContext) -> EmittedExpr
 class _Emitter:
     """Stateful recursive emitter."""
 
-    context: TranslationContext
+    context: TranslationContext | None
     required_imports: set[str] = field(default_factory=set)
 
     def emit_node(self, node: AstNode) -> str | UnsupportedValue:
@@ -102,6 +102,11 @@ class _Emitter:
             )
 
         if lowered == "variables":
+            if self.context is None:
+                return UnsupportedValue(
+                    value=node.name,
+                    message="Expression references variables() and requires TranslationContext",
+                )
             if len(node.args) != 1 or not isinstance(node.args[0], StringLiteral):
                 return UnsupportedValue(
                     value=node.name,
@@ -156,6 +161,11 @@ class _Emitter:
             if lowered == "pipeline":
                 return self._emit_pipeline_property_access(root, properties)
             if lowered == "activity":
+                if self.context is None:
+                    return UnsupportedValue(
+                        value=root.name,
+                        message="Expression references activity() and requires TranslationContext",
+                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[])
 
         root_expression = self.emit_node(root)
@@ -172,6 +182,11 @@ class _Emitter:
         if isinstance(node.object, PropertyAccess):
             root, properties = _flatten_property_chain(node.object)
             if isinstance(root, FunctionCall) and root.name.lower() == "activity":
+                if self.context is None:
+                    return UnsupportedValue(
+                        value=root.name,
+                        message="Expression references activity() and requires TranslationContext",
+                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[node.index])
 
         object_expression = self.emit_node(node.object)
