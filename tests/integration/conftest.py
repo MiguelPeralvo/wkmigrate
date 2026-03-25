@@ -1492,6 +1492,134 @@ def complex_expression_pipeline(
 
 
 @pytest.fixture(scope="session")
+def complex_expression_additional_cases_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    abfs_csv_dataset: DatasetResource,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline with additional complex-expression scenarios from the plan.
+
+    Args:
+        azure_config: Azure configuration fixture.
+        adf_management_client: Data Factory management client fixture.
+        abfs_csv_dataset: Ensures a dataset exists for the lookup + activity-output scenario.
+
+    Yields:
+        The created ``PipelineResource``.
+    """
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_additional_cases_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_concat_now",
+                    variable_name="concat_now",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat(pipeline().parameters.prefix, '-', utcNow())",
+                    },
+                    depends_on=[],
+                ),
+                SetVariableActivity(
+                    name="set_conditional_url",
+                    variable_name="conditional_url",
+                    value={
+                        "type": "Expression",
+                        "value": "@if(equals(pipeline().parameters.env, 'prod'), 'https://prod.api', 'https://dev.api')",
+                    },
+                    depends_on=[],
+                ),
+                SetVariableActivity(
+                    name="set_nested_math",
+                    variable_name="nested_math",
+                    value={
+                        "type": "Expression",
+                        "value": "@add(mul(pipeline().parameters.count, 2), 1)",
+                    },
+                    depends_on=[],
+                ),
+                LookupActivity(
+                    name="LookupStep",
+                    source=DelimitedTextSource(
+                        store_settings=AzureBlobFSReadSettings(recursive=True),
+                    ),
+                    dataset=DatasetReference(
+                        type="DatasetReference",
+                        reference_name="test_abfs_csv_dataset",
+                    ),
+                    first_row_only=True,
+                    depends_on=[],
+                    policy=ActivityPolicy(timeout="0.00:10:00"),
+                ),
+                SetVariableActivity(
+                    name="set_lookup_concat",
+                    variable_name="lookup_result_message",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat('Result: ', string(activity('LookupStep').output.firstRow.id))",
+                    },
+                    depends_on=[ActivityDependency(activity="LookupStep", dependency_conditions=["Succeeded"])],
+                ),
+            ],
+            parameters={
+                "prefix": {"type": "String", "defaultValue": "pre"},
+                "env": {"type": "String", "defaultValue": "dev"},
+                "count": {"type": "Int", "defaultValue": 2},
+            },
+            variables={
+                "concat_now": {"type": "String", "defaultValue": ""},
+                "conditional_url": {"type": "String", "defaultValue": ""},
+                "nested_math": {"type": "String", "defaultValue": ""},
+                "lookup_result_message": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
+def complex_expression_unsupported_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    adf_factory: Factory,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline containing an unsupported nested expression.
+
+    Args:
+        azure_config: Azure configuration fixture.
+        adf_management_client: Data Factory management client fixture.
+        adf_factory: Ensures the factory exists before provisioning.
+
+    Yields:
+        The created ``PipelineResource``.
+    """
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_unsupported_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_unsupported_expression",
+                    variable_name="unsupported_value",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat('x', unknownOuter(unknownInner('y')))",
+                    },
+                    depends_on=[],
+                ),
+            ],
+            variables={
+                "unsupported_value": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
 def factory_client(azure_config: AzureTestConfig) -> FactoryClient:
     """Create a ``FactoryClient`` connected to the test Azure Data Factory.
 
