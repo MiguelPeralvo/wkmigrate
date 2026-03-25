@@ -13,10 +13,8 @@ from typing import Any
 from wkmigrate.models.ir.pipeline import WebActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.expression_parsers import resolve_expression
+from wkmigrate.parsers.expression_parsers import ResolvedExpression, get_literal_or_expression
 from wkmigrate.utils import parse_timeout_string, parse_authentication
-
-_EXPRESSION_MARKER = "__expr__:"
 
 
 def translate_web_activity(activity: dict, base_kwargs: dict) -> WebActivity | UnsupportedValue:
@@ -80,12 +78,14 @@ def translate_web_activity(activity: dict, base_kwargs: dict) -> WebActivity | U
 
 def _resolve_web_value(value: Any, context: TranslationContext) -> Any | UnsupportedValue:
     """Resolve static or expression-like value for web activity fields."""
+    if not _is_expression_candidate(value):
+        return value
 
-    if _is_expression_candidate(value):
-        resolved = resolve_expression(value, context)
-        if isinstance(resolved, UnsupportedValue):
-            return resolved
-        return f"{_EXPRESSION_MARKER}{resolved}"
+    resolved = get_literal_or_expression(value, context)
+    if isinstance(resolved, UnsupportedValue):
+        return resolved
+    if resolved.is_dynamic:
+        return resolved
     return value
 
 
@@ -93,7 +93,12 @@ def _resolve_headers(headers: Any, context: TranslationContext) -> Any | Unsuppo
     """Resolve headers dictionary, allowing expression-valued header entries."""
 
     if _is_expression_candidate(headers):
-        return _resolve_web_value(headers, context)
+        resolved_headers = _resolve_web_value(headers, context)
+        if isinstance(resolved_headers, UnsupportedValue):
+            return resolved_headers
+        if isinstance(resolved_headers, ResolvedExpression):
+            return resolved_headers
+        return headers
     if not isinstance(headers, dict):
         return UnsupportedValue(value=headers, message="Headers must be a dictionary or Expression")
 
