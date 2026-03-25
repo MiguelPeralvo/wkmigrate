@@ -40,6 +40,12 @@ def parse_variable_value(value: str | dict | int | float | bool, context: Transl
     return _parse_expression_string(value, context)
 
 
+def resolve_expression(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
+    """Resolve a raw value or ADF expression payload into a Python expression string."""
+
+    return parse_variable_value(value, context)
+
+
 def _parse_expression_string(expression: str, context: TranslationContext) -> str | UnsupportedValue:
     """
     Parses an expression string into a Python code snippet.

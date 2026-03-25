@@ -62,6 +62,22 @@ def test_web_activity_notebook_contains_request_call() -> None:
     assert "response_body" in content
 
 
+def test_web_activity_notebook_accepts_expression_marker_values() -> None:
+    """Expression-marker inputs are injected as raw Python expressions."""
+    content = get_web_activity_notebook_content(
+        activity_name="dynamic_web_activity",
+        activity_type="WebActivity",
+        url="__expr__:str('https://api.example.com/') + str('v1')",
+        method="GET",
+        headers={"X-Test": "__expr__:str('token')"},
+        body="__expr__:str('payload')",
+    )
+
+    assert "url = str('https://api.example.com/') + str('v1')" in content
+    assert "headers = {'X-Test': str('token')}" in content
+    assert "body = str('payload')" in content
+
+
 def test_web_activity_notebook_with_unsupported_auth_type() -> None:
     """get_web_activity_notebook_content raises NotTranslatableWarning for unsupported auth type."""
     with pytest.raises(NotTranslatableWarning) as exc_info:
