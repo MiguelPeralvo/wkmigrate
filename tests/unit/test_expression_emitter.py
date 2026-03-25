@@ -130,6 +130,7 @@ def test_get_literal_or_expression_handles_zero_in_expression_payload() -> None:
     assert resolved.is_dynamic is True
 
 
+
 def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() -> None:
     resolved = get_literal_or_expression("@json('{\"x\": 1}')")
     assert not isinstance(resolved, UnsupportedValue)
