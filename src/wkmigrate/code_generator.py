@@ -20,6 +20,55 @@ from wkmigrate.parsers.dataset_parsers import (
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
 
+_DATETIME_HELPER_MARKER = "_wkmigrate_"
+_INLINE_DATETIME_HELPERS = [
+    "from datetime import datetime, timedelta, timezone",
+    "from zoneinfo import ZoneInfo",
+    "",
+    "def _wkmigrate_utc_now():",
+    "    return datetime.now(timezone.utc)",
+    "",
+    "def _wkmigrate_format_datetime(dt, adf_format):",
+    "    working_format = adf_format",
+    "    marker = '__WK_MILLISECOND__'",
+    "    if 'fff' in working_format:",
+    "        working_format = working_format.replace('fff', marker)",
+    "    for adf_token, py_token in [",
+    "        ('yyyy', '%Y'),",
+    "        ('yy', '%y'),",
+    "        ('MM', '%m'),",
+    "        ('dd', '%d'),",
+    "        ('HH', '%H'),",
+    "        ('hh', '%I'),",
+    "        ('mm', '%M'),",
+    "        ('ss', '%S'),",
+    "        ('tt', '%p'),",
+    "    ]:",
+    "        working_format = working_format.replace(adf_token, py_token)",
+    "    formatted = dt.strftime(working_format)",
+    "    if marker in formatted:",
+    "        formatted = formatted.replace(marker, f'{dt.microsecond // 1000:03d}')",
+    "    return formatted",
+    "",
+    "def _wkmigrate_add_days(dt, days):",
+    "    return dt + timedelta(days=days)",
+    "",
+    "def _wkmigrate_add_hours(dt, hours):",
+    "    return dt + timedelta(hours=hours)",
+    "",
+    "def _wkmigrate_start_of_day(dt):",
+    "    return dt.replace(hour=0, minute=0, second=0, microsecond=0)",
+    "",
+    "def _wkmigrate_convert_time_zone(dt, source_tz, target_tz):",
+    "    source_zone = ZoneInfo(source_tz)",
+    "    target_zone = ZoneInfo(target_tz)",
+    "    if dt.tzinfo is None:",
+    "        localized = dt.replace(tzinfo=source_zone)",
+    "    else:",
+    "        localized = dt.astimezone(source_zone)",
+    "    return localized.astimezone(target_zone)",
+]
+
 
 def get_set_variable_notebook_content(variable_name: str, variable_value: str) -> str:
     """
@@ -36,6 +85,8 @@ def get_set_variable_notebook_content(variable_name: str, variable_value: str) -
     script_lines = ["# Databricks notebook source"]
     if "json.loads(" in variable_value:
         script_lines.append("import json")
+    if _DATETIME_HELPER_MARKER in variable_value:
+        script_lines.extend(["", *_INLINE_DATETIME_HELPERS])
     script_lines.extend(
         [
             "",
