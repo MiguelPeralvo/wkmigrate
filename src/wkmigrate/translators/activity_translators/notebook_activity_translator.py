@@ -5,10 +5,13 @@ representations. Each translator must validate required fields, parse the activi
 and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
+import ast
 import warnings
+from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.expression_parsers import resolve_expression
 
 
 def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:
@@ -50,7 +53,23 @@ def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
         return None
     # Parse the parameters:
     parsed_parameters = {}
+    context = TranslationContext()
     for name, value in parameters.items():
+        if _is_expression_candidate(value):
+            resolved = resolve_expression(value, context)
+            if isinstance(resolved, UnsupportedValue):
+                warnings.warn(
+                    NotTranslatableWarning(
+                        f"parameters.{name}",
+                        f'Could not resolve expression for parameter {name}, setting to ""',
+                    ),
+                    stacklevel=3,
+                )
+                parsed_parameters[name] = ""
+                continue
+            parsed_parameters[name] = _normalize_parameter_value(resolved)
+            continue
+
         if not isinstance(value, str):
             warnings.warn(
                 NotTranslatableWarning(
@@ -62,3 +81,26 @@ def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
             value = ""
         parsed_parameters[name] = value
     return parsed_parameters
+
+
+def _is_expression_candidate(value: object) -> bool:
+    """Return True for expression-shaped values."""
+
+    if isinstance(value, str):
+        return value.startswith("@")
+    if isinstance(value, dict):
+        return value.get("type") == "Expression"
+    return False
+
+
+def _normalize_parameter_value(value: str) -> str:
+    """Convert resolved expression output to a string parameter value."""
+
+    try:
+        literal = ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return value
+
+    if literal is None:
+        return ""
+    return str(literal)
