@@ -208,7 +208,7 @@ class WebActivity(Activity):
     url: str
     method: str
     body: Any = None
-    headers: dict[str, str] | None = None
+    headers: dict[str, Any] | None = None
     authentication: Authentication | None = None
     disable_cert_validation: bool = False
     http_request_timeout_seconds: int | None = None
