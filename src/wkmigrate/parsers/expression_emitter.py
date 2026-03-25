@@ -40,7 +40,7 @@ _DATETIME_HELPER_FUNCTIONS: set[str] = {
 class EmittedExpression:
     """Emitted expression and required import names."""
 
-    expression: str
+    code: str
     required_imports: tuple[str, ...] = ()
 
 
@@ -50,17 +50,17 @@ def emit(node: AstNode, context: TranslationContext | None = None) -> str | Unsu
     emitted = emit_with_imports(node, context)
     if isinstance(emitted, UnsupportedValue):
         return emitted
-    return emitted.expression
+    return emitted.code
 
 
 def emit_with_imports(node: AstNode, context: TranslationContext | None = None) -> EmittedExpression | UnsupportedValue:
     """Emit Python expression and import metadata for an AST node."""
 
     emitter = _Emitter(context=context)
-    expression = emitter.emit_node(node)
-    if isinstance(expression, UnsupportedValue):
-        return expression
-    return EmittedExpression(expression=expression, required_imports=tuple(sorted(emitter.required_imports)))
+    code = emitter.emit_node(node)
+    if isinstance(code, UnsupportedValue):
+        return code
+    return EmittedExpression(code=code, required_imports=tuple(sorted(emitter.required_imports)))
 
 
 @dataclass(slots=True)
@@ -299,7 +299,7 @@ def _flatten_property_chain(node: PropertyAccess) -> tuple[AstNode, list[str]]:
 
     while isinstance(current, PropertyAccess):
         properties.append(current.property_name)
-        current = current.object
+        current = current.target
 
     properties.reverse()
     return current, properties
