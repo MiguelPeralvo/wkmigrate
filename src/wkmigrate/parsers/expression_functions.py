@@ -9,7 +9,9 @@ from wkmigrate.models.ir.unsupported import UnsupportedValue
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
 
 
-def _require_arity(function_name: str, args: list[str], minimum: int, maximum: int | None = None) -> UnsupportedValue | None:
+def _require_arity(
+    function_name: str, args: list[str], minimum: int, maximum: int | None = None
+) -> UnsupportedValue | None:
     """Validate function arity before emitting Python code."""
 
     if len(args) < minimum:
@@ -179,14 +181,18 @@ def _emit_empty(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_utc_now(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("utcNow", args, 0, 0):
+    if error := _require_arity("utcNow", args, 0, 1):
         return error
+    if len(args) == 1:
+        return f"_wkmigrate_format_datetime(_wkmigrate_utc_now(), {args[0]})"
     return "_wkmigrate_utc_now()"
 
 
 def _emit_format_datetime(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("formatDateTime", args, 2, 2):
+    if error := _require_arity("formatDateTime", args, 1, 2):
         return error
+    if len(args) == 1:
+        return f"str({args[0]})"
     return f"_wkmigrate_format_datetime({args[0]}, {args[1]})"
 
 

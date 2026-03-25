@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.expression_emitter import emit
+from wkmigrate.parsers.expression_emitter import emit, emit_with_imports
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, parse_variable_value
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -47,6 +49,28 @@ def test_emit_conversion_and_collection_functions() -> None:
     assert _emit_expression("coalesce(null, 'x')") == "next((v for v in [None, 'x'] if v is not None), None)"
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("toUpper('abc')", "str('abc').upper()"),
+        ("trim('  hi  ')", "str('  hi  ').strip()"),
+        ("length('abcd')", "len('abcd')"),
+        ("contains('abcd', 'bc')", "('bc' in str('abcd'))"),
+        ("split('a,b', ',')", "str('a,b').split(',')"),
+        ("greater(3, 2)", "(3 > 2)"),
+        ("less(2, 3)", "(2 < 3)"),
+        ("greaterOrEquals(3, 3)", "(3 >= 3)"),
+        ("lessOrEquals(3, 3)", "(3 <= 3)"),
+        ("first(createArray('x', 'y'))", "(['x', 'y'])[0]"),
+        ("last(createArray('x', 'y'))", "(['x', 'y'])[-1]"),
+        ("empty(createArray())", "(len([]) == 0)"),
+    ],
+)
+def test_emit_additional_registry_functions(expression: str, expected: str) -> None:
+    assert _emit_expression(expression) == expected
+
+
+
 def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None:
     assert _emit_expression("union(createArray('a', 'b'), createArray('b', 'c'))") == (
         "list(dict.fromkeys(list(['a', 'b']) + list(['b', 'c'])))"
@@ -62,8 +86,17 @@ def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None
     )
 
 
-def test_emit_wrong_arity_returns_unsupported() -> None:
-    emitted = _emit_expression("@union(createArray('a'))")
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "@substring('abc', 1)",
+        "@add(1)",
+        "@union(createArray('a'))",
+    ],
+)
+def test_emit_wrong_arity_returns_unsupported(expression: str) -> None:
+    emitted = _emit_expression(expression)
+
     assert isinstance(emitted, UnsupportedValue)
     assert "expects" in emitted.message
 
@@ -102,6 +135,8 @@ def test_emit_unknown_function_returns_unsupported() -> None:
 
 def test_emit_datetime_functions_to_runtime_helpers() -> None:
     assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
+    assert _emit_expression("utcNow('yyyy-MM-dd')") == "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
+    assert _emit_expression("formatDateTime(utcNow())") == "str(_wkmigrate_utc_now())"
     assert _emit_expression("formatDateTime(utcNow(), 'yyyy-MM-dd')") == (
         "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
     )
@@ -130,12 +165,27 @@ def test_get_literal_or_expression_handles_zero_in_expression_payload() -> None:
     assert resolved.is_dynamic is True
 
 
+def test_get_literal_or_expression_with_non_expression_dict_type_returns_unsupported() -> None:
+    resolved = get_literal_or_expression({"type": "Literal", "value": "abc"})
+    assert isinstance(resolved, UnsupportedValue)
+    assert "Unsupported variable value type" in resolved.message
+
+
 
 def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() -> None:
     resolved = get_literal_or_expression("@json('{\"x\": 1}')")
     assert not isinstance(resolved, UnsupportedValue)
     assert resolved.code == "json.loads('{\"x\": 1}')"
     assert resolved.required_imports == frozenset({"json"})
+
+
+def test_emit_with_imports_tracks_datetime_helper_dependency() -> None:
+    parsed = parse_expression("@formatDateTime(utcNow(), 'yyyy-MM-dd')")
+    assert not isinstance(parsed, UnsupportedValue)
+
+    emitted = emit_with_imports(parsed, TranslationContext())
+    assert not isinstance(emitted, UnsupportedValue)
+    assert "wkmigrate_datetime_helpers" in emitted.required_imports
 
 
 def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
@@ -148,6 +198,19 @@ def test_get_literal_or_expression_context_free_activity_reference_is_unsupporte
     resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")
     assert isinstance(resolved, UnsupportedValue)
     assert "requires TranslationContext" in resolved.message
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "@pipeline().unknownProp",
+        "@pipeline().parameters",
+    ],
+)
+def test_emit_pipeline_error_paths(expression: str) -> None:
+    emitted = _emit_expression(expression)
+    assert isinstance(emitted, UnsupportedValue)
+    assert "Unsupported pipeline" in emitted.message
 
 
 def test_parse_variable_value_is_thin_wrapper() -> None:
