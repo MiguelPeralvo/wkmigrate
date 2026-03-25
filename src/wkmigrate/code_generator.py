@@ -168,7 +168,7 @@ def get_file_options(
     service_name = dataset_definition["service_name"]
     provider_type = dataset_definition.get("provider_type", "abfs")
     config_lines = [
-        rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
+        f'{dataset_name}_options["{option}"] = {str(dataset_definition.get(option))!r}'
         for option in DATASET_OPTIONS.get(file_type, [])
         if dataset_definition.get(option)
     ]

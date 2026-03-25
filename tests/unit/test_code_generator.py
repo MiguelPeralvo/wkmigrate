@@ -207,6 +207,22 @@ def test_file_options_uses_custom_scope() -> None:
     assert "wkmigrate_credentials_scope" not in joined
 
 
+def test_file_options_generate_valid_python_for_escaped_quote_values() -> None:
+    """Generated option lines remain valid Python when values contain backslash-quote sequences."""
+    dataset_def = {
+        "dataset_name": "src",
+        "service_name": "adls_svc",
+        "type": "csv",
+        "storage_account_name": "mystorage",
+        "quote": '\\"',
+    }
+    lines = get_file_options(dataset_def, "csv")
+    generated_source = "\n".join(lines)
+
+    assert 'r"\\""' not in generated_source
+    compile(generated_source, "<generated_file_options>", "exec")
+
+
 def test_database_options_uses_custom_scope() -> None:
     """Database options use the custom credentials scope when provided."""
     dataset_def = {
