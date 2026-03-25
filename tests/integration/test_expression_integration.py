@@ -8,6 +8,7 @@ from azure.mgmt.datafactory.models import PipelineResource
 
 from wkmigrate.definition_stores.factory_definition_store import FactoryDefinitionStore
 from wkmigrate.models.ir.pipeline import ForEachActivity, IfConditionActivity, Pipeline, SetVariableActivity, WebActivity
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 pytestmark = pytest.mark.integration
 
@@ -64,9 +65,10 @@ def test_web_activity_expression_url_translates(
     factory_store: FactoryDefinitionStore,
     complex_expression_pipeline: PipelineResource,
 ) -> None:
-    """Expression-valued web URL is preserved as runtime expression marker."""
+    """Expression-valued web URL is preserved as a dynamic expression object."""
     result = factory_store.load("integration_test_complex_expression_pipeline")
 
     web_task = next(task for task in result.tasks if isinstance(task, WebActivity))
-    assert web_task.url.startswith("__expr__:")
-    assert "dbutils.widgets.get('version')" in web_task.url
+    assert isinstance(web_task.url, ResolvedExpression)
+    assert web_task.url.is_dynamic is True
+    assert "dbutils.widgets.get('version')" in web_task.url.code
