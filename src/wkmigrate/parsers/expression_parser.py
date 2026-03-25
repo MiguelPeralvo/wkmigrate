@@ -48,6 +48,8 @@ def _normalize_expression(expression: str) -> str:
     normalized = expression.strip()
     if normalized.startswith("@"):
         normalized = normalized[1:].strip()
+    # ADF commonly wraps expressions in ``@{...}`` before this stage. At this point
+    # we only strip a single outer brace pair produced by that wrapper style.
     if normalized.startswith("{") and normalized.endswith("}"):
         normalized = normalized[1:-1].strip()
     return normalized
@@ -173,7 +175,7 @@ class _Parser:
                 identifier = self._consume(TokenType.IDENT, "Expected property name after '.'")
                 if isinstance(identifier, UnsupportedValue):
                     return identifier
-                primary = PropertyAccess(object=primary, property_name=str(identifier.value))
+                primary = PropertyAccess(target=primary, property_name=str(identifier.value))
                 continue
 
             if token.token_type == TokenType.LBRACKET:
