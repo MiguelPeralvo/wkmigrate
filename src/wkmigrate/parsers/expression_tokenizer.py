@@ -73,6 +73,14 @@ def tokenize(expression: str) -> list[Token] | UnsupportedValue:
             tokens.append(Token(token_type=TokenType.STRING, value=value, position=idx))
             continue
 
+        if char == '"':
+            parsed = _read_double_quoted_string(expression, idx)
+            if isinstance(parsed, UnsupportedValue):
+                return parsed
+            value, idx = parsed
+            tokens.append(Token(token_type=TokenType.STRING, value=value, position=idx))
+            continue
+
         if char.isdigit() or (char == "-" and idx + 1 < length and expression[idx + 1].isdigit()):
             value, idx = _read_number_literal(expression, idx)
             tokens.append(Token(token_type=TokenType.NUMBER, value=value, position=idx))
@@ -115,6 +123,32 @@ def _read_string_literal(expression: str, idx: int) -> tuple[str, int] | Unsuppo
                 continue
             return "".join(chars), idx + 1
 
+        chars.append(char)
+        idx += 1
+
+    return UnsupportedValue(
+        value=expression,
+        message="Unterminated string literal in expression",
+    )
+
+
+def _read_double_quoted_string(expression: str, idx: int) -> tuple[str, int] | UnsupportedValue:
+    """Read a double-quoted string literal."""
+
+    idx += 1
+    length = len(expression)
+    chars: list[str] = []
+
+    while idx < length:
+        char = expression[idx]
+        if char == "\\":
+            if idx + 1 >= length:
+                return UnsupportedValue(value=expression, message="Invalid escape at end of string literal")
+            chars.append(expression[idx + 1])
+            idx += 2
+            continue
+        if char == '"':
+            return "".join(chars), idx + 1
         chars.append(char)
         idx += 1
 
