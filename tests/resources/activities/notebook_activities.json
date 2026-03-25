@@ -213,7 +213,7 @@
   },
   {
     "id": "expression_parameters",
-    "description": "Notebook activity with expression parameters (should warn)",
+    "description": "Notebook activity with expression parameters",
     "input": {
       "name": "run_expression_notebook",
       "type": "DatabricksNotebook",
@@ -238,9 +238,8 @@
       "notebook_path": "/Workspace/notebooks/expression_notebook",
       "base_parameters": {
         "static_param": "static_value",
-        "expression_param": ""
+        "expression_param": "dbutils.widgets.get('dynamic_value')"
       }
-    },
-    "expects_warnings": true
+    }
   }
 ]
