@@ -17,6 +17,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.expression_ast import BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
+from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 from wkmigrate.parsers.expression_parser import parse_expression
 
 
@@ -179,12 +180,17 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
     value = items.get("value")
     if value is None:
         return UnsupportedValue(value=items, message="Missing property 'value' in ForEach activity 'items'")
-    # TODO: Move all dynamic function patterns to a common enum list
-    array_pattern = r"@array\(\[(.+)\]\)"
-    match = re.match(string=value, pattern=array_pattern)
-    if match:
-        matched_item = match.group(1)
-        return _parse_array_string(matched_item)
+
+    if isinstance(value, str):
+        array_pattern = r"@array\(\[(.+)\]\)"
+        match = re.match(string=value, pattern=array_pattern)
+        if match:
+            matched_item = match.group(1)
+            return _parse_array_string(matched_item)
+
+    resolved = get_literal_or_expression(items, context)
+    if isinstance(resolved, UnsupportedValue):
+        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
 
     parsed = parse_expression(value)
     if isinstance(parsed, UnsupportedValue):
@@ -203,7 +209,15 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
         quoted_items = ",".join([f'"{item}"' for item in list_items])
         return _parse_array_string(quoted_items)
 
-    return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+    try:
+        literal_value = ast.literal_eval(resolved.code)
+    except (SyntaxError, ValueError):
+        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+
+    if not isinstance(literal_value, list):
+        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+    quoted_items = ",".join(f'"{str(item)}"' for item in literal_value)
+    return _parse_array_string(quoted_items)
 
 
 def _parse_array_string(array_string: str) -> str:
