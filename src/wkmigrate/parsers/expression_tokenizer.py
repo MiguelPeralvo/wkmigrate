@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 
-class TokenType(str, Enum):
+class TokenType(StrEnum):
     """Token types supported by the expression grammar."""
 
     STRING = "STRING"
@@ -22,7 +22,6 @@ class TokenType(str, Enum):
     RBRACKET = "RBRACKET"
     COMMA = "COMMA"
     DOT = "DOT"
-    AT = "AT"
     EOF = "EOF"
 
 
@@ -42,7 +41,6 @@ _SINGLE_CHAR_TOKENS: dict[str, TokenType] = {
     "]": TokenType.RBRACKET,
     ",": TokenType.COMMA,
     ".": TokenType.DOT,
-    "@": TokenType.AT,
 }
 
 
@@ -66,28 +64,43 @@ def tokenize(expression: str) -> list[Token] | UnsupportedValue:
             continue
 
         if char == "'":
+            start = idx
             parsed = _read_string_literal(expression, idx)
             if isinstance(parsed, UnsupportedValue):
                 return parsed
             value, idx = parsed
-            tokens.append(Token(token_type=TokenType.STRING, value=value, position=idx))
+            tokens.append(Token(token_type=TokenType.STRING, value=value, position=start))
+            continue
+
+        if char == '"':
+            start = idx
+            parsed = _read_double_quoted_string(expression, idx)
+            if isinstance(parsed, UnsupportedValue):
+                return parsed
+            value, idx = parsed
+            tokens.append(Token(token_type=TokenType.STRING, value=value, position=start))
             continue
 
         if char.isdigit() or (char == "-" and idx + 1 < length and expression[idx + 1].isdigit()):
-            value, idx = _read_number_literal(expression, idx)
-            tokens.append(Token(token_type=TokenType.NUMBER, value=value, position=idx))
+            start = idx
+            parsed = _read_number_literal(expression, idx)
+            if isinstance(parsed, UnsupportedValue):
+                return parsed
+            value, idx = parsed
+            tokens.append(Token(token_type=TokenType.NUMBER, value=value, position=start))
             continue
 
         if char.isalpha() or char == "_":
+            start = idx
             value, idx = _read_identifier(expression, idx)
             lower_value = value.lower()
             if lower_value == "true" or lower_value == "false":
-                tokens.append(Token(token_type=TokenType.BOOL, value=lower_value, position=idx))
+                tokens.append(Token(token_type=TokenType.BOOL, value=lower_value, position=start))
                 continue
             if lower_value == "null":
-                tokens.append(Token(token_type=TokenType.NULL, value=lower_value, position=idx))
+                tokens.append(Token(token_type=TokenType.NULL, value=lower_value, position=start))
                 continue
-            tokens.append(Token(token_type=TokenType.IDENT, value=value, position=idx))
+            tokens.append(Token(token_type=TokenType.IDENT, value=value, position=start))
             continue
 
         return UnsupportedValue(
@@ -124,7 +137,33 @@ def _read_string_literal(expression: str, idx: int) -> tuple[str, int] | Unsuppo
     )
 
 
-def _read_number_literal(expression: str, idx: int) -> tuple[str, int]:
+def _read_double_quoted_string(expression: str, idx: int) -> tuple[str, int] | UnsupportedValue:
+    """Read a double-quoted string literal."""
+
+    idx += 1
+    length = len(expression)
+    chars: list[str] = []
+
+    while idx < length:
+        char = expression[idx]
+        if char == "\\":
+            if idx + 1 >= length:
+                return UnsupportedValue(value=expression, message="Invalid escape at end of string literal")
+            chars.append(expression[idx + 1])
+            idx += 2
+            continue
+        if char == '"':
+            return "".join(chars), idx + 1
+        chars.append(char)
+        idx += 1
+
+    return UnsupportedValue(
+        value=expression,
+        message="Unterminated string literal in expression",
+    )
+
+
+def _read_number_literal(expression: str, idx: int) -> tuple[str, int] | UnsupportedValue:
     """Read a numeric literal (integer or decimal)."""
 
     start = idx
@@ -136,6 +175,8 @@ def _read_number_literal(expression: str, idx: int) -> tuple[str, int]:
 
     if idx < len(expression) and expression[idx] == ".":
         idx += 1
+        if idx >= len(expression) or not expression[idx].isdigit():
+            return UnsupportedValue(value=expression, message=f"Invalid number literal at position {start}")
         while idx < len(expression) and expression[idx].isdigit():
             idx += 1
 
