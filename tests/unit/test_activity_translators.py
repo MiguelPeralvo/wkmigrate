@@ -154,15 +154,13 @@ def test_notebook_missing_path_returns_unsupported(notebook_activity_fixtures: l
     assert fixture["expected_message"] in result.message
 
 
-def test_notebook_expression_parameters_warns(notebook_activity_fixtures: list[dict]) -> None:
-    """Test that expression parameters emit warnings and are set to empty string."""
+def test_notebook_expression_parameters_resolved(notebook_activity_fixtures: list[dict]) -> None:
+    """Test that expression parameters are translated into Python expression strings."""
     fixture = get_fixture(notebook_activity_fixtures, "expression_parameters")
-
-    with pytest.warns(UserWarning):
-        result = translate_activity(fixture["input"])
+    result = translate_activity(fixture["input"])
 
     assert isinstance(result, DatabricksNotebookActivity)
-    assert result.base_parameters["expression_param"] == ""
+    assert result.base_parameters["expression_param"] == "dbutils.widgets.get('dynamic_value')"
 
 
 def test_basic_spark_jar_activity(spark_jar_activity_fixtures: list[dict]) -> None:
@@ -281,6 +279,29 @@ def test_foreach_createarray_expression(for_each_activity_fixtures: list[dict]) 
 
     assert isinstance(result, ForEachActivity)
     assert result.items_string == fixture["expected"]["items_string"]
+
+
+def test_foreach_createarray_with_concat_literals() -> None:
+    """createArray supports concat() when each arg resolves to a literal string."""
+    activity = {
+        "name": "foreach_concat",
+        "type": "ForEach",
+        "depends_on": [],
+        "items": {"type": "Expression", "value": "@createArray(concat('a', '1'), concat('b', '2'))"},
+        "activities": [
+            {
+                "name": "inner_task",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/notebooks/inner",
+                "depends_on": [],
+                "base_parameters": {},
+            }
+        ],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, ForEachActivity)
+    assert result.items_string == "[\"a1\",\"b2\"]"
 
 
 def test_foreach_multiple_inner_activities_creates_run_job(for_each_activity_fixtures: list[dict]) -> None:
@@ -404,6 +425,23 @@ def test_if_condition_unsupported_expression_returns_unsupported(if_condition_ac
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message
+
+
+def test_if_condition_not_equals_expression() -> None:
+    """not(equals()) is translated to the NOT_EQUAL condition op."""
+    activity = {
+        "name": "if_not_equals",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@not(equals('left', 'right'))"},
+        "if_true_activities": [],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "NOT_EQUAL"
+    assert result.left == "left"
+    assert result.right == "right"
 
 
 def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) -> None:
@@ -816,6 +854,22 @@ def test_web_activity_translate_activity_dispatch(web_activity_fixtures: list[di
     assert isinstance(result, WebActivity)
     assert result.url == fixture["expected"]["url"]
     assert result.method == fixture["expected"]["method"]
+
+
+def test_web_activity_expression_url_is_preserved_as_runtime_expression() -> None:
+    """Expression-valued URL is preserved with runtime expression marker."""
+    activity = {
+        "name": "dynamic_url_call",
+        "type": "WebActivity",
+        "url": {"type": "Expression", "value": "@concat('https://api.example.com/', 'v1')"},
+        "method": "GET",
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_web_activity(activity, base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert result.url.startswith("__expr__:")
+    assert "str('https://api.example.com/')" in result.url
 
 
 def test_web_activity_unsupported_auth_type_returns_unsupported(web_activity_fixtures: list[dict]) -> None:

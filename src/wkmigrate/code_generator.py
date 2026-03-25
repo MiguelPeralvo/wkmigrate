@@ -21,6 +21,7 @@ from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
 
 _DATETIME_HELPER_MARKER = "_wkmigrate_"
+_EXPRESSION_MARKER = "__expr__:"
 _INLINE_DATETIME_HELPERS = [
     "import re",
     "from datetime import datetime, timedelta, timezone",
@@ -410,10 +411,10 @@ def get_web_activity_notebook_content(
         "# Databricks notebook source",
         "import requests",
         "",
-        f"url = {url!r}",
+        f"url = {_as_python_expression(url)}",
         f"method = {method!r}",
-        f"headers = {headers!r}",
-        f"body = {body!r}",
+        f"headers = {_as_python_expression(headers)}",
+        f"body = {_as_python_expression(body)}",
         "",
         "kwargs = {}",
         "if headers:",
@@ -450,6 +451,28 @@ def get_web_activity_notebook_content(
         ]
     )
     return autopep8.fix_code("\n".join(script_lines))
+
+
+def _as_python_expression(value: Any) -> str:
+    """Return a safe Python expression string for generated notebook assignment."""
+
+    if isinstance(value, dict):
+        items = ", ".join(f"{_as_python_expression(k)}: {_as_python_expression(v)}" for k, v in value.items())
+        return "{" + items + "}"
+    if isinstance(value, list):
+        items = ", ".join(_as_python_expression(item) for item in value)
+        return "[" + items + "]"
+    if isinstance(value, tuple):
+        items = ", ".join(_as_python_expression(item) for item in value)
+        if len(value) == 1:
+            items += ","
+        return "(" + items + ")"
+
+    if isinstance(value, str):
+        if value.startswith(_EXPRESSION_MARKER):
+            return value[len(_EXPRESSION_MARKER) :]
+        return repr(value)
+    return repr(value)
 
 
 def _get_file_credential_lines(
