@@ -41,12 +41,10 @@ TypeTranslator = Callable[[dict, dict], TranslationResult]
 
 _default_type_translators: dict[str, TypeTranslator] = {
     "DatabricksJob": translate_databricks_job_activity,
-    "DatabricksNotebook": translate_notebook_activity,
     "DatabricksSparkJar": translate_spark_jar_activity,
     "DatabricksSparkPython": translate_spark_python_activity,
     "Copy": translate_copy_activity,
     "Lookup": translate_lookup_activity,
-    "WebActivity": translate_web_activity,
 }
 
 
@@ -181,6 +179,10 @@ def _dispatch_activity(
         Tuple of ``(translator_result, updated_context)``.
     """
     match activity_type:
+        case "DatabricksNotebook":
+            return translate_notebook_activity(activity, base_kwargs, context), context
+        case "WebActivity":
+            return translate_web_activity(activity, base_kwargs, context), context
         case "IfCondition":
             return translate_if_condition_activity(activity, base_kwargs, context)
         case "ForEach":

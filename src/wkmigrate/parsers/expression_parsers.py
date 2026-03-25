@@ -27,9 +27,12 @@ def get_literal_or_expression(
         if value.get("type") != "Expression":
             return UnsupportedValue(value=value, message=f"Unsupported variable value type '{value.get('type')}'")
         expression = value.get("value")
-        if not expression:
+        if expression is None or expression == "":
             return UnsupportedValue(value=value, message="Missing property 'value' of expression")
-        return _resolve_expression_string(str(expression), context)
+        expression_string = str(expression)
+        if not expression_string.startswith("@"):
+            expression_string = f"@{expression_string}"
+        return _resolve_expression_string(expression_string, context)
 
     if not isinstance(value, str):
         return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
@@ -101,7 +104,7 @@ def _resolve_expression_string(
         return emitted
 
     return ResolvedExpression(
-        code=emitted.expression,
+        code=emitted.code,
         is_dynamic=True,
         required_imports=frozenset(emitted.required_imports),
     )
