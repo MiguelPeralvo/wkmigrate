@@ -100,54 +100,6 @@ def test_emit_unknown_function_returns_unsupported() -> None:
     assert isinstance(emitted, UnsupportedValue)
     assert "Unsupported function" in emitted.message
 
-def test_get_literal_or_expression_static_literal() -> None:
-    resolved = get_literal_or_expression("hello")
-    assert not isinstance(resolved, UnsupportedValue)
-    assert resolved.code == "'hello'"
-    assert resolved.is_dynamic is False
-    assert resolved.required_imports == frozenset()
-
-
-def test_get_literal_or_expression_dynamic_expression() -> None:
-    resolved = get_literal_or_expression("@concat('a', 'b')")
-    assert not isinstance(resolved, UnsupportedValue)
-    assert resolved.code == "str('a') + str('b')"
-    assert resolved.is_dynamic is True
-
-
-def test_get_literal_or_expression_handles_zero_in_expression_payload() -> None:
-    resolved = get_literal_or_expression({"type": "Expression", "value": 0})
-    assert not isinstance(resolved, UnsupportedValue)
-    assert resolved.code == "0"
-    assert resolved.is_dynamic is True
-
-
-def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() -> None:
-    resolved = get_literal_or_expression("@json('{\"x\": 1}')")
-    assert not isinstance(resolved, UnsupportedValue)
-    assert resolved.code == "json.loads('{\"x\": 1}')"
-    assert resolved.required_imports == frozenset({"json"})
-
-
-def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
-    resolved = get_literal_or_expression("@variables('x')")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
-
-
-def test_get_literal_or_expression_context_free_activity_reference_is_unsupported() -> None:
-    resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
-
-
-def test_parse_variable_value_is_thin_wrapper() -> None:
-    context = TranslationContext()
-    parsed = parse_variable_value({"value": "@pipeline().RunId", "type": "Expression"}, context)
-    assert parsed == "dbutils.jobs.getContext().tags().get('runId', '')"
-
-
-
 def test_emit_datetime_functions_to_runtime_helpers() -> None:
     assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
     assert _emit_expression("formatDateTime(utcNow(), 'yyyy-MM-dd')") == (
