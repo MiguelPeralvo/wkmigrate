@@ -34,6 +34,24 @@ def test_emit_math_functions() -> None:
     assert _emit_expression("mod(10, 3)") == "(10 % 3)"
 
 
+def test_emit_math_functions_coerce_pipeline_parameter_widget_values() -> None:
+    emitted_mul = _emit_expression("mul(pipeline().parameters.count, 2)")
+    assert isinstance(emitted_mul, str)
+    assert "dbutils.widgets.get('count') * 2" not in emitted_mul
+    assert "int(__wkm_p)" in emitted_mul
+    assert "float(__wkm_p)" in emitted_mul
+
+    emitted_add = _emit_expression("add(mul(pipeline().parameters.count, 2), 1)")
+    assert isinstance(emitted_add, str)
+    assert "dbutils.widgets.get('count')" in emitted_add
+    assert " + 1" in emitted_add
+
+    emitted_div = _emit_expression("div(pipeline().parameters.count, 2)")
+    assert isinstance(emitted_div, str)
+    assert "int(" in emitted_div
+    assert "dbutils.widgets.get('count')" in emitted_div
+
+
 def test_emit_logical_functions() -> None:
     assert _emit_expression("if(equals(1, 1), 'yes', 'no')") == "('yes' if (1 == 1) else 'no')"
     assert _emit_expression("and(true, false)") == "(True and False)"
