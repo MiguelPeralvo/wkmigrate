@@ -17,13 +17,19 @@ from wkmigrate.parsers.expression_parsers import ResolvedExpression, get_literal
 from wkmigrate.utils import parse_timeout_string, parse_authentication
 
 
-def translate_web_activity(activity: dict, base_kwargs: dict) -> WebActivity | UnsupportedValue:
+def translate_web_activity(
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext | None = None,
+) -> WebActivity | UnsupportedValue:
     """
     Translates an ADF Web activity into a ``WebActivity`` object.
 
     Args:
         activity: Web activity definition as a ``dict``.
         base_kwargs: Common activity metadata.
+        context: Optional translation context for resolving variable and activity output
+            references. When ``None``, only context-free expressions are resolved.
 
     Returns:
         ``WebActivity`` representation of the HTTP request task.
@@ -31,7 +37,7 @@ def translate_web_activity(activity: dict, base_kwargs: dict) -> WebActivity | U
     url_input = activity.get("url")
     if url_input is None or (isinstance(url_input, str) and not url_input):
         return UnsupportedValue(activity, "Missing value 'url' for Web activity")
-    context = TranslationContext()
+    context = context or TranslationContext()
     url = _resolve_web_value(url_input, context)
     if isinstance(url, UnsupportedValue):
         return UnsupportedValue(activity, f"Unsupported value 'url' for Web activity. {url.message}")

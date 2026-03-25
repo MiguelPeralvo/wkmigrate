@@ -14,13 +14,19 @@ from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 
 
-def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:
+def translate_notebook_activity(
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext | None = None,
+) -> DatabricksNotebookActivity | UnsupportedValue:
     """
     Translates an ADF Databricks Notebook activity into a ``DatabricksNotebookActivity`` object.
 
     Args:
         activity: Notebook activity definition as a ``dict``.
         base_kwargs: Common activity metadata.
+        context: Optional translation context for resolving variable and activity output
+            references. When ``None``, only context-free expressions are resolved.
 
     Returns:
         ``DatabricksNotebookActivity`` representation of the notebook task.
@@ -31,7 +37,7 @@ def translate_notebook_activity(activity: dict, base_kwargs: dict) -> Databricks
     return DatabricksNotebookActivity(
         **base_kwargs,
         notebook_path=notebook_path,
-        base_parameters=_parse_notebook_parameters(activity.get("base_parameters"), TranslationContext()),
+        base_parameters=_parse_notebook_parameters(activity.get("base_parameters"), context or TranslationContext()),
         linked_service_definition=activity.get("linked_service_definition"),
     )
 
@@ -68,7 +74,16 @@ def _parse_notebook_parameters(
             )
             parsed_parameters[name] = ""
             continue
-        parsed_parameters[name] = _normalize_parameter_value(resolved.code)
+        normalized = _normalize_parameter_value(resolved.code)
+        if normalized == "" and _is_none_literal_expression(resolved.code):
+            warnings.warn(
+                NotTranslatableWarning(
+                    f"parameters.{name}",
+                    f"Parameter {name} resolved to None and was converted to an empty string",
+                ),
+                stacklevel=3,
+            )
+        parsed_parameters[name] = normalized
     return parsed_parameters
 
 
@@ -83,3 +98,12 @@ def _normalize_parameter_value(value: str) -> str:
     if literal is None:
         return ""
     return str(literal)
+
+
+def _is_none_literal_expression(value: str) -> bool:
+    """Return True when the emitted Python expression is the literal ``None``."""
+    try:
+        literal = ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return False
+    return literal is None
