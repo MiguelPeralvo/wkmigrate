@@ -27,7 +27,8 @@ def test_emit_math_functions() -> None:
     assert _emit_expression("add(1, 2)") == "(1 + 2)"
     assert _emit_expression("sub(5, 3)") == "(5 - 3)"
     assert _emit_expression("mul(2, 4)") == "(2 * 4)"
-    assert _emit_expression("div(10, 2)") == "(10 / 2)"
+    assert _emit_expression("div(10, 2)") == "int(10 / 2)"
+    assert _emit_expression("div(-7, 2)") == "int(-7 / 2)"
     assert _emit_expression("mod(10, 3)") == "(10 % 3)"
 
 
@@ -44,6 +45,37 @@ def test_emit_conversion_and_collection_functions() -> None:
     assert _emit_expression("json('{\"a\": 1}')") == "json.loads('{\"a\": 1}')"
     assert _emit_expression("first(createArray('x', 'y'))") == "(['x', 'y'])[0]"
     assert _emit_expression("coalesce(null, 'x')") == "next((v for v in [None, 'x'] if v is not None), None)"
+
+
+def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None:
+    assert _emit_expression("union(createArray('a', 'b'), createArray('b', 'c'))") == (
+        "list(dict.fromkeys(list(['a', 'b']) + list(['b', 'c'])))"
+    )
+    assert _emit_expression("union(createArray('a'), createArray('b'), createArray('a', 'c'))") == (
+        "list(dict.fromkeys(list(['a']) + list(['b']) + list(['a', 'c'])))"
+    )
+    assert _emit_expression(
+        "intersection(createArray('a', 'b', 'c'), createArray('b', 'c'), createArray('c', 'b'))"
+    ) == ("list(dict.fromkeys([x for x in ['a', 'b', 'c'] if x in set(['b', 'c']) and x in set(['c', 'b'])]))")
+    assert _emit_expression("intersection(createArray('a', 'a', 'b'), createArray('a', 'b'))") == (
+        "list(dict.fromkeys([x for x in ['a', 'a', 'b'] if x in set(['a', 'b'])]))"
+    )
+
+
+def test_emit_wrong_arity_returns_unsupported() -> None:
+    emitted = _emit_expression("@union(createArray('a'))")
+    assert isinstance(emitted, UnsupportedValue)
+    assert "expects" in emitted.message
+
+
+def test_emit_string_interpolation_expression() -> None:
+    emitted = _emit_expression("prefix-@{pipeline().parameters.env}-suffix")
+
+    assert emitted == "'prefix-' + str(dbutils.widgets.get('env')) + '-suffix'"
+
+
+def test_emit_item_function() -> None:
+    assert _emit_expression("item()") == "item"
 
 
 def test_emit_context_variables_reference() -> None:
@@ -88,6 +120,13 @@ def test_get_literal_or_expression_dynamic_expression() -> None:
     resolved = get_literal_or_expression("@concat('a', 'b')")
     assert not isinstance(resolved, UnsupportedValue)
     assert resolved.code == "str('a') + str('b')"
+    assert resolved.is_dynamic is True
+
+
+def test_get_literal_or_expression_handles_zero_in_expression_payload() -> None:
+    resolved = get_literal_or_expression({"type": "Expression", "value": 0})
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.code == "0"
     assert resolved.is_dynamic is True
 
 
