@@ -19,9 +19,9 @@ from wkmigrate.parsers.dataset_parsers import (
 )
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 _DATETIME_HELPER_MARKER = "_wkmigrate_"
-_EXPRESSION_MARKER = "__expr__:"
 _INLINE_DATETIME_HELPERS = [
     "import re",
     "from datetime import datetime, timedelta, timezone",
@@ -407,24 +407,31 @@ def get_web_activity_notebook_content(
     Returns:
         Formatted Python notebook source as a ``str``.
     """
+    required_imports = sorted(_collect_required_imports(url) | _collect_required_imports(headers) | _collect_required_imports(body))
+
     script_lines = [
         "# Databricks notebook source",
         "import requests",
-        "",
-        f"url = {_as_python_expression(url)}",
-        f"method = {method!r}",
-        f"headers = {_as_python_expression(headers)}",
-        f"body = {_as_python_expression(body)}",
-        "",
-        "kwargs = {}",
-        "if headers:",
-        '    kwargs["headers"] = headers',
-        "if body is not None:",
-        "    if isinstance(body, dict):",
-        '        kwargs["json"] = body',
-        "    else:",
-        '        kwargs["data"] = body',
     ]
+    script_lines.extend(f"import {module_name}" for module_name in required_imports if module_name != "requests")
+    script_lines.extend(
+        [
+            "",
+            f"url = {_as_python_expression(url)}",
+            f"method = {method!r}",
+            f"headers = {_as_python_expression(headers)}",
+            f"body = {_as_python_expression(body)}",
+            "",
+            "kwargs = {}",
+            "if headers:",
+            '    kwargs["headers"] = headers',
+            "if body is not None:",
+            "    if isinstance(body, dict):",
+            '        kwargs["json"] = body',
+            "    else:",
+            '        kwargs["data"] = body',
+        ]
+    )
 
     if disable_cert_validation:
         script_lines.append('kwargs["verify"] = False')
@@ -456,6 +463,9 @@ def get_web_activity_notebook_content(
 def _as_python_expression(value: Any) -> str:
     """Return a safe Python expression string for generated notebook assignment."""
 
+    if isinstance(value, ResolvedExpression):
+        return value.code
+
     if isinstance(value, dict):
         items = ", ".join(f"{_as_python_expression(k)}: {_as_python_expression(v)}" for k, v in value.items())
         return "{" + items + "}"
@@ -469,10 +479,27 @@ def _as_python_expression(value: Any) -> str:
         return "(" + items + ")"
 
     if isinstance(value, str):
-        if value.startswith(_EXPRESSION_MARKER):
-            return value[len(_EXPRESSION_MARKER) :]
         return repr(value)
     return repr(value)
+
+
+def _collect_required_imports(value: Any) -> set[str]:
+    """Collect required import modules from nested resolved-expression values."""
+
+    if isinstance(value, ResolvedExpression):
+        return set(value.required_imports)
+    if isinstance(value, dict):
+        imports: set[str] = set()
+        for key, item in value.items():
+            imports.update(_collect_required_imports(key))
+            imports.update(_collect_required_imports(item))
+        return imports
+    if isinstance(value, (list, tuple, set)):
+        imports: set[str] = set()
+        for item in value:
+            imports.update(_collect_required_imports(item))
+        return imports
+    return set()
 
 
 def _get_file_credential_lines(

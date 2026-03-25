@@ -19,6 +19,7 @@ from wkmigrate.code_generator import (
 )
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
 from wkmigrate.runtime.datetime_helpers import format_datetime
 
 
@@ -65,20 +66,45 @@ def test_web_activity_notebook_contains_request_call() -> None:
     assert "response_body" in content
 
 
-def test_web_activity_notebook_accepts_expression_marker_values() -> None:
-    """Expression-marker inputs are injected as raw Python expressions."""
+def test_web_activity_notebook_accepts_resolved_expression_values() -> None:
+    """Resolved-expression inputs are injected as raw Python expressions."""
     content = get_web_activity_notebook_content(
         activity_name="dynamic_web_activity",
         activity_type="WebActivity",
-        url="__expr__:str('https://api.example.com/') + str('v1')",
+        url=ResolvedExpression(
+            code="str('https://api.example.com/') + str('v1')",
+            is_dynamic=True,
+            required_imports=frozenset(),
+        ),
         method="GET",
-        headers={"X-Test": "__expr__:str('token')"},
-        body="__expr__:str('payload')",
+        headers={
+            "X-Test": ResolvedExpression(code="str('token')", is_dynamic=True, required_imports=frozenset()),
+        },
+        body=ResolvedExpression(code="str('payload')", is_dynamic=True, required_imports=frozenset()),
     )
 
     assert "url = str('https://api.example.com/') + str('v1')" in content
     assert "headers = {'X-Test': str('token')}" in content
     assert "body = str('payload')" in content
+
+
+def test_web_activity_notebook_includes_required_expression_imports() -> None:
+    """Required imports from resolved expressions are included in notebook header."""
+    content = get_web_activity_notebook_content(
+        activity_name="json_expr_activity",
+        activity_type="WebActivity",
+        url=ResolvedExpression(
+            code="json.loads('{\"u\": \"https://api.example.com\"}')['u']",
+            is_dynamic=True,
+            required_imports=frozenset({"json"}),
+        ),
+        method="GET",
+        body=None,
+        headers=None,
+    )
+
+    assert "import requests" in content
+    assert "import json" in content
 
 
 def test_web_activity_notebook_with_unsupported_auth_type() -> None:
