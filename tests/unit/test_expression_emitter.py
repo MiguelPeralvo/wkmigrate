@@ -145,3 +145,11 @@ def test_parse_variable_value_is_thin_wrapper() -> None:
     context = TranslationContext()
     parsed = parse_variable_value({"value": "@pipeline().RunId", "type": "Expression"}, context)
     assert parsed == "dbutils.jobs.getContext().tags().get('runId', '')"
+
+
+def test_emit_datetime_functions_to_runtime_helpers() -> None:
+    assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
+    assert _emit_expression("formatDateTime(utcNow(), 'yyyy-MM-dd')") == (
+        "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
+    )
+    assert _emit_expression("addDays(utcNow(), 2)") == "_wkmigrate_add_days(_wkmigrate_utc_now(), 2)"
