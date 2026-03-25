@@ -62,7 +62,7 @@ from wkmigrate.translators.activity_translators.copy_activity_translator import 
     translate_copy_activity,
 )
 from wkmigrate.models.ir.translation_context import TranslationContext
-from wkmigrate.parsers.expression_parsers import parse_variable_value
+from wkmigrate.parsers.expression_parsers import ResolvedExpression, parse_variable_value
 from wkmigrate.utils import get_placeholder_activity
 
 NOTEBOOK_ACTIVITY: dict = {
@@ -161,6 +161,23 @@ def test_notebook_expression_parameters_resolved(notebook_activity_fixtures: lis
 
     assert isinstance(result, DatabricksNotebookActivity)
     assert result.base_parameters["expression_param"] == "dbutils.widgets.get('dynamic_value')"
+
+
+def test_notebook_non_string_parameters_are_literalized() -> None:
+    """Notebook parameters preserve non-string values via shared expression resolver."""
+    activity = {
+        "name": "run_numeric_params_notebook",
+        "type": "DatabricksNotebook",
+        "notebook_path": "/Workspace/notebooks/params",
+        "base_parameters": {
+            "count": 3,
+            "enabled": True,
+        },
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.base_parameters == {"count": "3", "enabled": "True"}
 
 
 def test_basic_spark_jar_activity(spark_jar_activity_fixtures: list[dict]) -> None:
@@ -857,7 +874,7 @@ def test_web_activity_translate_activity_dispatch(web_activity_fixtures: list[di
 
 
 def test_web_activity_expression_url_is_preserved_as_runtime_expression() -> None:
-    """Expression-valued URL is preserved with runtime expression marker."""
+    """Expression-valued URL is preserved as a resolved dynamic expression."""
     activity = {
         "name": "dynamic_url_call",
         "type": "WebActivity",
@@ -868,8 +885,9 @@ def test_web_activity_expression_url_is_preserved_as_runtime_expression() -> Non
     result = translate_web_activity(activity, base_kwargs)
 
     assert isinstance(result, WebActivity)
-    assert result.url.startswith("__expr__:")
-    assert "str('https://api.example.com/')" in result.url
+    assert isinstance(result.url, ResolvedExpression)
+    assert result.url.is_dynamic is True
+    assert "str('https://api.example.com/')" in result.url.code
 
 
 def test_web_activity_unsupported_auth_type_returns_unsupported(web_activity_fixtures: list[dict]) -> None:
