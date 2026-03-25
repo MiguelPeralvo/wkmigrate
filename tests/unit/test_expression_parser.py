@@ -35,6 +35,44 @@ def test_tokenize_handles_single_quoted_escape() -> None:
     assert tokens[4].value == "ok"
 
 
+def test_tokenize_records_start_position_for_tokens() -> None:
+    tokens = tokenize("concat('hello', 12)")
+
+    assert not isinstance(tokens, UnsupportedValue)
+    assert tokens[0].position == 0
+    assert tokens[2].position == 7
+    assert tokens[4].position == 16
+
+
+def test_tokenize_unterminated_string_returns_unsupported() -> None:
+    tokens = tokenize("concat('hello")
+
+    assert isinstance(tokens, UnsupportedValue)
+    assert "Unterminated string literal" in tokens.message
+
+
+def test_tokenize_unknown_character_returns_unsupported() -> None:
+    tokens = tokenize("1 + 2")
+
+    assert isinstance(tokens, UnsupportedValue)
+    assert "Unsupported token" in tokens.message
+
+
+def test_tokenize_empty_input_returns_only_eof() -> None:
+    tokens = tokenize("")
+
+    assert not isinstance(tokens, UnsupportedValue)
+    assert [token.token_type for token in tokens] == [TokenType.EOF]
+    assert tokens[0].position == 0
+
+
+def test_tokenize_trailing_decimal_dot_returns_unsupported() -> None:
+    tokens = tokenize("5.")
+
+    assert isinstance(tokens, UnsupportedValue)
+    assert "Invalid number literal" in tokens.message
+
+
 def test_parse_simple_function_call() -> None:
     result = parse_expression("concat('a', 'b')")
 
@@ -51,8 +89,8 @@ def test_parse_nested_function_with_property_chain() -> None:
         name="concat",
         args=(
             PropertyAccess(
-                object=PropertyAccess(
-                    object=FunctionCall(name="pipeline", args=()),
+                target=PropertyAccess(
+                    target=FunctionCall(name="pipeline", args=()),
                     property_name="parameters",
                 ),
                 property_name="prefix",
@@ -67,9 +105,9 @@ def test_parse_activity_output_property_chain() -> None:
     result = parse_expression("@activity('X').output.firstRow.columnName")
 
     assert result == PropertyAccess(
-        object=PropertyAccess(
-            object=PropertyAccess(
-                object=FunctionCall(name="activity", args=(StringLiteral(value="X"),)),
+        target=PropertyAccess(
+            target=PropertyAccess(
+                target=FunctionCall(name="activity", args=(StringLiteral(value="X"),)),
                 property_name="output",
             ),
             property_name="firstRow",
@@ -83,13 +121,28 @@ def test_parse_index_access() -> None:
 
     assert result == IndexAccess(
         object=PropertyAccess(
-            object=PropertyAccess(
-                object=FunctionCall(name="activity", args=(StringLiteral(value="X"),)),
+            target=PropertyAccess(
+                target=FunctionCall(name="activity", args=(StringLiteral(value="X"),)),
                 property_name="output",
             ),
             property_name="value",
         ),
         index=NumberLiteral(value=0),
+    )
+
+
+def test_parse_index_access_with_string_key() -> None:
+    result = parse_expression("@activity('X').output.firstRow['columnName']")
+
+    assert result == IndexAccess(
+        object=PropertyAccess(
+            target=PropertyAccess(
+                target=FunctionCall(name="activity", args=(StringLiteral(value="X"),)),
+                property_name="output",
+            ),
+            property_name="firstRow",
+        ),
+        index=StringLiteral(value="columnName"),
     )
 
 
@@ -99,8 +152,8 @@ def test_parse_string_interpolation() -> None:
     assert result == StringInterpolation(
         parts=(
             PropertyAccess(
-                object=PropertyAccess(
-                    object=FunctionCall(name="pipeline", args=()),
+                target=PropertyAccess(
+                    target=FunctionCall(name="pipeline", args=()),
                     property_name="parameters",
                 ),
                 property_name="env",
@@ -108,6 +161,27 @@ def test_parse_string_interpolation() -> None:
             StringLiteral(value="-cluster"),
         )
     )
+
+
+def test_parse_string_interpolation_multiple_segments() -> None:
+    result = parse_expression("prefix-@{a()}-middle-@{b()}-suffix")
+
+    assert result == StringInterpolation(
+        parts=(
+            StringLiteral(value="prefix-"),
+            FunctionCall(name="a", args=()),
+            StringLiteral(value="-middle-"),
+            FunctionCall(name="b", args=()),
+            StringLiteral(value="-suffix"),
+        )
+    )
+
+
+def test_parse_unterminated_string_interpolation_returns_unsupported() -> None:
+    result = parse_expression("hello @{concat(")
+
+    assert isinstance(result, UnsupportedValue)
+    assert "Unterminated interpolation expression" in result.message
 
 
 def test_parse_all_literal_types() -> None:
@@ -140,3 +214,23 @@ def test_parse_malformed_expression_returns_unsupported() -> None:
 
     assert isinstance(result, UnsupportedValue)
     assert "Unexpected token" in result.message
+
+
+def test_parse_empty_input_returns_unsupported() -> None:
+    result = parse_expression("")
+
+    assert isinstance(result, UnsupportedValue)
+    assert "Expression is empty" in result.message
+
+
+def test_parse_whitespace_input_returns_unsupported() -> None:
+    result = parse_expression("   ")
+
+    assert isinstance(result, UnsupportedValue)
+    assert "Expression is empty" in result.message
+
+
+def test_parse_grouped_expression() -> None:
+    result = parse_expression("(concat('a', 'b'))")
+
+    assert result == FunctionCall(name="concat", args=(StringLiteral(value="a"), StringLiteral(value="b")))
