@@ -1,13 +1,25 @@
-"""Tests for the utils module."""
+"""Tests for the utils module, casing utilities, and new enums."""
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
+from wkmigrate.definition_stores.json_definition_store import JsonDefinitionStore
+from wkmigrate.enums.source_property_case import SourcePropertyCase
+from wkmigrate.enums.workflow_source_type import WorkflowSourceType
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
-from wkmigrate.utils import DEFAULT_TIMEOUT_SECONDS, parse_timeout_string, parse_authentication
+from wkmigrate.utils import (
+    DEFAULT_TIMEOUT_SECONDS,
+    camel_to_snake,
+    normalize_arm_pipeline,
+    parse_authentication,
+    parse_timeout_string,
+    recursive_camel_to_snake,
+)
 
 
 def test_parse_authentication_none_returns_none() -> None:
@@ -123,3 +135,179 @@ def test_timeout_zero_warns_and_returns_default() -> None:
 def test_timeout_only_seconds() -> None:
     """00:00:30 is 30 seconds."""
     assert parse_timeout_string("00:00:30") == 30
+
+
+# ---------------------------------------------------------------------------
+# Casing utilities (moved from tests/test_utils_casing.py)
+# ---------------------------------------------------------------------------
+
+
+class TestCamelToSnake:
+    """Tests for camel_to_snake."""
+
+    def test_simple_camel(self) -> None:
+        assert camel_to_snake("linkedServiceName") == "linked_service_name"
+
+    def test_pascal(self) -> None:
+        assert camel_to_snake("ReferenceName") == "reference_name"
+
+    def test_all_lower(self) -> None:
+        assert camel_to_snake("activities") == "activities"
+
+    def test_multiple_capitals(self) -> None:
+        assert camel_to_snake("ifTrueActivities") == "if_true_activities"
+
+    def test_single_word(self) -> None:
+        assert camel_to_snake("name") == "name"
+
+
+class TestRecursiveCamelToSnake:
+    """Tests for recursive_camel_to_snake."""
+
+    def test_nested_dict(self) -> None:
+        obj = {"linkedServiceName": {"referenceName": "ls1"}}
+        got = recursive_camel_to_snake(obj)
+        assert got == {"linked_service_name": {"reference_name": "ls1"}}
+
+    def test_list_of_dicts(self) -> None:
+        obj = [{"referenceName": "a"}, {"referenceName": "b"}]
+        got = recursive_camel_to_snake(obj)
+        assert got == [{"reference_name": "a"}, {"reference_name": "b"}]
+
+    def test_leaves_primitives_unchanged(self) -> None:
+        obj = {"someKey": 1, "anotherKey": "value", "nested": {"k": True}}
+        got = recursive_camel_to_snake(obj)
+        assert got == {"some_key": 1, "another_key": "value", "nested": {"k": True}}
+
+    def test_already_snake_unchanged(self) -> None:
+        obj = {"reference_name": "x", "linked_service_name": "y"}
+        got = recursive_camel_to_snake(obj)
+        assert got == obj
+
+    def test_empty_containers(self) -> None:
+        assert recursive_camel_to_snake({}) == {}
+        assert recursive_camel_to_snake([]) == []
+
+
+class TestNormalizeArmPipeline:
+    """Tests for normalize_arm_pipeline (ARM-shaped pipeline to flat)."""
+
+    def test_flat_pipeline_unchanged(self) -> None:
+        """Pipeline without 'properties' wrapper is returned as-is (aside from type_properties merge)."""
+        pipeline = {"name": "p1", "activities": [{"name": "a1", "type": "Notebook"}]}
+        got = normalize_arm_pipeline(pipeline)
+        assert got["name"] == "p1"
+        assert len(got["activities"]) == 1
+        assert got["activities"][0]["name"] == "a1"
+
+    def test_arm_wrapper_unwrapped(self) -> None:
+        """Pipeline with top-level 'properties' is unwrapped."""
+        pipeline = {
+            "name": "p1",
+            "properties": {
+                "activities": [{"name": "a1", "type": "Notebook"}],
+                "parameters": {},
+            },
+        }
+        got = normalize_arm_pipeline(pipeline)
+        assert got["name"] == "p1"
+        assert got["activities"] == [{"name": "a1", "type": "Notebook"}]
+        assert got["parameters"] == {}
+
+    def test_type_properties_merged_into_activity(self) -> None:
+        """Activity typeProperties / type_properties are merged into activity root."""
+        pipeline = {
+            "name": "p1",
+            "activities": [
+                {
+                    "name": "a1",
+                    "type": "DatabricksNotebook",
+                    "type_properties": {"notebook_path": "/path", "base_parameters": {}},
+                }
+            ],
+        }
+        got = normalize_arm_pipeline(pipeline)
+        act = got["activities"][0]
+        assert act.get("notebook_path") == "/path"
+        assert act.get("base_parameters") == {}
+        assert "type_properties" not in act
+
+    def test_list_annotations_converted_to_tags_dict(self) -> None:
+        """ADF annotations (list of strings) should be converted to a tags dict."""
+        pipeline = {
+            "name": "p1",
+            "properties": {
+                "activities": [],
+                "annotations": ["MyLabel", "AnotherLabel"],
+            },
+        }
+        got = normalize_arm_pipeline(pipeline)
+        assert isinstance(got["tags"], dict)
+        assert got["tags"]["MyLabel"] == ""
+        assert got["tags"]["AnotherLabel"] == ""
+
+    def test_empty_annotations_gives_empty_tags(self) -> None:
+        """Empty annotations list should produce empty tags dict."""
+        pipeline = {
+            "name": "p1",
+            "properties": {
+                "activities": [],
+                "annotations": [],
+            },
+        }
+        got = normalize_arm_pipeline(pipeline)
+        assert isinstance(got["tags"], dict)
+
+
+# ---------------------------------------------------------------------------
+# Enum tests
+# ---------------------------------------------------------------------------
+
+_CAMEL_JSON_PATH = os.path.join(os.path.dirname(__file__), os.pardir, "resources", "json", "camel")
+
+
+class TestWorkflowSourceType:
+    """Tests for WorkflowSourceType enum."""
+
+    def test_adf_value(self) -> None:
+        assert WorkflowSourceType.ADF == "adf"
+        assert WorkflowSourceType.ADF.value == "adf"
+
+    def test_is_str_enum(self) -> None:
+        assert isinstance(WorkflowSourceType.ADF, str)
+
+
+class TestSourcePropertyCase:
+    """Tests for SourcePropertyCase enum."""
+
+    def test_camel_value(self) -> None:
+        assert SourcePropertyCase.CAMEL == "camel"
+        assert SourcePropertyCase.CAMEL.value == "camel"
+
+    def test_snake_value(self) -> None:
+        assert SourcePropertyCase.SNAKE == "snake"
+        assert SourcePropertyCase.SNAKE.value == "snake"
+
+    def test_is_str_enum(self) -> None:
+        assert isinstance(SourcePropertyCase.CAMEL, str)
+        assert isinstance(SourcePropertyCase.SNAKE, str)
+
+
+class TestJsonDefinitionStoreAttributes:
+    """Tests for JsonDefinitionStore source_system and source_property_case attributes."""
+
+    def test_source_system_defaults_to_adf(self) -> None:
+        store = JsonDefinitionStore(source_directory=_CAMEL_JSON_PATH)
+        assert store.source_system == WorkflowSourceType.ADF
+
+    def test_source_property_case_defaults_to_camel(self) -> None:
+        store = JsonDefinitionStore(source_directory=_CAMEL_JSON_PATH)
+        assert store.source_property_case == SourcePropertyCase.CAMEL
+
+    def test_source_property_case_accepts_string_camel(self) -> None:
+        """StrEnum allows passing the string value directly."""
+        store = JsonDefinitionStore(
+            source_directory=_CAMEL_JSON_PATH,
+            source_property_case="camel",
+        )
+        assert store.source_property_case == SourcePropertyCase.CAMEL

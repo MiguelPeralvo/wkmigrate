@@ -8,6 +8,7 @@ import yaml
 
 from wkmigrate.definition_stores.definition_store import DefinitionStore
 from wkmigrate.definition_stores.factory_definition_store import FactoryDefinitionStore
+from wkmigrate.definition_stores.json_definition_store import JsonDefinitionStore
 from wkmigrate.definition_stores.workspace_definition_store import WorkspaceDefinitionStore
 from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
@@ -18,6 +19,9 @@ from wkmigrate.models.ir.pipeline import (
 )
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity, PreparedWorkflow
 from wkmigrate.models.workflows.instructions import PipelineInstruction
+
+
+_CAMEL_JSON_PATH = os.path.join(os.path.dirname(__file__), os.pardir, "resources", "json", "camel")
 
 
 def test_factory_definition_store_requires_mandatory_fields() -> None:
@@ -40,6 +44,104 @@ def test_workspace_definition_store_requires_auth_and_host() -> None:
             authentication_type="invalid",
             host_name=None,
         )
+
+
+def test_factory_definition_store_default_source_property_case_is_snake(
+    mock_factory_client,
+) -> None:
+    """Default source_property_case is 'snake'; load works with snake_case payloads."""
+    assert mock_factory_client is not None
+    store = FactoryDefinitionStore(
+        tenant_id="TENANT_ID",
+        client_id="CLIENT_ID",
+        client_secret="SECRET",
+        subscription_id="SUBSCRIPTION_ID",
+        resource_group_name="RESOURCE_GROUP",
+        factory_name="FACTORY_NAME",
+    )
+    pipeline = store.load("TEST_PIPELINE_NAME")
+    assert pipeline.name == "TEST_PIPELINE_NAME"
+
+
+def test_factory_definition_store_accepts_source_property_case_camel(
+    mock_factory_client,
+) -> None:
+    """Store with source_property_case='camel' accepts options and load still works (snake payload stays snake)."""
+    assert mock_factory_client is not None
+    store = FactoryDefinitionStore(
+        tenant_id="TENANT_ID",
+        client_id="CLIENT_ID",
+        client_secret="SECRET",
+        subscription_id="SUBSCRIPTION_ID",
+        resource_group_name="RESOURCE_GROUP",
+        factory_name="FACTORY_NAME",
+        source_property_case="camel",
+    )
+    pipeline = store.load("TEST_PIPELINE_NAME")
+    assert pipeline.name == "TEST_PIPELINE_NAME"
+
+
+def test_factory_definition_store_camel_normalizes_to_snake(
+    mock_factory_client,
+    monkeypatch,
+) -> None:
+    """When source_property_case is 'camel', camelCase payload is normalized to snake_case for translation."""
+    assert mock_factory_client is not None
+    # Return a minimal camelCase pipeline from the mock so load() runs the normalizer
+    camel_pipeline = {
+        "name": "CAMEL_PIPELINE",
+        "activities": [
+            {
+                "name": "act1",
+                "type": "DatabricksNotebook",
+                "linkedServiceName": {"type": "LinkedServiceReference", "referenceName": "db_linkedservice_001"},
+                "notebookPath": "/test",
+            }
+        ],
+    }
+    camel_trigger = {"properties": {"recurrence": {"frequency": "Day", "interval": 1}}}
+    original_get_pipeline = mock_factory_client.get_pipeline
+    original_get_trigger = mock_factory_client.get_trigger
+
+    def get_pipeline(name: str):
+        if name == "CAMEL_PIPELINE":
+            return dict(camel_pipeline)
+        return original_get_pipeline(name)
+
+    def get_trigger(name: str):
+        if name == "CAMEL_PIPELINE":
+            return dict(camel_trigger)
+        return original_get_trigger(name)
+
+    monkeypatch.setattr(mock_factory_client, "get_pipeline", get_pipeline)
+    monkeypatch.setattr(mock_factory_client, "get_trigger", get_trigger)
+
+    store = FactoryDefinitionStore(
+        tenant_id="TENANT_ID",
+        client_id="CLIENT_ID",
+        client_secret="SECRET",
+        subscription_id="SUBSCRIPTION_ID",
+        resource_group_name="RESOURCE_GROUP",
+        factory_name="FACTORY_NAME",
+        source_property_case="camel",
+    )
+    pipeline = store.load("CAMEL_PIPELINE")
+    assert pipeline.name == "CAMEL_PIPELINE"
+    assert len(pipeline.tasks) >= 1
+
+
+def test_workspace_definition_store_uses_definition_store_interface(
+    mock_workspace_client,
+) -> None:
+    """WorkspaceDefinitionStore should behave as a DefinitionStore when wired with a mock workspace client."""
+    assert mock_workspace_client is not None
+
+    store = WorkspaceDefinitionStore(
+        authentication_type="pat",
+        host_name="https://example.com",
+        pat="DUMMY_TOKEN",
+    )
+    assert isinstance(store, DefinitionStore)
 
 
 def test_factory_definition_store_uses_definition_store_interface(mock_factory_client) -> None:
@@ -76,21 +178,6 @@ def test_factory_definition_store_loads_pipeline_without_trigger(mock_factory_cl
     assert isinstance(pipeline, Pipeline)
     assert pipeline.name == "test_pipeline_no_triggers"
     assert pipeline.schedule is None
-
-
-def test_workspace_definition_store_uses_definition_store_interface(mock_workspace_client) -> None:
-    """WorkspaceDefinitionStore should behave as a DefinitionStore when wired with a mock workspace client."""
-    assert mock_workspace_client is not None
-
-    store = WorkspaceDefinitionStore(
-        authentication_type="pat",
-        host_name="https://example.com",
-        pat="DUMMY_TOKEN",
-    )
-
-    assert isinstance(store, DefinitionStore)
-    assert hasattr(store, "to_job")
-    assert hasattr(store, "to_asset_bundle")
 
 
 def _make_workspace_store(mock_workspace_client) -> WorkspaceDefinitionStore:
@@ -251,6 +338,79 @@ def test_to_job_foreach_with_inner_notebook_recurses_dependency_check(mock_works
     )
     job_id = store.to_job(pipeline)
     assert job_id is not None
+
+
+def test_json_store_camel_case_pipeline() -> None:
+    """End-to-end: a camelCase portal-export JSON loaded via JsonDefinitionStore
+    is normalised to snake_case and translated to the correct Pipeline IR."""
+    store = JsonDefinitionStore(
+        source_directory=_CAMEL_JSON_PATH,
+        source_property_case="camel",
+    )
+
+    pipeline = store.load("one_activity_pipeline")
+
+    assert isinstance(pipeline, Pipeline)
+    assert pipeline.name == "one_activity_pipeline"
+    assert len(pipeline.tasks) == 1
+
+    task = pipeline.tasks[0]
+    assert isinstance(task, DatabricksNotebookActivity)
+    assert task.task_key == "run maintenance notebook"
+    assert task.notebook_path == "/Shared/notebooks/maintenance/nb_execute_maintenance"
+    assert task.timeout_seconds == 43200
+    assert task.max_retries == 0
+
+    assert pipeline.parameters is not None
+    param_names = {p["name"] for p in pipeline.parameters}
+    assert param_names == {"target_table", "retention_days"}
+
+    not_translatable_props = {entry["property"] for entry in pipeline.not_translatable}
+    assert "secure_input" in not_translatable_props
+    assert "secure_output" in not_translatable_props
+
+
+def test_json_store_camel_case_trigger_matched() -> None:
+    """camelCase trigger JSON (pipelineReference/referenceName) is normalised and
+    matched to the pipeline, producing a schedule in the Pipeline IR."""
+    store = JsonDefinitionStore(
+        source_directory=_CAMEL_JSON_PATH,
+        source_property_case="camel",
+    )
+
+    pipeline = store.load("one_activity_pipeline")
+
+    assert pipeline.schedule is not None, (
+        "Trigger was not matched to the pipeline. "
+        "camelCase keys (pipelineReference, referenceName) must be normalised "
+        "to snake_case before lookup."
+    )
+
+
+def test_json_store_source_system_defaults_to_adf() -> None:
+    """JsonDefinitionStore.source_system should default to WorkflowSourceType.ADF."""
+    store = JsonDefinitionStore(source_directory=_CAMEL_JSON_PATH)
+    assert store.source_system == "adf"
+
+
+def test_json_store_raises_when_pipelines_subdir_missing(tmp_path) -> None:
+    """JsonDefinitionStore should raise ValueError when pipelines/ subdirectory has no JSON files."""
+    (tmp_path / "triggers").mkdir()
+    (tmp_path / "pipelines").mkdir()  # empty
+    with pytest.raises(ValueError, match="No pipeline JSON files found"):
+        JsonDefinitionStore(source_directory=str(tmp_path))
+
+
+def test_json_store_raises_when_source_directory_missing() -> None:
+    """JsonDefinitionStore should raise ValueError when source_directory does not exist."""
+    with pytest.raises(ValueError, match="source_directory is not a directory"):
+        JsonDefinitionStore(source_directory="/nonexistent/path")
+
+
+def test_json_store_raises_when_source_directory_is_none() -> None:
+    """JsonDefinitionStore should raise ValueError when source_directory is None."""
+    with pytest.raises(ValueError, match="source_directory must be provided"):
+        JsonDefinitionStore()
 
 
 def test_set_and_get_option(mock_workspace_client) -> None:

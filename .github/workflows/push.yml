@@ -38,7 +38,11 @@ jobs:
       - name: Run unit tests
         run: |
           pip install poetry==2.2.1
-          make dev test
+          poetry source remove pypi-proxy 2>/dev/null || true
+          poetry config repositories.pypi https://pypi.org/simple
+          make dev
+          git checkout pyproject.toml
+          make test
 
   fmt:
     runs-on: ubuntu-latest
@@ -49,6 +53,8 @@ jobs:
       - name: Install Poetry
         run: |
           pip install poetry==2.2.1
+          poetry source remove pypi-proxy 2>/dev/null || true
+          poetry config repositories.pypi https://pypi.org/simple
           poetry config virtualenvs.create true --local
           poetry config virtualenvs.in-project true --local
 
@@ -58,8 +64,14 @@ jobs:
             path: .venv
             key: venv-${{ hashFiles('poetry.lock') }}
 
+      - name: Install dependencies
+        run: make dev
+
+      - name: Restore pyproject.toml
+        run: git checkout pyproject.toml
+
       - name: Format modules
-        run: make dev fmt
+        run: make fmt
 
       - name: Fail on differences
         run: git diff --exit-code
@@ -90,7 +102,11 @@ jobs:
           cache-dependency-path: docs/wkmigrate/yarn.lock # need to put the lockfile path explicitly
 
       - name: Install dependencies
-        run: poetry install
+        run: |
+          poetry source remove pypi-proxy 2>/dev/null || true
+          poetry config repositories.pypi https://pypi.org/simple
+          poetry install
+          git checkout pyproject.toml
 
       - name: Build website
         run: make docs

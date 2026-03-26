@@ -19,6 +19,94 @@ from wkmigrate.not_translatable import NotTranslatableWarning
 DEFAULT_TIMEOUT_SECONDS = 43200
 
 
+def camel_to_snake(name: str) -> str:
+    """
+    Converts a camelCase or PascalCase string to snake_case.
+
+    Used when loading ADF definitions that use camelCase (e.g. REST/portal export)
+    so that downstream code, which expects snake_case keys, works unchanged.
+    Note: acronyms (e.g. HTTPResponse) may not round-trip cleanly.
+
+    Args:
+        name: Identifier in camelCase or PascalCase.
+
+    Returns:
+        Same identifier in snake_case.
+    """
+    substituted = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", substituted).lower()
+
+
+def recursive_camel_to_snake(obj: Any) -> Any:
+    """
+    Recursively converts all dict keys in a structure from camelCase to snake_case.
+    Leaves list order and non-dict values unchanged. Creates new dicts/lists (no in-place mutation).
+
+    Args:
+        obj: Nested structure of dicts, lists, and primitives (e.g. ADF JSON).
+
+    Returns:
+        New structure with the same values but dict keys in snake_case.
+    """
+    if isinstance(obj, dict):
+        return {camel_to_snake(k): recursive_camel_to_snake(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [recursive_camel_to_snake(item) for item in obj]
+    return obj
+
+
+def _annotations_to_tags(annotations: list | dict | None) -> dict | None:
+    """Convert ADF annotations (a list of strings) to a tags dict."""
+    if isinstance(annotations, list):
+        return {a: "" for a in annotations if isinstance(a, str)} or None
+    return annotations
+
+
+def normalize_arm_pipeline(pipeline: dict) -> dict:
+    """
+    Normalizes an ARM/REST-style ADF pipeline into the flat shape expected by
+    translate_pipeline: top-level activities, parameters, trigger, tags, and
+    per-activity fields (e.g. type_properties merged into the activity root).
+
+    Use for pipeline JSON that has a "properties" wrapper and/or activities
+    with "typeProperties" / "type_properties" (e.g. exported from the Azure portal).
+    Call recursive_camel_to_snake first if the payload is camelCase.
+
+    Args:
+        pipeline: Raw pipeline dict (camelCase or snake_case).
+
+    Returns:
+        Pipeline dict with name, activities, parameters, trigger, tags, and
+        each activity with type_properties merged into the root.
+    """
+    if isinstance(pipeline.get("properties"), dict):
+        props = pipeline["properties"]
+        activities = props.get("activities") or props.get("Activities") or []
+        parameters = props.get("parameters") if "parameters" in props else props.get("Parameters")
+        pipeline_definition = {
+            "name": pipeline.get("name"),
+            "activities": list(activities),
+            "parameters": parameters,
+            "trigger": None,
+            "tags": pipeline.get("tags") or _annotations_to_tags(props.get("annotations")) or {},
+        }
+    else:
+        pipeline_definition = dict(pipeline)
+        if "trigger" not in pipeline_definition:
+            pipeline_definition["trigger"] = None
+    activities = pipeline_definition.get("activities") or []
+    normalized_activities = []
+    for activity in activities:
+        if not isinstance(activity, dict):
+            normalized_activities.append(activity)
+            continue
+        activity_definition = dict(activity)
+        normalized_activity_definition = _normalize_activity_type_properties(activity_definition)
+        normalized_activities.append(normalized_activity_definition)
+    pipeline_definition["activities"] = normalized_activities
+    return pipeline_definition
+
+
 def translate(items: dict | None, mapping: dict) -> dict | None:
     """
     Maps dictionary values using a translation specification.
@@ -318,3 +406,14 @@ def normalize_translated_result(result: Activity | UnsupportedValue, base_kwargs
         return get_placeholder_activity(base_kwargs)
 
     return result
+
+
+def _normalize_activity_type_properties(activity: dict) -> dict:
+    type_properties = activity.pop("type_properties", None) or activity.pop("typeProperties", None)
+    if isinstance(type_properties, dict):
+        for original_key, original_value in type_properties.items():
+            converted_key = camel_to_snake(original_key) if isinstance(original_key, str) else original_key
+            if converted_key in activity:
+                continue
+            activity[converted_key] = original_value
+    return activity

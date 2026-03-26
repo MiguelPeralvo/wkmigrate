@@ -9,6 +9,69 @@ Utilities in this module cover common translation patterns such as mapping
 dictionaries with parser specifications, normalizing expressions, and enriching
 metadata (e.g. appending system tags).
 
+#### camel\_to\_snake
+
+```python
+def camel_to_snake(name: str) -> str
+```
+
+Converts a camelCase or PascalCase string to snake_case.
+
+Used when loading ADF definitions that use camelCase (e.g. REST/portal export)
+so that downstream code, which expects snake_case keys, works unchanged.
+Note: acronyms (e.g. HTTPResponse) may not round-trip cleanly.
+
+**Arguments**:
+
+- `name` - Identifier in camelCase or PascalCase.
+  
+
+**Returns**:
+
+  Same identifier in snake_case.
+
+#### recursive\_camel\_to\_snake
+
+```python
+def recursive_camel_to_snake(obj: Any) -> Any
+```
+
+Recursively converts all dict keys in a structure from camelCase to snake_case.
+Leaves list order and non-dict values unchanged. Creates new dicts/lists (no in-place mutation).
+
+**Arguments**:
+
+- `obj` - Nested structure of dicts, lists, and primitives (e.g. ADF JSON).
+  
+
+**Returns**:
+
+  New structure with the same values but dict keys in snake_case.
+
+#### normalize\_arm\_pipeline
+
+```python
+def normalize_arm_pipeline(pipeline: dict) -> dict
+```
+
+Normalizes an ARM/REST-style ADF pipeline into the flat shape expected by
+translate_pipeline: top-level activities, parameters, trigger, tags, and
+per-activity fields (e.g. type_properties merged into the activity root).
+
+Use for pipeline JSON that has a "properties" wrapper and/or activities
+with "typeProperties" / "type_properties" (e.g. exported from the Azure portal).
+Call recursive_camel_to_snake first if the payload is camelCase.
+
+**Arguments**:
+
+- `pipeline` - Raw pipeline dict (camelCase or snake_case).
+  
+
+**Returns**:
+
+  Pipeline dict with name, activities, parameters, trigger, tags, and
+  each activity with type_properties merged into the root.
+
 #### translate
 
 ```python

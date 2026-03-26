@@ -42,7 +42,10 @@ jobs:
           cache-dependency-path: docs/wkmigrate/yarn.lock # need to put the lockfile path explicitly
 
       - name: Install Dependencies
-        run: poetry install
+        run: |
+          poetry source remove pypi-proxy 2>/dev/null || true
+          poetry config repositories.pypi https://pypi.org/simple
+          poetry install
 
       - name: Build Site
         run: make docs

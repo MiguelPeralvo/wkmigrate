@@ -17,7 +17,8 @@ configuration files or CLIs to avoid coupling to specific implementations.
 
     options = {
         "tenant_id": "...", "client_id": "...", "client_secret": "...",
-        "subscription_id": "...", "resource_group_name": "...", "factory_name": "..."
+        "subscription_id": "...", "resource_group_name": "...", "factory_name": "...",
+        "source_property_case": "snake",  # optional: "camel" if source uses camelCase
     }
     store = build_definition_store("factory_definition_store", options)
     ```

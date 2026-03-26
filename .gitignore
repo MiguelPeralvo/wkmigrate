@@ -162,3 +162,7 @@ cython_debug/
 /.cursor/
 /.idea/
 /sandbox/
+/examples/convert_downld_adf_pipeline.py
+/poetry.toml
+/poetry.lock
+/yarn.lock

@@ -1,3 +1,9 @@
 [virtualenvs]
 create = true
 in-project = true
+
+[repositories.private]
+url = "https://pypi-proxy.dev.databricks.com/simple"
+
+[installer]
+no-binary = []

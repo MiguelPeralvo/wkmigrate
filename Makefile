@@ -6,6 +6,11 @@ dev:
 	poetry config virtualenvs.in-project true --local
 	poetry install
 
+ci:
+	pip install poetry==2.2.1
+	poetry source remove pypi-proxy 2>/dev/null || true
+	poetry install --no-interaction
+
 test:
 	poetry run pytest tests/unit
 

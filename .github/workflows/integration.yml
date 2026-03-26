@@ -44,9 +44,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install poetry==2.2.1
+          poetry source remove pypi-proxy 2>/dev/null || true
+          poetry config repositories.pypi https://pypi.org/simple
           poetry config virtualenvs.create true --local
           poetry config virtualenvs.in-project true --local
           poetry install
+          git checkout pyproject.toml
 
       - name: Run integration tests
         run: poetry run pytest -m integration --tb=short -v
