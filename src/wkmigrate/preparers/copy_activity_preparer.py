@@ -18,11 +18,11 @@ from wkmigrate.parsers.dataset_parsers import (
     parse_spark_data_type,
 )
 from wkmigrate.code_generator import (
+    DEFAULT_CREDENTIALS_SCOPE,
     get_file_uri,
     get_option_expressions,
     get_read_expression,
 )
-from wkmigrate.parsers.dataset_parsers import DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.models.ir.pipeline import CopyActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
 from wkmigrate.models.workflows.instructions import PipelineInstruction
@@ -52,8 +52,8 @@ def prepare_copy_activity(
     if not column_mapping:
         raise ValueError("No column mapping provided for copy data task")
 
-    data_source_secrets = collect_data_source_secrets(source_definition)
-    data_sink_secrets = collect_data_source_secrets(sink_definition)
+    data_source_secrets = collect_data_source_secrets(source_definition, credentials_scope)
+    data_sink_secrets = collect_data_source_secrets(sink_definition, credentials_scope)
     secrets_to_collect = data_source_secrets + data_sink_secrets
 
     files_to_delta_sinks = sink_definition.get("type") == "delta"

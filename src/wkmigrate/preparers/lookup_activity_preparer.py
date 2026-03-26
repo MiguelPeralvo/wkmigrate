@@ -43,7 +43,7 @@ def prepare_lookup_activity(
     """
     source_definition = merge_dataset_definition(activity.source_dataset, activity.source_properties)
 
-    data_source_secrets = collect_data_source_secrets(source_definition)
+    data_source_secrets = collect_data_source_secrets(source_definition, credentials_scope)
     secrets_to_collect = data_source_secrets if data_source_secrets else None
 
     notebook_path, notebook = _create_lookup_notebook(

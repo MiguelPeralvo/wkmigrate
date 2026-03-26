@@ -278,6 +278,46 @@ def test_workspace_store_credentials_scope_appears_in_prepared_notebook(
     assert 'scope="store_vault"' in notebook_content
 
 
+def test_custom_credentials_scope_flows_to_secret_instructions(
+    workspace_definition_store: WorkspaceDefinitionStore,
+) -> None:
+    """Custom credentials_scope should appear in SecretInstruction.scope for copy activities."""
+    workspace_definition_store.set_option("credentials_scope", "custom_vault")
+    pipeline = Pipeline(
+        name="test_copy_pipeline",
+        tasks=[_make_copy_activity()],
+        parameters=None,
+        schedule=None,
+        tags={},
+    )
+
+    prepared = workspace_definition_store._prepare_workflow(pipeline)
+
+    secrets = prepared.activities[0].secrets
+    if secrets:
+        for secret in secrets:
+            assert secret.scope == "custom_vault", (
+                f"Expected scope 'custom_vault' but got '{secret.scope}'"
+            )
+
+
+def test_collect_data_source_secrets_uses_provided_scope() -> None:
+    """collect_data_source_secrets should use the provided credentials_scope."""
+    from wkmigrate.parsers.dataset_parsers import collect_data_source_secrets
+
+    definition = {
+        "type": "abfs",
+        "service_name": "my_storage",
+        "provider_type": "abfs",
+        "storage_account_key": "fake_key",
+    }
+    secrets = collect_data_source_secrets(definition, credentials_scope="my_scope")
+
+    assert len(secrets) > 0
+    for secret in secrets:
+        assert secret.scope == "my_scope"
+
+
 # ---------------------------------------------------------------------------
 # Pipeline fixtures (kept at end for readability)
 # ---------------------------------------------------------------------------
