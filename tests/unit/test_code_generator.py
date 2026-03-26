@@ -5,17 +5,21 @@ the Web activity notebook builder and configurable credentials scope.
 """
 
 from __future__ import annotations
+from datetime import datetime, timezone
 import pytest
 
 from wkmigrate.code_generator import (
+    _INLINE_DATETIME_HELPERS,
     DEFAULT_CREDENTIALS_SCOPE,
     get_database_options,
     get_file_options,
     get_option_expressions,
+    get_set_variable_notebook_content,
     get_web_activity_notebook_content,
 )
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.runtime.datetime_helpers import format_datetime
 
 
 def test_web_activity_notebook_with_auth_and_cert_validation() -> None:
@@ -174,3 +178,39 @@ def test_web_activity_auth_uses_custom_scope() -> None:
     )
     assert 'scope="enterprise_vault"' in content
     assert "wkmigrate_credentials_scope" not in content
+
+
+def test_set_variable_notebook_inlines_datetime_helpers() -> None:
+    """Datetime helpers are inlined when emitted expression references them."""
+    content = get_set_variable_notebook_content(
+        variable_name="runDate",
+        variable_value="_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')",
+    )
+
+    assert "def _wkmigrate_utc_now" in content
+    assert "def _wkmigrate_format_datetime" in content
+    assert "from zoneinfo import ZoneInfo" in content
+
+
+def test_set_variable_notebook_skips_datetime_helpers_for_simple_values() -> None:
+    """Datetime helper block is omitted for simple expressions."""
+    content = get_set_variable_notebook_content(
+        variable_name="name",
+        variable_value="'alice'",
+    )
+
+    assert "def _wkmigrate_utc_now" not in content
+
+
+def test_inline_datetime_helpers_match_runtime_helpers() -> None:
+    """Inlined helper code remains behaviorally aligned with runtime helpers."""
+    helper_namespace: dict[str, object] = {}
+    exec("\n".join(_INLINE_DATETIME_HELPERS), helper_namespace)  # noqa: S102
+
+    dt = datetime(2026, 3, 25, 10, 20, 30, 123000, tzinfo=timezone.utc)
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "yyyy-MM-dd HH:mm:ss.fff") == format_datetime(
+        dt, "yyyy-MM-dd HH:mm:ss.fff"
+    )
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.ff") == format_datetime(dt, "HH:mm:ss.ff")
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.f") == format_datetime(dt, "HH:mm:ss.f")
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "offset") == format_datetime(dt, "offset")

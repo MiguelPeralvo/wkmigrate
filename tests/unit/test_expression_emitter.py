@@ -100,6 +100,15 @@ def test_emit_unknown_function_returns_unsupported() -> None:
     assert isinstance(emitted, UnsupportedValue)
     assert "Unsupported function" in emitted.message
 
+def test_emit_datetime_functions_to_runtime_helpers() -> None:
+    assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
+    assert _emit_expression("formatDateTime(utcNow(), 'yyyy-MM-dd')") == (
+        "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
+    )
+    assert _emit_expression("addDays(utcNow(), 2)") == "_wkmigrate_add_days(_wkmigrate_utc_now(), 2)"
+
+
+
 def test_get_literal_or_expression_static_literal() -> None:
     resolved = get_literal_or_expression("hello")
     assert not isinstance(resolved, UnsupportedValue)

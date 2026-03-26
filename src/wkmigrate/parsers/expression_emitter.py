@@ -26,6 +26,14 @@ _PIPELINE_VARS: dict[str, str] = {
     "GroupId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
 }
 _SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {"firstRow", "value"}
+_DATETIME_HELPER_FUNCTIONS: set[str] = {
+    "utcnow",
+    "formatdatetime",
+    "adddays",
+    "addhours",
+    "startofday",
+    "converttimezone",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +146,8 @@ class _Emitter:
 
         if lowered == "json":
             self.required_imports.add("json")
+        if lowered in _DATETIME_HELPER_FUNCTIONS:
+            self.required_imports.add("wkmigrate_datetime_helpers")
 
         return emitted
 
