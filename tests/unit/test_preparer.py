@@ -296,9 +296,7 @@ def test_custom_credentials_scope_flows_to_secret_instructions(
     secrets = prepared.activities[0].secrets
     if secrets:
         for secret in secrets:
-            assert secret.scope == "custom_vault", (
-                f"Expected scope 'custom_vault' but got '{secret.scope}'"
-            )
+            assert secret.scope == "custom_vault", f"Expected scope 'custom_vault' but got '{secret.scope}'"
 
 
 def test_collect_data_source_secrets_uses_provided_scope() -> None:

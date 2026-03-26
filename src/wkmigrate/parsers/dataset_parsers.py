@@ -22,7 +22,6 @@ from wkmigrate.models.workflows.instructions import SecretInstruction
 from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.utils import parse_mapping, parse_timeout_string
 
-
 _JDBC_SECRETS = ["user_name", "password"]
 _JDBC_OPTIONS = ["dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
 DEFAULT_PORTS: dict[str, int] = {
