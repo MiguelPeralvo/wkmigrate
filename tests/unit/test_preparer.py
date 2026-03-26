@@ -21,9 +21,6 @@ from wkmigrate.preparers.preparer import prepare_workflow
 from wkmigrate.preparers.run_job_activity_preparer import prepare_run_job_activity
 from wkmigrate.preparers.web_activity_preparer import prepare_web_activity
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 _CSV_SOURCE = {
     "type": "csv",
@@ -69,11 +66,6 @@ def _make_web_activity_with_auth() -> WebActivity:
     )
 
 
-# ---------------------------------------------------------------------------
-# prepare_lookup_activity
-# ---------------------------------------------------------------------------
-
-
 def test_lookup_preparer_default_scope_in_notebook() -> None:
     """prepare_lookup_activity uses DEFAULT_CREDENTIALS_SCOPE when none is supplied."""
     activity = _make_lookup_activity()
@@ -93,11 +85,6 @@ def test_lookup_preparer_custom_scope_in_notebook() -> None:
     notebook_content = result.notebooks[0].content
     assert 'scope="custom_vault"' in notebook_content
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
-
-
-# ---------------------------------------------------------------------------
-# prepare_web_activity
-# ---------------------------------------------------------------------------
 
 
 def test_web_preparer_default_scope_in_notebook() -> None:
@@ -121,11 +108,6 @@ def test_web_preparer_custom_scope_in_notebook() -> None:
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
 
 
-# ---------------------------------------------------------------------------
-# prepare_workflow
-# ---------------------------------------------------------------------------
-
-
 def test_prepare_workflow_default_scope_threads_to_lookup() -> None:
     """prepare_workflow uses DEFAULT_CREDENTIALS_SCOPE in generated notebooks by default."""
     pipeline = _make_pipeline_with_lookup()
@@ -145,11 +127,6 @@ def test_prepare_workflow_custom_scope_threads_to_lookup() -> None:
     notebook_content = result.activities[0].notebooks[0].content
     assert 'scope="pipeline_vault"' in notebook_content
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
-
-
-# ---------------------------------------------------------------------------
-# prepare_copy_activity
-# ---------------------------------------------------------------------------
 
 
 def test_copy_preparer_default_scope_in_notebook() -> None:
@@ -177,11 +154,6 @@ def test_copy_preparer_custom_scope_in_notebook() -> None:
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
 
 
-# ---------------------------------------------------------------------------
-# prepare_for_each_activity
-# ---------------------------------------------------------------------------
-
-
 def test_for_each_preparer_default_scope_in_inner_notebook() -> None:
     """prepare_for_each_activity passes DEFAULT_CREDENTIALS_SCOPE to the inner preparer."""
     activity = _make_for_each_with_lookup()
@@ -205,11 +177,6 @@ def test_for_each_preparer_custom_scope_in_inner_notebook() -> None:
     notebook_content = result.notebooks[0].content
     assert 'scope="foreach_vault"' in notebook_content
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
-
-
-# ---------------------------------------------------------------------------
-# prepare_run_job_activity
-# ---------------------------------------------------------------------------
 
 
 def test_run_job_preparer_default_scope_in_inner_notebook() -> None:
@@ -237,11 +204,6 @@ def test_run_job_preparer_custom_scope_in_inner_notebook() -> None:
     notebook_content = result.inner_workflow.activities[0].notebooks[0].content
     assert 'scope="nested_job_vault"' in notebook_content
     assert DEFAULT_CREDENTIALS_SCOPE not in notebook_content
-
-
-# ---------------------------------------------------------------------------
-# WorkspaceDefinitionStore.options (credentials_scope)
-# ---------------------------------------------------------------------------
 
 
 def test_workspace_store_uses_default_credentials_scope_when_option_unset(
@@ -314,11 +276,6 @@ def test_collect_data_source_secrets_uses_provided_scope() -> None:
     assert len(secrets) > 0
     for secret in secrets:
         assert secret.scope == "my_scope"
-
-
-# ---------------------------------------------------------------------------
-# Pipeline fixtures (kept at end for readability)
-# ---------------------------------------------------------------------------
 
 
 def _make_pipeline_with_lookup() -> Pipeline:
