@@ -168,7 +168,7 @@ def get_file_options(
     service_name = dataset_definition["service_name"]
     provider_type = dataset_definition.get("provider_type", "abfs")
     config_lines = [
-        rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
+        f'{dataset_name}_options["{option}"] = {str(dataset_definition.get(option))!r}'
         for option in DATASET_OPTIONS.get(file_type, [])
         if dataset_definition.get(option)
     ]
@@ -375,10 +375,10 @@ def get_jdbc_read_expression(source_definition: dict, source_query: str | None =
 def get_web_activity_notebook_content(
     activity_name: str,
     activity_type: str,
-    url: str,
+    url: str | ResolvedExpression,
     method: str,
     body: Any,
-    headers: dict[str, str] | None,
+    headers: dict[str, Any] | ResolvedExpression | None,
     authentication: Authentication | None = None,
     disable_cert_validation: bool = False,
     http_request_timeout_seconds: int | None = None,
@@ -408,12 +408,22 @@ def get_web_activity_notebook_content(
         Formatted Python notebook source as a ``str``.
     """
     required_imports = sorted(_collect_required_imports(url) | _collect_required_imports(headers) | _collect_required_imports(body))
+    required_imports = (
+        _collect_required_imports(url) | _collect_required_imports(headers) | _collect_required_imports(body)
+    )
+    include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
+    required_imports.discard("wkmigrate_datetime_helpers")
 
     script_lines = [
         "# Databricks notebook source",
         "import requests",
     ]
     script_lines.extend(f"import {module_name}" for module_name in required_imports if module_name != "requests")
+    script_lines.extend(
+        f"import {module_name}" for module_name in sorted(required_imports) if module_name != "requests"
+    )
+    if include_datetime_helpers:
+        script_lines.extend(["", *_INLINE_DATETIME_HELPERS])
     script_lines.extend(
         [
             "",

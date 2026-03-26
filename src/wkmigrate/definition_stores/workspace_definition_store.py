@@ -1229,8 +1229,8 @@ class WorkspaceDefinitionStore(DefinitionStore):
             host=self.host_name,
             azure_workspace_resource_id=self.resource_id,
             azure_tenant_id=self.tenant_id,
-            client_id=self.client_id,
-            client_secret=self.client_secret,
+            azure_client_id=self.client_id,
+            azure_client_secret=self.client_secret,
         )
 
     def _get_workspace_client(self) -> WorkspaceClient:

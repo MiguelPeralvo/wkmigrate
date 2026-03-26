@@ -7,9 +7,12 @@ from typing import Callable
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
+_PIPELINE_PARAMETER_EXPRESSION_PREFIX = "dbutils.widgets.get("
 
 
-def _require_arity(function_name: str, args: list[str], minimum: int, maximum: int | None = None) -> UnsupportedValue | None:
+def _require_arity(
+    function_name: str, args: list[str], minimum: int, maximum: int | None = None
+) -> UnsupportedValue | None:
     """Validate function arity before emitting Python code."""
 
     if len(args) < minimum:
@@ -97,6 +100,25 @@ def _emit_binary_operator(name: str, operator: str) -> FunctionEmitter:
     return _emit
 
 
+def _coerce_numeric_operand(arg: str) -> str:
+    """Coerce pipeline parameter widget expressions to numeric values in math contexts."""
+
+    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX):
+        return f"(lambda __wkm_p: int(__wkm_p) if __wkm_p.lstrip('-').isdigit() else float(__wkm_p))(str({arg}))"
+    return arg
+
+
+def _emit_numeric_binary_operator(name: str, operator: str) -> FunctionEmitter:
+    def _emit(args: list[str]) -> str | UnsupportedValue:
+        if error := _require_arity(name, args, 2, 2):
+            return error
+        left = _coerce_numeric_operand(args[0])
+        right = _coerce_numeric_operand(args[1])
+        return f"({left} {operator} {right})"
+
+    return _emit
+
+
 def _emit_ternary_if(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("if", args, 3, 3):
         return error
@@ -113,6 +135,9 @@ def _emit_div(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("div", args, 2, 2):
         return error
     return f"int({args[0]} / {args[1]})"
+    left = _coerce_numeric_operand(args[0])
+    right = _coerce_numeric_operand(args[1])
+    return f"int({left} / {right})"
 
 
 def _emit_cast(cast_name: str, py_cast: str) -> FunctionEmitter:
@@ -179,14 +204,18 @@ def _emit_empty(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_utc_now(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("utcNow", args, 0, 0):
+    if error := _require_arity("utcNow", args, 0, 1):
         return error
+    if len(args) == 1:
+        return f"_wkmigrate_format_datetime(_wkmigrate_utc_now(), {args[0]})"
     return "_wkmigrate_utc_now()"
 
 
 def _emit_format_datetime(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("formatDateTime", args, 2, 2):
+    if error := _require_arity("formatDateTime", args, 1, 2):
         return error
+    if len(args) == 1:
+        return f"str({args[0]})"
     return f"_wkmigrate_format_datetime({args[0]}, {args[1]})"
 
 
@@ -232,6 +261,11 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "mul": _emit_binary_operator("mul", "*"),
     "div": _emit_div,
     "mod": _emit_binary_operator("mod", "%"),
+    "add": _emit_numeric_binary_operator("add", "+"),
+    "sub": _emit_numeric_binary_operator("sub", "-"),
+    "mul": _emit_numeric_binary_operator("mul", "*"),
+    "div": _emit_div,
+    "mod": _emit_numeric_binary_operator("mod", "%"),
     "equals": _emit_binary_operator("equals", "=="),
     "not": _emit_not,
     "and": _emit_binary_operator("and", "and"),
