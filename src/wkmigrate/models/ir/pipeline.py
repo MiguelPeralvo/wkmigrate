@@ -11,8 +11,11 @@ payloads into internal representations that can be used to generate Databricks L
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from wkmigrate.models.ir.datasets import Dataset
+
+if TYPE_CHECKING:
+    from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 
 @dataclass(slots=True)
@@ -205,10 +208,10 @@ class WebActivity(Activity):
         turn_off_async: When ``True``, the activity executes synchronously rather than polling.
     """
 
-    url: str
+    url: str | ResolvedExpression
     method: str
-    body: Any = None
-    headers: dict[str, str] | None = None
+    body: Any | ResolvedExpression = None
+    headers: dict[str, Any | ResolvedExpression] | ResolvedExpression | None = None
     authentication: Authentication | None = None
     disable_cert_validation: bool = False
     http_request_timeout_seconds: int | None = None

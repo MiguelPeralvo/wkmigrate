@@ -5,19 +5,28 @@ representations. Each translator must validate required fields, parse the activi
 and emit ``UnsupportedValue`` objects for any unparsable inputs.
 """
 
+import ast
 import warnings
+from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 
 
-def translate_notebook_activity(activity: dict, base_kwargs: dict) -> DatabricksNotebookActivity | UnsupportedValue:
+def translate_notebook_activity(
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext | None = None,
+) -> DatabricksNotebookActivity | UnsupportedValue:
     """
     Translates an ADF Databricks Notebook activity into a ``DatabricksNotebookActivity`` object.
 
     Args:
         activity: Notebook activity definition as a ``dict``.
         base_kwargs: Common activity metadata.
+        context: Optional translation context for resolving variable and activity output
+            references. When ``None``, only context-free expressions are resolved.
 
     Returns:
         ``DatabricksNotebookActivity`` representation of the notebook task.
@@ -28,12 +37,15 @@ def translate_notebook_activity(activity: dict, base_kwargs: dict) -> Databricks
     return DatabricksNotebookActivity(
         **base_kwargs,
         notebook_path=notebook_path,
-        base_parameters=_parse_notebook_parameters(activity.get("base_parameters")),
+        base_parameters=_parse_notebook_parameters(activity.get("base_parameters"), context or TranslationContext()),
         linked_service_definition=activity.get("linked_service_definition"),
     )
 
 
-def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
+def _parse_notebook_parameters(
+    parameters: dict | None,
+    context: TranslationContext,
+) -> dict | None:
     """
     Parses task parameters in a Databricks notebook activity definition.
 
@@ -51,14 +63,47 @@ def _parse_notebook_parameters(parameters: dict | None) -> dict | None:
     # Parse the parameters:
     parsed_parameters = {}
     for name, value in parameters.items():
-        if not isinstance(value, str):
+        resolved = get_literal_or_expression(value, context)
+        if isinstance(resolved, UnsupportedValue):
             warnings.warn(
                 NotTranslatableWarning(
                     f"parameters.{name}",
-                    f'Could not resolve default value for parameter {name}, setting to ""',
+                    f'Could not resolve value for parameter {name}, setting to ""',
                 ),
                 stacklevel=3,
             )
-            value = ""
-        parsed_parameters[name] = value
+            parsed_parameters[name] = ""
+            continue
+        normalized = _normalize_parameter_value(resolved.code)
+        if normalized == "" and _is_none_literal_expression(resolved.code):
+            warnings.warn(
+                NotTranslatableWarning(
+                    f"parameters.{name}",
+                    f"Parameter {name} resolved to None and was converted to an empty string",
+                ),
+                stacklevel=3,
+            )
+        parsed_parameters[name] = normalized
     return parsed_parameters
+
+
+def _normalize_parameter_value(value: str) -> str:
+    """Convert resolved expression output to a string parameter value."""
+
+    try:
+        literal = ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return value
+
+    if literal is None:
+        return ""
+    return str(literal)
+
+
+def _is_none_literal_expression(value: str) -> bool:
+    """Return True when the emitted Python expression is the literal ``None``."""
+    try:
+        literal = ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return False
+    return literal is None

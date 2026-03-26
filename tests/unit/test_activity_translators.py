@@ -62,7 +62,10 @@ from wkmigrate.translators.activity_translators.copy_activity_translator import 
     translate_copy_activity,
 )
 from wkmigrate.models.ir.translation_context import TranslationContext
-from wkmigrate.parsers.expression_parsers import parse_variable_value
+from wkmigrate.parsers.expression_parsers import ResolvedExpression, parse_variable_value
+from wkmigrate.parsers.expression_ast import StringLiteral
+from wkmigrate.not_translatable import NotTranslatableWarning
+import wkmigrate.translators.activity_translators.for_each_activity_translator as for_each_activity_translator_module
 from wkmigrate.utils import get_placeholder_activity
 
 NOTEBOOK_ACTIVITY: dict = {
@@ -154,15 +157,70 @@ def test_notebook_missing_path_returns_unsupported(notebook_activity_fixtures: l
     assert fixture["expected_message"] in result.message
 
 
-def test_notebook_expression_parameters_warns(notebook_activity_fixtures: list[dict]) -> None:
-    """Test that expression parameters emit warnings and are set to empty string."""
+def test_notebook_expression_parameters_resolved(notebook_activity_fixtures: list[dict]) -> None:
+    """Test that expression parameters are translated into Python expression strings."""
     fixture = get_fixture(notebook_activity_fixtures, "expression_parameters")
-
-    with pytest.warns(UserWarning):
-        result = translate_activity(fixture["input"])
+    result = translate_activity(fixture["input"])
 
     assert isinstance(result, DatabricksNotebookActivity)
-    assert result.base_parameters["expression_param"] == ""
+    assert result.base_parameters["expression_param"] == "dbutils.widgets.get('dynamic_value')"
+
+
+def test_notebook_non_string_parameters_are_literalized() -> None:
+    """Notebook parameters preserve non-string values via shared expression resolver."""
+    activity = {
+        "name": "run_numeric_params_notebook",
+        "type": "DatabricksNotebook",
+        "notebook_path": "/Workspace/notebooks/params",
+        "base_parameters": {
+            "count": 3,
+            "enabled": True,
+        },
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.base_parameters == {"count": "3", "enabled": "True"}
+
+
+def test_notebook_unsupported_expression_parameter_warns_and_defaults_empty() -> None:
+    activity = {
+        "name": "run_unsupported_expression_notebook",
+        "type": "DatabricksNotebook",
+        "notebook_path": "/Workspace/notebooks/params",
+        "base_parameters": {
+            "unsupported_param": {
+                "type": "Expression",
+                "value": "@unknownFunc()",
+            }
+        },
+    }
+
+    with pytest.warns(NotTranslatableWarning):
+        result = translate_activity(activity)
+
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.base_parameters == {"unsupported_param": ""}
+
+
+def test_notebook_expression_parameter_resolved_to_none_warns_and_defaults_empty() -> None:
+    activity = {
+        "name": "run_none_expression_notebook",
+        "type": "DatabricksNotebook",
+        "notebook_path": "/Workspace/notebooks/params",
+        "base_parameters": {
+            "nullable_param": {
+                "type": "Expression",
+                "value": "@null",
+            }
+        },
+    }
+
+    with pytest.warns(NotTranslatableWarning):
+        result = translate_activity(activity)
+
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.base_parameters == {"nullable_param": ""}
 
 
 def test_basic_spark_jar_activity(spark_jar_activity_fixtures: list[dict]) -> None:
@@ -283,6 +341,51 @@ def test_foreach_createarray_expression(for_each_activity_fixtures: list[dict]) 
     assert result.items_string == fixture["expected"]["items_string"]
 
 
+def test_foreach_createarray_with_concat_literals() -> None:
+    """createArray supports concat() when each arg resolves to a literal string."""
+    activity = {
+        "name": "foreach_concat",
+        "type": "ForEach",
+        "depends_on": [],
+        "items": {"type": "Expression", "value": "@createArray(concat('a', '1'), concat('b', '2'))"},
+        "activities": [
+            {
+                "name": "inner_task",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/notebooks/inner",
+                "depends_on": [],
+                "base_parameters": {},
+            }
+        ],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, ForEachActivity)
+    assert result.items_string == "[\"a1\",\"b2\"]"
+
+
+def test_foreach_parse_items_literal_eval_fallback_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fallback path converts resolved literal list expression to ForEach items JSON string."""
+
+    monkeypatch.setattr(
+        for_each_activity_translator_module,
+        "get_literal_or_expression",
+        lambda _items, _ctx: ResolvedExpression(code="['a', 'b']", is_dynamic=True, required_imports=frozenset()),
+    )
+    monkeypatch.setattr(
+        for_each_activity_translator_module,
+        "parse_expression",
+        lambda _value: StringLiteral(value="non_function_ast"),
+    )
+
+    result = for_each_activity_translator_module._parse_for_each_items(
+        {"type": "Expression", "value": "@customExpression()"},
+        TranslationContext(),
+    )
+
+    assert result == "[\"a\",\"b\"]"
+
+
 def test_foreach_multiple_inner_activities_creates_run_job(for_each_activity_fixtures: list[dict]) -> None:
     """Test ForEach with multiple inner activities creates RunJobActivity."""
     fixture = get_fixture(for_each_activity_fixtures, "multiple_inner_activities")
@@ -343,6 +446,9 @@ def test_if_condition_equals_both_branches(if_condition_activity_fixtures: list[
     assert result.left == fixture["expected"]["left"]
     assert result.right == fixture["expected"]["right"]
     assert len(result.child_activities) == fixture["expected"]["child_activities_count"]
+    child_names = {child.name for child in result.child_activities}
+    assert "process_success" in child_names
+    assert "process_failure" in child_names
 
 
 def test_if_condition_only_true_branch(if_condition_activity_fixtures: list[dict]) -> None:
@@ -404,6 +510,47 @@ def test_if_condition_unsupported_expression_returns_unsupported(if_condition_ac
 
     assert isinstance(result, UnsupportedValue)
     assert fixture["expected_message"] in result.message
+
+
+def test_if_condition_not_equals_expression() -> None:
+    """not(equals()) is translated to the NOT_EQUAL condition op."""
+    activity = {
+        "name": "if_not_equals",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@not(equals('left', 'right'))"},
+        "if_true_activities": [],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "NOT_EQUAL"
+    assert result.left == "left"
+    assert result.right == "right"
+
+
+def test_if_condition_dynamic_left_operand_expression() -> None:
+    activity = {
+        "name": "if_dynamic_left",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@equals(pipeline().parameters.X, 'value')"},
+        "if_true_activities": [
+            {
+                "name": "child_nb",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/notebooks/child",
+                "depends_on": [],
+            }
+        ],
+        "if_false_activities": [],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.left == "dbutils.widgets.get('X')"
+    assert result.right == "value"
 
 
 def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) -> None:
@@ -816,6 +963,59 @@ def test_web_activity_translate_activity_dispatch(web_activity_fixtures: list[di
     assert isinstance(result, WebActivity)
     assert result.url == fixture["expected"]["url"]
     assert result.method == fixture["expected"]["method"]
+
+
+def test_web_activity_expression_url_is_preserved_as_runtime_expression() -> None:
+    """Expression-valued URL is preserved as a resolved dynamic expression."""
+    activity = {
+        "name": "dynamic_url_call",
+        "type": "WebActivity",
+        "url": {"type": "Expression", "value": "@concat('https://api.example.com/', 'v1')"},
+        "method": "GET",
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_web_activity(activity, base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert isinstance(result.url, ResolvedExpression)
+    assert result.url.is_dynamic is True
+    assert "str('https://api.example.com/')" in result.url.code
+
+
+def test_web_activity_expression_body_is_resolved() -> None:
+    activity = {
+        "name": "dynamic_body_call",
+        "type": "WebActivity",
+        "url": "https://api.example.com",
+        "method": "POST",
+        "body": {"type": "Expression", "value": "@concat('payload-', pipeline().parameters.version)"},
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_web_activity(activity, base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert isinstance(result.body, ResolvedExpression)
+    assert "dbutils.widgets.get('version')" in result.body.code
+
+
+def test_web_activity_header_values_support_expression_entries() -> None:
+    activity = {
+        "name": "dynamic_header_call",
+        "type": "WebActivity",
+        "url": "https://api.example.com",
+        "method": "GET",
+        "headers": {
+            "X-Env": {"type": "Expression", "value": "@pipeline().parameters.env"},
+            "Accept": "application/json",
+        },
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_web_activity(activity, base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert isinstance(result.headers, dict)
+    assert isinstance(result.headers["X-Env"], ResolvedExpression)
+    assert result.headers["Accept"] == "application/json"
 
 
 def test_web_activity_unsupported_auth_type_returns_unsupported(web_activity_fixtures: list[dict]) -> None:
@@ -1241,6 +1441,60 @@ def test_variable_cache_available_to_downstream_set_variable() -> None:
     downstream_activity = ctx.get_activity("copy_var")
     assert isinstance(downstream_activity, SetVariableActivity)
     assert downstream_activity.variable_value == "dbutils.jobs.taskValues.get(taskKey='set_source', key='sourceVar')"
+
+
+def test_translate_activities_with_context_threads_variable_cache_to_notebook_parameters() -> None:
+    activities = [
+        {
+            "name": "set_source",
+            "type": "SetVariable",
+            "depends_on": [],
+            "variable_name": "sourceVar",
+            "value": "hello",
+        },
+        {
+            "name": "consume_in_notebook",
+            "type": "DatabricksNotebook",
+            "depends_on": [{"activity": "set_source", "dependency_conditions": ["Succeeded"]}],
+            "notebook_path": "/Workspace/notebooks/consumer",
+            "base_parameters": {
+                "copied_value": {"type": "Expression", "value": "@variables('sourceVar')"},
+            },
+        },
+    ]
+    translated, _ctx = translate_activities_with_context(activities)
+
+    assert translated is not None
+    notebook_task = next(task for task in translated if isinstance(task, DatabricksNotebookActivity))
+    assert notebook_task.base_parameters is not None
+    assert notebook_task.base_parameters["copied_value"] == (
+        "dbutils.jobs.taskValues.get(taskKey='set_source', key='sourceVar')"
+    )
+
+
+def test_translate_activities_with_context_threads_variable_cache_to_web_expression() -> None:
+    activities = [
+        {
+            "name": "set_source",
+            "type": "SetVariable",
+            "depends_on": [],
+            "variable_name": "sourceVar",
+            "value": "hello",
+        },
+        {
+            "name": "consume_in_web",
+            "type": "WebActivity",
+            "depends_on": [{"activity": "set_source", "dependency_conditions": ["Succeeded"]}],
+            "url": {"type": "Expression", "value": "@concat('https://', variables('sourceVar'))"},
+            "method": "GET",
+        },
+    ]
+    translated, _ctx = translate_activities_with_context(activities)
+
+    assert translated is not None
+    web_task = next(task for task in translated if isinstance(task, WebActivity))
+    assert isinstance(web_task.url, ResolvedExpression)
+    assert "taskKey='set_source'" in web_task.url.code
 
 
 def test_set_variable_activity_output_double_quotes(set_variable_activity_fixtures: list[dict]) -> None:
