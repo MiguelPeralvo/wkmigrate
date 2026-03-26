@@ -88,7 +88,10 @@ Converts ``DatasetProperties`` into a dictionary.
 #### collect\_data\_source\_secrets
 
 ```python
-def collect_data_source_secrets(definition: dict) -> list[SecretInstruction]
+def collect_data_source_secrets(
+    definition: dict,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> list[SecretInstruction]
 ```
 
 Builds the list of ``SecretInstruction`` objects required for a dataset definition.
@@ -103,6 +106,7 @@ SQL datasets resolve secrets by ``service_type`` (e.g. ``"sqlserver"``).
 **Arguments**:
 
 - `definition` - Flat dataset definition dictionary produced by ``merge_dataset_definition``.
+- `credentials_scope` - Name of the Databricks secret scope. Defaults to ``DEFAULT_CREDENTIALS_SCOPE``.
   
 
 **Returns**:

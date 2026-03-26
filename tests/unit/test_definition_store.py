@@ -20,7 +20,6 @@ from wkmigrate.models.ir.pipeline import (
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity, PreparedWorkflow
 from wkmigrate.models.workflows.instructions import PipelineInstruction
 
-
 _CAMEL_JSON_PATH = os.path.join(os.path.dirname(__file__), os.pardir, "resources", "json", "camel")
 
 

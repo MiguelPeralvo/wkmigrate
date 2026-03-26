@@ -7,14 +7,17 @@ as Databricks task values via ``dbutils.jobs.taskValues.set()``.
 
 from __future__ import annotations
 
-from wkmigrate.code_generator import get_web_activity_notebook_content
+from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE, get_web_activity_notebook_content
 from wkmigrate.models.ir.pipeline import WebActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_web_activity(activity: WebActivity) -> PreparedActivity:
+def prepare_web_activity(
+    activity: WebActivity,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+) -> PreparedActivity:
     """
     Builds the task payload for a Web activity.
 
@@ -23,6 +26,7 @@ def prepare_web_activity(activity: WebActivity) -> PreparedActivity:
 
     Args:
         activity: Activity definition emitted by the translators.
+        credentials_scope: Name of the Databricks secret scope used for storing credentials.
 
     Returns:
         PreparedActivity containing the notebook task configuration and artifacts.
@@ -38,6 +42,7 @@ def prepare_web_activity(activity: WebActivity) -> PreparedActivity:
         disable_cert_validation=activity.disable_cert_validation,
         http_request_timeout_seconds=activity.http_request_timeout_seconds,
         turn_off_async=activity.turn_off_async,
+        credentials_scope=credentials_scope,
     )
     notebook_path = f"/wkmigrate/web_activity_notebooks/{activity.task_key}"
     notebook = NotebookArtifact(file_path=notebook_path, content=notebook_content)
