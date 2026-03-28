@@ -20,6 +20,7 @@ from wkmigrate.parsers.emission_config import ExpressionContext
 from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, resolve_expression_node
 from wkmigrate.parsers.expression_parser import parse_expression
+from wkmigrate.parsers.strategy_router import StrategyRouter
 
 
 def translate_for_each_activity(
@@ -207,8 +208,9 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
 
     if isinstance(parsed, FunctionCall) and parsed.name.lower() in {"createarray", "array"}:
         list_items: list[str] = []
+        router = StrategyRouter(config=None, translation_context=context)
         for arg in parsed.args:
-            item = _evaluate_for_each_item(arg, context)
+            item = _evaluate_for_each_item(arg, context, router=router)
             if isinstance(item, UnsupportedValue):
                 return UnsupportedValue(
                     value=items,
@@ -247,7 +249,11 @@ def _parse_array_string(array_string: str) -> str:
     return '["' + '","'.join(items) + '"]'
 
 
-def _evaluate_for_each_item(item: object, context: TranslationContext) -> str | UnsupportedValue:
+def _evaluate_for_each_item(
+    item: object,
+    context: TranslationContext,
+    router: StrategyRouter | None = None,
+) -> str | UnsupportedValue:
     """Evaluate supported item expressions to a string for Databricks for-each inputs."""
 
     if isinstance(item, StringLiteral):
@@ -259,7 +265,7 @@ def _evaluate_for_each_item(item: object, context: TranslationContext) -> str | 
     if isinstance(item, FunctionCall) and item.name.lower() == "concat":
         parts: list[str] = []
         for arg in item.args:
-            part = _evaluate_for_each_item(arg, context)
+            part = _evaluate_for_each_item(arg, context, router=router)
             if isinstance(part, UnsupportedValue):
                 return part
             parts.append(part)
@@ -268,7 +274,12 @@ def _evaluate_for_each_item(item: object, context: TranslationContext) -> str | 
     if not isinstance(item, AstNode):
         return UnsupportedValue(value=item, message="Expression cannot be resolved to a literal for ForEach items")
 
-    emitted = resolve_expression_node(item, context, expression_context=ExpressionContext.FOREACH_ITEMS)
+    emitted = resolve_expression_node(
+        item,
+        context,
+        expression_context=ExpressionContext.FOREACH_ITEMS,
+        router=router,
+    )
     if isinstance(emitted, UnsupportedValue):
         return emitted
     try:
