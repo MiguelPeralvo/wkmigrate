@@ -13,7 +13,7 @@ from typing import Any
 from wkmigrate.models.ir.pipeline import WebActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
 from wkmigrate.parsers.expression_parsers import ResolvedExpression, get_literal_or_expression
 from wkmigrate.utils import parse_timeout_string, parse_authentication
 
@@ -22,6 +22,7 @@ def translate_web_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> WebActivity | UnsupportedValue:
     """
     Translates an ADF Web activity into a ``WebActivity`` object.
@@ -39,7 +40,7 @@ def translate_web_activity(
     if url_input is None or (isinstance(url_input, str) and not url_input):
         return UnsupportedValue(activity, "Missing value 'url' for Web activity")
     context = context or TranslationContext()
-    url = _resolve_web_value(url_input, context, ExpressionContext.WEB_URL)
+    url = _resolve_web_value(url_input, context, ExpressionContext.WEB_URL, emission_config=emission_config)
     if isinstance(url, UnsupportedValue):
         return UnsupportedValue(activity, f"Unsupported value 'url' for Web activity. {url.message}")
 
@@ -52,13 +53,13 @@ def translate_web_activity(
 
     body = activity.get("body")
     if body is not None:
-        body = _resolve_web_value(body, context, ExpressionContext.WEB_BODY)
+        body = _resolve_web_value(body, context, ExpressionContext.WEB_BODY, emission_config=emission_config)
         if isinstance(body, UnsupportedValue):
             return UnsupportedValue(activity, f"Unsupported value 'body' for Web activity. {body.message}")
 
     headers = activity.get("headers")
     if headers is not None:
-        headers = _resolve_headers(headers, context)
+        headers = _resolve_headers(headers, context, emission_config=emission_config)
         if isinstance(headers, UnsupportedValue):
             return UnsupportedValue(activity, f"Unsupported value 'headers' for Web activity. {headers.message}")
 
@@ -87,6 +88,7 @@ def _resolve_web_value(
     value: Any,
     context: TranslationContext,
     expression_context: ExpressionContext,
+    emission_config: EmissionConfig | None = None,
 ) -> Any | UnsupportedValue:
     """Resolve static or expression-like value for web activity fields."""
     if not _is_expression_candidate(value):
@@ -96,6 +98,7 @@ def _resolve_web_value(
         value,
         context,
         expression_context=expression_context,
+        emission_config=emission_config,
     )
     if isinstance(resolved, UnsupportedValue):
         return resolved
@@ -104,11 +107,20 @@ def _resolve_web_value(
     return value
 
 
-def _resolve_headers(headers: Any, context: TranslationContext) -> Any | UnsupportedValue:
+def _resolve_headers(
+    headers: Any,
+    context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
+) -> Any | UnsupportedValue:
     """Resolve headers dictionary, allowing expression-valued header entries."""
 
     if _is_expression_candidate(headers):
-        resolved_headers = _resolve_web_value(headers, context, ExpressionContext.WEB_HEADER)
+        resolved_headers = _resolve_web_value(
+            headers,
+            context,
+            ExpressionContext.WEB_HEADER,
+            emission_config=emission_config,
+        )
         if isinstance(resolved_headers, UnsupportedValue):
             return resolved_headers
         if isinstance(resolved_headers, ResolvedExpression):
@@ -119,7 +131,12 @@ def _resolve_headers(headers: Any, context: TranslationContext) -> Any | Unsuppo
 
     parsed_headers: dict[str, Any] = {}
     for key, value in headers.items():
-        parsed_value = _resolve_web_value(value, context, ExpressionContext.WEB_HEADER)
+        parsed_value = _resolve_web_value(
+            value,
+            context,
+            ExpressionContext.WEB_HEADER,
+            emission_config=emission_config,
+        )
         if isinstance(parsed_value, UnsupportedValue):
             return parsed_value
         parsed_headers[key] = parsed_value

@@ -16,7 +16,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
-from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
 from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
 from wkmigrate.parsers.expression_parsers import resolve_expression_node
 from wkmigrate.parsers.expression_parser import parse_expression
@@ -34,6 +34,7 @@ def translate_if_condition_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF IfCondition activity into a ``IfConditionActivity`` object.
@@ -63,7 +64,7 @@ def translate_if_condition_activity(
             context,
         )
 
-    parsed = _parse_condition_expression(source_expression, context)
+    parsed = _parse_condition_expression(source_expression, context, emission_config=emission_config)
     if isinstance(parsed, UnsupportedValue):
         return UnsupportedValue(value=activity, message=parsed.message), context
 
@@ -83,7 +84,13 @@ def translate_if_condition_activity(
     for branch_key, outcome in (("if_false_activities", "false"), ("if_true_activities", "true")):
         branch = activity.get(branch_key)
         if branch:
-            children, context = _translate_child_activities(branch, parent_task_name, outcome, context)
+            children, context = _translate_child_activities(
+                branch,
+                parent_task_name,
+                outcome,
+                context,
+                emission_config=emission_config,
+            )
             child_activities.extend(children)
 
     if not child_activities:
@@ -107,6 +114,7 @@ def _translate_child_activities(
     parent_task_name: str,
     parent_task_outcome: str,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
     """
     Translates child activities referenced by IfCondition tasks.
@@ -131,12 +139,16 @@ def _translate_child_activities(
     for activity in child_activities:
         _activity = activity.copy()
         _activity["depends_on"] = [*(activity.get("depends_on") or []), parent_dependency]
-        result, context = visit_activity(_activity, True, context)
+        result, context = visit_activity(_activity, True, context, emission_config=emission_config)
         translated.append(result)
     return translated, context
 
 
-def _parse_condition_expression(condition: dict, context: TranslationContext) -> dict | UnsupportedValue:
+def _parse_condition_expression(
+    condition: dict,
+    context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
+) -> dict | UnsupportedValue:
     """
     Parses a condition expression in an If Condition activity definition.
 
@@ -164,10 +176,20 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
     if isinstance(operation, UnsupportedValue):
         return _unsupported_condition_expression(condition, condition_value)
 
-    left = _emit_condition_operand(operation.left, context, ExpressionContext.IF_CONDITION_LEFT)
+    left = _emit_condition_operand(
+        operation.left,
+        context,
+        ExpressionContext.IF_CONDITION_LEFT,
+        emission_config=emission_config,
+    )
     if isinstance(left, UnsupportedValue):
         return left
-    right = _emit_condition_operand(operation.right, context, ExpressionContext.IF_CONDITION_RIGHT)
+    right = _emit_condition_operand(
+        operation.right,
+        context,
+        ExpressionContext.IF_CONDITION_RIGHT,
+        emission_config=emission_config,
+    )
     if isinstance(right, UnsupportedValue):
         return right
     return {"op": operation.op, "left": left, "right": right}
@@ -205,10 +227,17 @@ def _emit_condition_operand(
     operand: AstNode,
     context: TranslationContext,
     operand_context: ExpressionContext,
+    emission_config: EmissionConfig | None = None,
 ) -> str | UnsupportedValue:
     """Emit condition operand while preserving legacy literal formatting."""
 
-    emitted = resolve_expression_node(operand, context, expression_context=operand_context, exact=True)
+    emitted = resolve_expression_node(
+        operand,
+        context,
+        expression_context=operand_context,
+        emission_config=emission_config,
+        exact=True,
+    )
     if isinstance(emitted, UnsupportedValue):
         return emitted
     try:
