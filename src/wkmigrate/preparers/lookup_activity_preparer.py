@@ -15,11 +15,15 @@ from wkmigrate.parsers.dataset_parsers import collect_data_source_secrets, merge
 from wkmigrate.code_generator import get_option_expressions, get_read_expression
 from wkmigrate.models.ir.pipeline import LookupActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity:
+def prepare_lookup_activity(
+    activity: LookupActivity,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedActivity:
     """
     Builds tasks and artifacts for a Lookup activity.
 
@@ -37,6 +41,7 @@ def prepare_lookup_activity(activity: LookupActivity) -> PreparedActivity:
     Returns:
         PreparedActivity containing the notebook task configuration and artifacts.
     """
+    del emission_config
     source_definition = merge_dataset_definition(activity.source_dataset, activity.source_properties)
 
     data_source_secrets = collect_data_source_secrets(source_definition)

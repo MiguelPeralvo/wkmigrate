@@ -25,6 +25,7 @@ from wkmigrate.code_generator import (
 from wkmigrate.models.ir.pipeline import CopyActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
 from wkmigrate.models.workflows.instructions import PipelineInstruction
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
@@ -32,6 +33,7 @@ from wkmigrate.utils import parse_mapping
 def prepare_copy_activity(
     activity: CopyActivity,
     default_files_to_delta_sinks: bool | None,
+    emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """
     Builds tasks and artifacts for a Copy activity.
@@ -43,6 +45,7 @@ def prepare_copy_activity(
     Returns:
         PreparedActivity containing task configuration and artifacts.
     """
+    del emission_config
     source_definition = merge_dataset_definition(activity.source_dataset, activity.source_properties)
     sink_definition = merge_dataset_definition(activity.sink_dataset, activity.sink_properties)
     column_mapping = [asdict(mapping) for mapping in (activity.column_mapping or [])]

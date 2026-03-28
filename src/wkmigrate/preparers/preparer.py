@@ -23,6 +23,7 @@ from wkmigrate.models.ir.pipeline import (
     SparkPythonActivity,
     WebActivity,
 )
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.models.workflows.artifacts import PreparedActivity, PreparedWorkflow
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
@@ -36,7 +37,11 @@ from wkmigrate.preparers.spark_python_activity_preparer import prepare_spark_pyt
 from wkmigrate.preparers.web_activity_preparer import prepare_web_activity
 
 
-def prepare_workflow(pipeline: Pipeline, files_to_delta_sinks: bool | None = None) -> PreparedWorkflow:
+def prepare_workflow(
+    pipeline: Pipeline,
+    files_to_delta_sinks: bool | None = None,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedWorkflow:
     """
     Prepares a pipeline internal representation for creation as a Databricks Lakeflow job.
 
@@ -47,13 +52,14 @@ def prepare_workflow(pipeline: Pipeline, files_to_delta_sinks: bool | None = Non
     Returns:
         Prepared workflow containing the Databricks job payload and supporting artifacts for the pipeline.
     """
-    activities = [prepare_activity(task, files_to_delta_sinks) for task in pipeline.tasks]
+    activities = [prepare_activity(task, files_to_delta_sinks, emission_config) for task in pipeline.tasks]
     return PreparedWorkflow(pipeline=pipeline, activities=activities)
 
 
 def prepare_activity(
     activity: Activity,
     default_files_to_delta_sinks: bool | None,
+    emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """
     Prepares an activity internal representation for creation as a Databricks Lakeflow job task.
@@ -66,23 +72,23 @@ def prepare_activity(
         Prepared activity containing the task configuration and any associated artifacts.
     """
     if isinstance(activity, DatabricksNotebookActivity):
-        return prepare_notebook_activity(activity)
+        return prepare_notebook_activity(activity, emission_config=emission_config)
     if isinstance(activity, SparkJarActivity):
-        return prepare_spark_jar_activity(activity)
+        return prepare_spark_jar_activity(activity, emission_config=emission_config)
     if isinstance(activity, SparkPythonActivity):
-        return prepare_spark_python_activity(activity)
+        return prepare_spark_python_activity(activity, emission_config=emission_config)
     if isinstance(activity, IfConditionActivity):
-        return prepare_if_condition_activity(activity)
+        return prepare_if_condition_activity(activity, emission_config=emission_config)
     if isinstance(activity, ForEachActivity):
-        return prepare_for_each_activity(activity, default_files_to_delta_sinks)
+        return prepare_for_each_activity(activity, default_files_to_delta_sinks, emission_config=emission_config)
     if isinstance(activity, RunJobActivity):
-        return prepare_run_job_activity(activity, default_files_to_delta_sinks)
+        return prepare_run_job_activity(activity, default_files_to_delta_sinks, emission_config=emission_config)
     if isinstance(activity, CopyActivity):
-        return prepare_copy_activity(activity, default_files_to_delta_sinks)
+        return prepare_copy_activity(activity, default_files_to_delta_sinks, emission_config=emission_config)
     if isinstance(activity, LookupActivity):
-        return prepare_lookup_activity(activity)
+        return prepare_lookup_activity(activity, emission_config=emission_config)
     if isinstance(activity, WebActivity):
-        return prepare_web_activity(activity)
+        return prepare_web_activity(activity, emission_config=emission_config)
     if isinstance(activity, SetVariableActivity):
-        return prepare_set_variable_activity(activity)
+        return prepare_set_variable_activity(activity, emission_config=emission_config)
     raise ValueError(f"Unsupported activity type '{type(activity)}'")
