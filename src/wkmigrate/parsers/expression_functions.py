@@ -263,3 +263,11 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "startofday": _emit_start_of_day,
     "converttimezone": _emit_convert_time_zone,
 }
+
+
+def get_function_registry(strategy: str = "notebook_python") -> dict[str, FunctionEmitter]:
+    """Return the function registry for the requested strategy."""
+
+    if strategy.lower() != "notebook_python":
+        raise ValueError(f"Unknown emission strategy '{strategy}'")
+    return FUNCTION_REGISTRY
