@@ -44,6 +44,8 @@ class ExpressionContext(StrEnum):
     WEB_HEADER = "web_header"
     FOREACH_ITEMS = "foreach_items"
     IF_CONDITION = "if_condition"
+    IF_CONDITION_LEFT = "if_condition_left"
+    IF_CONDITION_RIGHT = "if_condition_right"
     SWITCH_ON = "switch_on"
     UNTIL_CONDITION = "until_condition"
     FILTER_CONDITION = "filter_condition"

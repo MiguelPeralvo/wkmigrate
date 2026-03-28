@@ -6,7 +6,9 @@ import pytest
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.expression_emitter import emit, emit_with_imports
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emitter_protocol import EmittedExpression
+from wkmigrate.parsers.expression_emitter import PythonEmitter, emit, emit_with_imports
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, parse_variable_value
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -203,6 +205,26 @@ def test_emit_with_imports_tracks_datetime_helper_dependency() -> None:
     emitted = emit_with_imports(parsed, TranslationContext())
     assert not isinstance(emitted, UnsupportedValue)
     assert "wkmigrate_datetime_helpers" in emitted.required_imports
+
+
+def test_python_emitter_emit_node_returns_emitted_expression() -> None:
+    parsed = parse_expression("@concat('a', 'b')")
+    assert not isinstance(parsed, UnsupportedValue)
+
+    emitter = PythonEmitter(context=TranslationContext())
+    emitted = emitter.emit_node(parsed, ExpressionContext.SET_VARIABLE)
+    assert isinstance(emitted, EmittedExpression)
+    assert emitted.code == "str('a') + str('b')"
+
+
+def test_python_emitter_emit_node_merges_required_imports_once() -> None:
+    parsed = parse_expression("@concat(json('{\"x\": 1}'), json('{\"y\": 2}'))")
+    assert not isinstance(parsed, UnsupportedValue)
+
+    emitter = PythonEmitter(context=TranslationContext())
+    emitted = emitter.emit_node(parsed, ExpressionContext.WEB_BODY)
+    assert not isinstance(emitted, UnsupportedValue)
+    assert emitted.required_imports == ("json",)
 
 
 def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:

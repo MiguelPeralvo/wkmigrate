@@ -24,11 +24,5 @@ class EmitterProtocol(Protocol):
     def can_emit(self, node: AstNode, context: ExpressionContext) -> bool:
         """Return ``True`` when the emitter can emit the node in this context."""
 
-    def emit_node(self, node: AstNode, context: ExpressionContext) -> str | UnsupportedValue:
-        """Emit the node into a strategy-specific representation.
-
-        Note: Phase 1 returns ``str`` for compatibility with the existing ``emit()`` wrapper.
-        Phase 2 (StrategyRouter) should change the return type to
-        ``EmittedExpression | UnsupportedValue`` so emitters can return structured output
-        with format metadata.
-        """
+    def emit_node(self, node: AstNode, context: ExpressionContext) -> EmittedExpression | UnsupportedValue:
+        """Emit the node into a strategy-specific representation."""
