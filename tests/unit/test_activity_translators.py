@@ -62,6 +62,8 @@ from wkmigrate.translators.activity_translators.copy_activity_translator import 
     translate_copy_activity,
 )
 from wkmigrate.models.ir.translation_context import TranslationContext
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emitter_protocol import EmittedExpression
 from wkmigrate.parsers.expression_parsers import ResolvedExpression, parse_variable_value
 from wkmigrate.parsers.expression_ast import StringLiteral
 from wkmigrate.not_translatable import NotTranslatableWarning
@@ -370,7 +372,11 @@ def test_foreach_parse_items_literal_eval_fallback_path(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         for_each_activity_translator_module,
         "get_literal_or_expression",
-        lambda _items, _ctx: ResolvedExpression(code="['a', 'b']", is_dynamic=True, required_imports=frozenset()),
+        lambda _items, _ctx, expression_context=None, emission_config=None: ResolvedExpression(
+            code="['a', 'b']",
+            is_dynamic=True,
+            required_imports=frozenset(),
+        ),
     )
     monkeypatch.setattr(
         for_each_activity_translator_module,
@@ -1636,6 +1642,126 @@ def test_parse_variable_value_pipeline_system_var() -> None:
     result = parse_variable_value({"value": "@pipeline().RunId", "type": "Expression"}, ctx)
 
     assert result == "dbutils.jobs.getContext().tags().get('runId', '')"
+
+
+def test_expression_contexts_are_threaded_to_strategy_router(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_contexts: list[ExpressionContext] = []
+
+    def _fake_emit(
+        self: object,
+        node: object,
+        expression_context: ExpressionContext,
+        exact: bool | None = None,
+    ) -> EmittedExpression:
+        del self, node, exact
+        seen_contexts.append(expression_context)
+        return EmittedExpression(code="'resolved'")
+
+    monkeypatch.setattr("wkmigrate.parsers.strategy_router.StrategyRouter.emit", _fake_emit)
+
+    activities = [
+        {
+            "name": "set_var",
+            "type": "SetVariable",
+            "depends_on": [],
+            "variable_name": "my_var",
+            "value": {"type": "Expression", "value": "@pipeline().RunId"},
+        },
+        {
+            "name": "nb_with_param",
+            "type": "DatabricksNotebook",
+            "depends_on": [],
+            "notebook_path": "/Workspace/notebooks/one",
+            "base_parameters": {"param": {"type": "Expression", "value": "@concat('a', 'b')"}},
+        },
+        {
+            "name": "web",
+            "type": "WebActivity",
+            "depends_on": [],
+            "url": {"type": "Expression", "value": "@concat('https://', 'example.com')"},
+            "method": "POST",
+            "body": {"type": "Expression", "value": "@json('{\"x\": 1}')"},
+            "headers": {"Authorization": {"type": "Expression", "value": "@concat('Bearer ', 'x')"}},
+        },
+        {
+            "name": "for_each",
+            "type": "ForEach",
+            "depends_on": [],
+            "items": {"type": "Expression", "value": "@createArray('a', 'b')"},
+            "activities": [
+                {
+                    "name": "inner",
+                    "type": "DatabricksNotebook",
+                    "depends_on": [],
+                    "notebook_path": "/Workspace/notebooks/inner",
+                    "base_parameters": {"item": {"type": "Expression", "value": "@item()"}},
+                }
+            ],
+        },
+        {
+            "name": "if_expr",
+            "type": "IfCondition",
+            "depends_on": [],
+            "expression": {"type": "Expression", "value": "@equals(pipeline().parameters.env, 'prod')"},
+            "if_true_activities": [
+                {
+                    "name": "if_child",
+                    "type": "DatabricksNotebook",
+                    "depends_on": [],
+                    "notebook_path": "/Workspace/notebooks/if_child",
+                }
+            ],
+        },
+    ]
+
+    translated, _ctx = translate_activities_with_context(activities)
+    assert translated is not None
+
+    assert set(seen_contexts) >= {
+        ExpressionContext.SET_VARIABLE,
+        ExpressionContext.EXECUTE_PIPELINE_PARAM,
+        ExpressionContext.WEB_URL,
+        ExpressionContext.WEB_BODY,
+        ExpressionContext.WEB_HEADER,
+        ExpressionContext.FOREACH_ITEMS,
+        ExpressionContext.IF_CONDITION_LEFT,
+        ExpressionContext.IF_CONDITION_RIGHT,
+    }
+
+
+def test_translator_expression_paths_do_not_use_legacy_emit_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_if_called(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("legacy emit() wrapper should not be called from translator expression paths")
+
+    monkeypatch.setattr("wkmigrate.parsers.expression_emitter.emit", _raise_if_called)
+
+    activities = [
+        {
+            "name": "set_var",
+            "type": "SetVariable",
+            "depends_on": [],
+            "variable_name": "my_var",
+            "value": {"type": "Expression", "value": "@pipeline().RunId"},
+        },
+        {
+            "name": "if_expr",
+            "type": "IfCondition",
+            "depends_on": [],
+            "expression": {"type": "Expression", "value": "@equals('a', 'b')"},
+            "if_true_activities": [
+                {
+                    "name": "if_child",
+                    "type": "DatabricksNotebook",
+                    "depends_on": [],
+                    "notebook_path": "/Workspace/notebooks/if_child",
+                }
+            ],
+        },
+    ]
+
+    translated = translate_activities(activities)
+    assert translated is not None
+    assert len(translated) == 3
 
 
 def test_copy_postgresql_to_delta(copy_activity_fixtures: list[dict]) -> None:
