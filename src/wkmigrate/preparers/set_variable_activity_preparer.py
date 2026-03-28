@@ -11,11 +11,15 @@ from __future__ import annotations
 from wkmigrate.code_generator import get_set_variable_notebook_content
 from wkmigrate.models.ir.pipeline import SetVariableActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_set_variable_activity(activity: SetVariableActivity) -> PreparedActivity:
+def prepare_set_variable_activity(
+    activity: SetVariableActivity,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedActivity:
     """
     Builds tasks and artifacts for a SetVariable activity.
 
@@ -26,6 +30,7 @@ def prepare_set_variable_activity(activity: SetVariableActivity) -> PreparedActi
         :class:`PreparedActivity` containing the notebook task configuration and
         the generated notebook artifact.
     """
+    del emission_config
     notebook_content = get_set_variable_notebook_content(activity.variable_name, activity.variable_value)
     notebook_path = f"/wkmigrate/set_variable_notebooks/{activity.task_key}/set_{activity.variable_name}"
     notebook = NotebookArtifact(file_path=notebook_path, content=notebook_content)

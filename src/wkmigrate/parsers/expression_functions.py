@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Callable
 
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import _VALID_STRATEGIES
 
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
 _PIPELINE_PARAMETER_EXPRESSION_PREFIX = "dbutils.widgets.get("
+_DEFAULT_EMISSION_STRATEGY = "notebook_python"
 
 
 def _require_arity(
@@ -291,3 +293,34 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "startofday": _emit_start_of_day,
     "converttimezone": _emit_convert_time_zone,
 }
+
+_FUNCTION_REGISTRIES: dict[str, dict[str, FunctionEmitter]] = {
+    _DEFAULT_EMISSION_STRATEGY: FUNCTION_REGISTRY,
+}
+
+
+def get_function_registry(strategy: str = _DEFAULT_EMISSION_STRATEGY) -> dict[str, FunctionEmitter]:
+    """Return the function registry for the requested emission strategy."""
+
+    if not isinstance(strategy, str):
+        raise ValueError("strategy must be a string")
+    normalized_strategy = strategy.lower()
+    if normalized_strategy not in _VALID_STRATEGIES and normalized_strategy not in _FUNCTION_REGISTRIES:
+        raise ValueError(f"Unknown emission strategy '{strategy}'")
+    return _FUNCTION_REGISTRIES.setdefault(normalized_strategy, {})
+
+
+def register_function(
+    name: str,
+    emitter: FunctionEmitter,
+    strategy: str = _DEFAULT_EMISSION_STRATEGY,
+) -> None:
+    """Register or replace a function emitter for a strategy registry."""
+
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name must be a non-empty string")
+    if not callable(emitter):
+        raise ValueError("emitter must be callable")
+
+    registry = get_function_registry(strategy)
+    registry[name.lower()] = emitter
