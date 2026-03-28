@@ -8,9 +8,10 @@ and nested activity tasks and artifacts.
 
 from __future__ import annotations
 from importlib import import_module
-from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE
+
 from wkmigrate.models.ir.pipeline import ForEachActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
@@ -18,7 +19,7 @@ from wkmigrate.utils import parse_mapping
 def prepare_for_each_activity(
     activity: ForEachActivity,
     default_files_to_delta_sinks: bool | None,
-    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+    emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """
     Builds the task payload for a ForEach activity.
@@ -35,7 +36,7 @@ def prepare_for_each_activity(
     inner_prepared = preparer.prepare_activity(
         activity.for_each_task,
         default_files_to_delta_sinks,
-        credentials_scope,
+        emission_config=emission_config,
     )
 
     for_each_task = parse_mapping(

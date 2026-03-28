@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emitter_protocol import EmittedExpression, EmitterProtocol
 from wkmigrate.parsers.expression_ast import (
     AstNode,
     BoolLiteral,
@@ -17,7 +19,7 @@ from wkmigrate.parsers.expression_ast import (
     StringInterpolation,
     StringLiteral,
 )
-from wkmigrate.parsers.expression_functions import FUNCTION_REGISTRY
+from wkmigrate.parsers.expression_functions import get_function_registry
 
 _PIPELINE_VARS: dict[str, str] = {
     "Pipeline": "spark.conf.get('spark.databricks.job.parentName', '')",
@@ -36,14 +38,6 @@ _DATETIME_HELPER_FUNCTIONS: set[str] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class EmittedExpression:
-    """Emitted expression and required import names."""
-
-    code: str
-    required_imports: tuple[str, ...] = ()
-
-
 def emit(node: AstNode, context: TranslationContext | None = None) -> str | UnsupportedValue:
     """Emit a Python expression string for an AST node."""
 
@@ -56,7 +50,7 @@ def emit(node: AstNode, context: TranslationContext | None = None) -> str | Unsu
 def emit_with_imports(node: AstNode, context: TranslationContext | None = None) -> EmittedExpression | UnsupportedValue:
     """Emit Python expression and import metadata for an AST node."""
 
-    emitter = _Emitter(context=context)
+    emitter = PythonEmitter(context=context)
     code = emitter.emit_node(node)
     if isinstance(code, UnsupportedValue):
         return code
@@ -64,14 +58,23 @@ def emit_with_imports(node: AstNode, context: TranslationContext | None = None) 
 
 
 @dataclass(slots=True)
-class _Emitter:
-    """Stateful recursive emitter."""
+class PythonEmitter(EmitterProtocol):
+    """Stateful recursive emitter for the notebook-python strategy."""
 
     context: TranslationContext | None
     required_imports: set[str] = field(default_factory=set)
 
-    def emit_node(self, node: AstNode) -> str | UnsupportedValue:
+    def can_emit(self, node: AstNode, context: ExpressionContext) -> bool:
+        del node, context
+        return True
+
+    def emit_node(
+        self,
+        node: AstNode,
+        context: ExpressionContext = ExpressionContext.GENERIC,
+    ) -> str | UnsupportedValue:
         """Emit node recursively."""
+        del context
 
         if isinstance(node, StringLiteral):
             return repr(node.value)
@@ -133,7 +136,7 @@ class _Emitter:
                 return emitted_arg
             emitted_args.append(emitted_arg)
 
-        function_emitter = FUNCTION_REGISTRY.get(lowered)
+        function_emitter = get_function_registry("notebook_python").get(lowered)
         if function_emitter is None:
             return UnsupportedValue(
                 value=node.name,

@@ -10,13 +10,14 @@ from __future__ import annotations
 from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE, get_web_activity_notebook_content
 from wkmigrate.models.ir.pipeline import WebActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
 def prepare_web_activity(
     activity: WebActivity,
-    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+    emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """
     Builds the task payload for a Web activity.
@@ -31,6 +32,7 @@ def prepare_web_activity(
     Returns:
         PreparedActivity containing the notebook task configuration and artifacts.
     """
+    del emission_config
     notebook_content = get_web_activity_notebook_content(
         activity_name=activity.name,
         activity_type="WebActivity",

@@ -40,6 +40,7 @@ from databricks.sdk.service.workspace import ExportFormat, ImportFormat, Languag
 from typing_extensions import deprecated
 
 from wkmigrate.parsers.dataset_parsers import DEFAULT_CREDENTIALS_SCOPE
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.definition_stores.definition_store import DefinitionStore
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
@@ -90,6 +91,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
             "schema",
             "workspace_url",
             "credentials_scope",
+            "emission_strategy",
         }
     )
     _valid_compute_types = frozenset({"serverless", "classic"})
@@ -111,6 +113,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
             raise ValueError("'host_name' must be provided when creating a WorkspaceDefinitionStore")
         self._validate_option_keys(self.options.keys())
         self._validate_compute_type_value(self.options.get('compute_type'))
+        self._validate_emission_strategy_value(self.options.get('emission_strategy'))
         self.workspace_client = self._login_workspace_client()
 
     def set_option(self, key: str, value: Any) -> None:
@@ -128,6 +131,8 @@ class WorkspaceDefinitionStore(DefinitionStore):
         self._validate_option_keys([key])
         if key == 'compute_type':
             self._validate_compute_type_value(value)
+        if key == 'emission_strategy':
+            self._validate_emission_strategy_value(value)
         self.options[key] = value
 
     def set_options(self, options: dict[str, Any]) -> None:
@@ -143,6 +148,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
         """
         self._validate_option_keys(options.keys())
         self._validate_compute_type_value(options.get('compute_type'))
+        self._validate_emission_strategy_value(options.get('emission_strategy'))
         self.options = dict(options)
 
     def to_jobs(self, pipeline_definitions: list[Pipeline]) -> list[int]:
@@ -354,6 +360,16 @@ class WorkspaceDefinitionStore(DefinitionStore):
                 f'{", ".join(sorted(self._valid_compute_types))}'
             )
 
+    @staticmethod
+    def _validate_emission_strategy_value(emission_strategy: Any) -> None:
+        """Validate the ``emission_strategy`` options payload.
+
+        The parsed config is discarded here; ``_prepare_workflow`` constructs the actual
+        ``EmissionConfig`` at preparation time to pick up any options changes since validation.
+        """
+
+        EmissionConfig.from_dict(emission_strategy)
+
     def _prepare_workflow(self, pipeline_definition: Pipeline, *, defer_root_path: bool = False) -> PreparedWorkflow:
         """
         Translates the pipeline and collects artifacts via ``prepare_workflow``, then applies options.
@@ -369,7 +385,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
         prepared = prepare_workflow(
             pipeline=pipeline_definition,
             files_to_delta_sinks=self._effective_files_to_delta_sinks(),
-            credentials_scope=self._effective_credentials_scope(),
+            emission_config=EmissionConfig.from_dict(self.options.get('emission_strategy')),
         )
         return self._apply_options(prepared, defer_root_path=defer_root_path)
 
