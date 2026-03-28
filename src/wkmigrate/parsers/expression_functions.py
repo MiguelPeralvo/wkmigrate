@@ -221,3 +221,11 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "coalesce": _emit_coalesce,
     "empty": _emit_empty,
 }
+
+
+def get_function_registry(strategy: str = "notebook_python") -> dict[str, FunctionEmitter]:
+    """Return the function registry for the requested strategy."""
+
+    if strategy.lower() != "notebook_python":
+        raise ValueError(f"Unknown emission strategy '{strategy}'")
+    return FUNCTION_REGISTRY
