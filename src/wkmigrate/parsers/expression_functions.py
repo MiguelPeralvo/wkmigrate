@@ -300,7 +300,7 @@ def _emit_sql_ends_with(args: list[str]) -> str | UnsupportedValue:
 def _emit_sql_contains(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("contains", args, 2, 2):
         return error
-    return f"(instr(cast({args[0]} as string), {args[1]}) > 0)"
+    return f"contains(cast({args[0]} as string), {args[1]})"
 
 
 def _emit_sql_split(args: list[str]) -> str | UnsupportedValue:
@@ -348,6 +348,8 @@ def _emit_sql_cast(cast_name: str, sql_cast: str) -> FunctionEmitter:
 def _emit_sql_json(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("json", args, 1, 1):
         return error
+    # Note: hardcoded map<string,string> only handles flat JSON objects.
+    # Nested JSON or arrays require schema inference which is not yet supported.
     # Preserve parser compatibility by returning a generic parsed JSON map.
     return f"from_json(cast({args[0]} as string), 'map<string,string>')"
 
