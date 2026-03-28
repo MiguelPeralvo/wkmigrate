@@ -51,10 +51,10 @@ def emit_with_imports(node: AstNode, context: TranslationContext | None = None) 
     """Emit Python expression and import metadata for an AST node."""
 
     emitter = PythonEmitter(context=context)
-    code = emitter.emit_node(node)
-    if isinstance(code, UnsupportedValue):
-        return code
-    return EmittedExpression(code=code, required_imports=tuple(sorted(emitter.required_imports)))
+    emitted = emitter.emit_node(node)
+    if isinstance(emitted, UnsupportedValue):
+        return emitted
+    return emitted
 
 
 @dataclass(slots=True)
@@ -72,27 +72,33 @@ class PythonEmitter(EmitterProtocol):
         self,
         node: AstNode,
         context: ExpressionContext = ExpressionContext.GENERIC,
-    ) -> str | UnsupportedValue:
+    ) -> EmittedExpression | UnsupportedValue:
         """Emit node recursively."""
-        del context
+        del context  # Python emission currently ignores context-specific semantics.
 
+        emitted: str | UnsupportedValue
         if isinstance(node, StringLiteral):
-            return repr(node.value)
-        if isinstance(node, NumberLiteral):
-            return repr(node.value)
-        if isinstance(node, BoolLiteral):
-            return repr(node.value)
-        if isinstance(node, NullLiteral):
-            return "None"
-        if isinstance(node, FunctionCall):
-            return self._emit_function_call(node)
-        if isinstance(node, PropertyAccess):
-            return self._emit_property_access(node)
-        if isinstance(node, IndexAccess):
-            return self._emit_index_access(node)
-        if isinstance(node, StringInterpolation):
-            return self._emit_string_interpolation(node)
-        return UnsupportedValue(value=node, message=f"Unsupported AST node type '{type(node).__name__}'")
+            emitted = repr(node.value)
+        elif isinstance(node, NumberLiteral):
+            emitted = repr(node.value)
+        elif isinstance(node, BoolLiteral):
+            emitted = repr(node.value)
+        elif isinstance(node, NullLiteral):
+            emitted = "None"
+        elif isinstance(node, FunctionCall):
+            emitted = self._emit_function_call(node)
+        elif isinstance(node, PropertyAccess):
+            emitted = self._emit_property_access(node)
+        elif isinstance(node, IndexAccess):
+            emitted = self._emit_index_access(node)
+        elif isinstance(node, StringInterpolation):
+            emitted = self._emit_string_interpolation(node)
+        else:
+            return UnsupportedValue(value=node, message=f"Unsupported AST node type '{type(node).__name__}'")
+
+        if isinstance(emitted, UnsupportedValue):
+            return emitted
+        return EmittedExpression(code=emitted, required_imports=tuple(sorted(self.required_imports)))
 
     def _emit_function_call(self, node: FunctionCall) -> str | UnsupportedValue:
         """Emit a function-call node."""
@@ -134,7 +140,7 @@ class PythonEmitter(EmitterProtocol):
             emitted_arg = self.emit_node(arg)
             if isinstance(emitted_arg, UnsupportedValue):
                 return emitted_arg
-            emitted_args.append(emitted_arg)
+            emitted_args.append(emitted_arg.code)
 
         function_emitter = get_function_registry("notebook_python").get(lowered)
         if function_emitter is None:
@@ -171,9 +177,10 @@ class PythonEmitter(EmitterProtocol):
                     )
                 return self._emit_activity_property_access(root, properties, index_segments=[])
 
-        root_expression = self.emit_node(root)
-        if isinstance(root_expression, UnsupportedValue):
-            return root_expression
+        root_emitted = self.emit_node(root)
+        if isinstance(root_emitted, UnsupportedValue):
+            return root_emitted
+        root_expression = root_emitted.code
 
         for property_name in properties:
             root_expression = f"({root_expression})[{property_name!r}]"
@@ -192,13 +199,15 @@ class PythonEmitter(EmitterProtocol):
                     )
                 return self._emit_activity_property_access(root, properties, index_segments=[node.index])
 
-        object_expression = self.emit_node(node.object)
-        if isinstance(object_expression, UnsupportedValue):
-            return object_expression
+        object_emitted = self.emit_node(node.object)
+        if isinstance(object_emitted, UnsupportedValue):
+            return object_emitted
+        object_expression = object_emitted.code
 
-        index_expression = self.emit_node(node.index)
-        if isinstance(index_expression, UnsupportedValue):
-            return index_expression
+        index_emitted = self.emit_node(node.index)
+        if isinstance(index_emitted, UnsupportedValue):
+            return index_emitted
+        index_expression = index_emitted.code
 
         return f"({object_expression})[{index_expression}]"
 
@@ -214,7 +223,7 @@ class PythonEmitter(EmitterProtocol):
             emitted = self.emit_node(part)
             if isinstance(emitted, UnsupportedValue):
                 return emitted
-            emitted_parts.append(f"str({emitted})")
+            emitted_parts.append(f"str({emitted.code})")
 
         if not emitted_parts:
             return "''"
@@ -288,7 +297,7 @@ class PythonEmitter(EmitterProtocol):
             emitted_index = self.emit_node(index_node)
             if isinstance(emitted_index, UnsupportedValue):
                 return emitted_index
-            accessors.append(f"[{emitted_index}]")
+            accessors.append(f"[{emitted_index.code}]")
 
         self.required_imports.add("json")
         return f"json.loads({base}){''.join(accessors)}"
