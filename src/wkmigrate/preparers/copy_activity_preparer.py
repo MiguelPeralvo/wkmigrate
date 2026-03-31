@@ -34,6 +34,7 @@ from wkmigrate.utils import parse_mapping
 def prepare_copy_activity(
     activity: CopyActivity,
     default_files_to_delta_sinks: bool | None,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
     emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """

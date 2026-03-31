@@ -17,6 +17,7 @@ from wkmigrate.utils import parse_mapping
 
 def prepare_web_activity(
     activity: WebActivity,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
     emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """

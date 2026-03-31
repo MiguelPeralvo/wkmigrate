@@ -22,6 +22,7 @@ from wkmigrate.utils import parse_mapping
 
 def prepare_lookup_activity(
     activity: LookupActivity,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
     emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """

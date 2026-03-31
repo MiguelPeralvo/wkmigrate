@@ -21,6 +21,7 @@ from wkmigrate.utils import parse_mapping
 def prepare_run_job_activity(
     activity: RunJobActivity,
     default_files_to_delta_sinks: bool | None,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
     emission_config: EmissionConfig | None = None,
 ) -> PreparedActivity:
     """
@@ -46,6 +47,7 @@ def prepare_run_job_activity(
     inner_workflow = preparer.prepare_workflow(
         activity.pipeline,
         default_files_to_delta_sinks,
+        credentials_scope=credentials_scope,
         emission_config=emission_config,
     )
 

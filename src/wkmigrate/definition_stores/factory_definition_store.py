@@ -24,6 +24,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+from dataclasses import dataclass, field
 
 from wkmigrate.clients.factory_client import FactoryClient
 from wkmigrate.definition_stores.definition_store import DefinitionStore
@@ -59,8 +60,10 @@ class FactoryDefinitionStore(DefinitionStore):
     resource_group_name: str | None = None
     factory_name: str | None = None
     options: dict[str, Any] = field(default_factory=dict)
-    _factory_client: FactoryClient | None = field(init=False)
-    _appenders: list[Callable[[dict], dict]] | None = field(init=False)
+    source_property_case: SourcePropertyCase = SourcePropertyCase.SNAKE
+
+    _client: FactoryClient | None = field(init=False)
+    _adapter: PipelineAdapter | None = field(init=False)
     _valid_option_keys = frozenset({"emission_strategy"})
 
     def __post_init__(self) -> None:
@@ -140,7 +143,10 @@ class FactoryDefinitionStore(DefinitionStore):
         trigger = self._client.get_trigger(pipeline_name)
 
         enriched = self._adapter.adapt(pipeline, trigger)
-        return translate_pipeline(enriched)
+        return translate_pipeline(
+            enriched,
+            emission_config=EmissionConfig.from_dict(self.options.get("emission_strategy")),
+        )
 
     def load_all(self, pipeline_names: list[str] | None = None) -> list[Pipeline]:
         """Load and translate multiple pipelines. Failures are logged and skipped.
@@ -163,30 +169,6 @@ class FactoryDefinitionStore(DefinitionStore):
                     logger.warning(f"Could not load pipeline '{futures[future]}'", exc_info=exc)
         return results
 
-
-        Args:
-            pipeline_name: Name of the pipeline to load as a ``str``.
-
-        Returns:
-            Pipeline definition decorated with linked resources as a ``Pipeline`` dataclass.
-
-        Raises:
-            ValueError: If the factory client is not initialized.
-        """
-        if self._factory_client is None:
-            raise ValueError("Factory client is not initialized")
-        pipeline = self._factory_client.get_pipeline(pipeline_name)
-        pipeline["trigger"] = self._factory_client.get_trigger(pipeline_name)
-        activities = pipeline.get("activities")
-        if activities is not None:
-            pipeline["activities"] = [self._append_objects(activity) for activity in activities]
-        else:
-            pipeline["activities"] = []
-        return translate_pipeline(
-            pipeline,
-            emission_config=EmissionConfig.from_dict(self.options.get("emission_strategy")),
-        )
-
     def _validate_option_keys(self, keys: Any) -> None:
         invalid_keys = set(keys) - self._valid_option_keys
         if invalid_keys:
@@ -196,106 +178,8 @@ class FactoryDefinitionStore(DefinitionStore):
     def _validate_emission_strategy_value(emission_strategy: Any) -> None:
         EmissionConfig.from_dict(emission_strategy)
 
-    def _append_objects(self, activity: dict) -> dict:
-        """
-        Attaches datasets and linked services to an activity definition.
 
-        Args:
-            activity: Activity payload emitted by the factory service as a ``dict``.
-
-        Returns:
-            Activity definition with curated child objects as a ``dict``.
-        """
-        if self._appenders is None:
-            return activity
-        for appender in self._appenders:
-            activity = appender(activity)
-        return activity
-
-    def _append_datasets(self, activity: dict) -> dict:
-        """
-        Populates referenced datasets for the provided activity.
-
-        Args:
-            activity: Activity definition containing dataset references as a ``dict``.
-
-        Returns:
-            Activity definition enriched with dataset metadata as a ``dict``.
-
-        Raises:
-            ValueError: If the factory client is not initialized.
-        """
-        if "inputs" in activity:
-            datasets = activity.get("inputs")
-            if datasets is not None:
-                dataset_names = [dataset.get("reference_name") for dataset in datasets]
-                if self._factory_client is None:
-                    raise ValueError("Factory client is not initialized")
-                activity["input_dataset_definitions"] = [
-                    self._factory_client.get_dataset(dataset_name) for dataset_name in dataset_names
-                ]
-        if "outputs" in activity:
-            datasets = activity.get("outputs")
-            if datasets is not None:
-                dataset_names = [dataset.get("reference_name") for dataset in datasets]
-                if self._factory_client is None:
-                    raise ValueError("Factory client is not initialized")
-                activity["output_dataset_definitions"] = [
-                    self._factory_client.get_dataset(dataset_name) for dataset_name in dataset_names
-                ]
-        if "dataset" in activity:
-            dataset_ref = activity.get("dataset")
-            if dataset_ref is not None:
-                dataset_name = dataset_ref.get("reference_name")
-                if self._factory_client is None:
-                    raise ValueError("Factory client is not initialized")
-                activity["input_dataset_definitions"] = [self._factory_client.get_dataset(dataset_name)]
-        return activity
-
-    def _append_linked_service(self, activity: dict) -> dict:
-        """
-        Populates linked-service metadata for Databricks activities.
-
-        Args:
-            activity: Activity definition containing linked-service references as a ``dict``.
-
-        Returns:
-            Activity definition enriched with linked-service payloads as a ``dict``.
-
-        Raises:
-            ValueError: If the factory client is not initialized.
-        """
-        linked_service_reference = activity.get("linked_service_name")
-        if linked_service_reference is not None:
-            linked_service_name = linked_service_reference.get("reference_name")
-            if self._factory_client is None:
-                raise ValueError("Factory client is not initialized")
-            activity["linked_service_definition"] = self._factory_client.get_linked_service(linked_service_name)
-
-        if_false_activities = activity.get("if_false_activities")
-        if if_false_activities is not None:
-            activity["if_false_activities"] = [
-                self._append_linked_service(if_false_activity) for if_false_activity in if_false_activities
-            ]
-
-        if_true_activities = activity.get("if_true_activities")
-        if if_true_activities is not None:
-            activity["if_true_activities"] = [
-                self._append_linked_service(if_true_activity) for if_true_activity in if_true_activities
-            ]
-
-        activities = activity.get("activities")
-        if activities is not None:
-            activity["activities"] = [self._append_linked_service(activity) for activity in activities]
-        return activity
-
-    @staticmethod
-    def _get_worker_count() -> int:
-        """
-        Returns the number of threadpool workers to use.
-
-        Returns:
-            Number of threadpool workers as an ``int``.
-        """
-        cpu_count = os.cpu_count()
-        return cpu_count * 2 if cpu_count is not None else 1
+def _get_worker_count() -> int:
+    """Return the number of threadpool workers to use."""
+    cpu_count = os.cpu_count()
+    return cpu_count * 2 if cpu_count is not None else 1

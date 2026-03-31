@@ -16,6 +16,7 @@ from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.parsers.expression_ast import FunctionCall
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -32,6 +33,7 @@ def translate_if_condition_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF IfCondition activity into a ``IfConditionActivity`` object.
@@ -81,7 +83,13 @@ def translate_if_condition_activity(
     for branch_key, outcome in (("if_false_activities", "false"), ("if_true_activities", "true")):
         branch = activity.get(branch_key)
         if branch:
-            children, context = _translate_child_activities(branch, parent_task_name, outcome, context)
+            children, context = _translate_child_activities(
+                branch,
+                parent_task_name,
+                outcome,
+                context,
+                emission_config=emission_config,
+            )
             child_activities.extend(children)
 
     if not child_activities:
@@ -105,6 +113,7 @@ def _translate_child_activities(
     parent_task_name: str,
     parent_task_outcome: str,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
     """
     Translates child activities referenced by IfCondition tasks.
@@ -129,7 +138,7 @@ def _translate_child_activities(
     for activity in child_activities:
         _activity = activity.copy()
         _activity["depends_on"] = [*(activity.get("depends_on") or []), parent_dependency]
-        result, context = visit_activity(_activity, True, context)
+        result, context = visit_activity(_activity, True, context, emission_config=emission_config)
         translated.append(result)
     return translated, context
 

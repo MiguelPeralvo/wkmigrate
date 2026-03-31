@@ -385,6 +385,7 @@ class WorkspaceDefinitionStore(DefinitionStore):
         prepared = prepare_workflow(
             pipeline=pipeline_definition,
             files_to_delta_sinks=self._effective_files_to_delta_sinks(),
+            credentials_scope=self._effective_credentials_scope(),
             emission_config=EmissionConfig.from_dict(self.options.get('emission_strategy')),
         )
         return self._apply_options(prepared, defer_root_path=defer_root_path)
