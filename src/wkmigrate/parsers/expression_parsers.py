@@ -4,11 +4,8 @@ from dataclasses import dataclass
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
-from wkmigrate.parsers.emitter_protocol import EmittedExpression
-from wkmigrate.parsers.expression_ast import AstNode
+from wkmigrate.parsers.expression_emitter import emit_with_imports
 from wkmigrate.parsers.expression_parser import parse_expression
-from wkmigrate.parsers.strategy_router import StrategyRouter
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,8 +20,6 @@ class ResolvedExpression:
 def get_literal_or_expression(
     value: str | dict | int | float | bool,
     context: TranslationContext | None = None,
-    expression_context: ExpressionContext = ExpressionContext.GENERIC,
-    emission_config: EmissionConfig | None = None,
 ) -> ResolvedExpression | UnsupportedValue:
     """Resolve an ADF property value into Python expression code."""
 
@@ -37,12 +32,7 @@ def get_literal_or_expression(
         expression_string = str(expression)
         if not expression_string.startswith("@"):
             expression_string = f"@{expression_string}"
-        return _resolve_expression_string(
-            expression_string,
-            context=context,
-            expression_context=expression_context,
-            emission_config=emission_config,
-        )
+        return _resolve_expression_string(expression_string, context)
 
     if not isinstance(value, str):
         return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
@@ -50,20 +40,10 @@ def get_literal_or_expression(
     if not value.startswith("@"):
         return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
 
-    return _resolve_expression_string(
-        value,
-        context=context,
-        expression_context=expression_context,
-        emission_config=emission_config,
-    )
+    return _resolve_expression_string(value, context)
 
 
-def parse_variable_value(
-    value: str | dict | int | float | bool,
-    context: TranslationContext,
-    expression_context: ExpressionContext = ExpressionContext.SET_VARIABLE,
-    emission_config: EmissionConfig | None = None,
-) -> str | UnsupportedValue:
+def parse_variable_value(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
     """
     Parses an ADF variable value or expression into a Python code snippet. Unsupported dynamic expressions return
     `UnsupportedValue`.
@@ -85,57 +65,21 @@ def parse_variable_value(
         A Python expression string suitable for embedding in a generated notebook, or an `UnsupportedValue` when the
         expression cannot be translated.
     """
-    resolved = get_literal_or_expression(
-        value,
-        context=context,
-        expression_context=expression_context,
-        emission_config=emission_config,
-    )
+    resolved = get_literal_or_expression(value, context)
     if isinstance(resolved, UnsupportedValue):
         return resolved
     return resolved.code
 
 
-def resolve_expression(
-    value: str | dict | int | float | bool,
-    context: TranslationContext,
-    expression_context: ExpressionContext = ExpressionContext.GENERIC,
-    emission_config: EmissionConfig | None = None,
-) -> str | UnsupportedValue:
+def resolve_expression(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
     """Resolve a raw value or ADF expression payload into a Python expression string."""
 
-    return parse_variable_value(
-        value,
-        context=context,
-        expression_context=expression_context,
-        emission_config=emission_config,
-    )
-
-
-def resolve_expression_node(
-    node: AstNode,
-    context: TranslationContext | None = None,
-    expression_context: ExpressionContext = ExpressionContext.GENERIC,
-    emission_config: EmissionConfig | None = None,
-    exact: bool | None = None,
-    router: StrategyRouter | None = None,
-) -> EmittedExpression | UnsupportedValue:
-    """Resolve a parsed AST node via the strategy router.
-
-    By default this function builds a per-call ``StrategyRouter`` to preserve
-    backwards-compatible behavior. Callers that emit many sibling expressions
-    can pass a pre-built router to reuse emitter instances.
-    """
-
-    effective_router = router or StrategyRouter(config=emission_config, translation_context=context)
-    return effective_router.emit(node, expression_context=expression_context, exact=exact)
+    return parse_variable_value(value, context)
 
 
 def _resolve_expression_string(
     expression: str,
     context: TranslationContext | None,
-    expression_context: ExpressionContext,
-    emission_config: EmissionConfig | None,
 ) -> ResolvedExpression | UnsupportedValue:
     """
     Parses an expression string into a Python code snippet.
@@ -155,12 +99,7 @@ def _resolve_expression_string(
     if isinstance(parsed, UnsupportedValue):
         return parsed
 
-    emitted = resolve_expression_node(
-        parsed,
-        context=context,
-        expression_context=expression_context,
-        emission_config=emission_config,
-    )
+    emitted = emit_with_imports(parsed, context)
     if isinstance(emitted, UnsupportedValue):
         return emitted
 
