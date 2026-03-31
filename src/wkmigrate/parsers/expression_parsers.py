@@ -1,21 +1,69 @@
-import re
+from __future__ import annotations
+
+from dataclasses import dataclass
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-
-# Supported @pipeline() system variables mapped to Python expressions
-_PIPELINE_VARS: dict[str, str] = {
-    "Pipeline": "spark.conf.get('spark.databricks.job.parentName', '')",
-    "RunId": "dbutils.jobs.getContext().tags().get('runId', '')",
-    "TriggerTime": "dbutils.jobs.getContext().tags().get('startTime', '')",
-    "GroupId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
-}
-_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {"firstRow", "value"}
-_ACTIVITY_OUTPUT_PATTERN = r"activity\(['\"]([^'\"]+)['\"]\)\.output\.([\w.]+)$"
-_NAMED_VARIABLE_PATTERN = r"variables\(['\"]([^'\"]+)['\"]\)$"
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
+from wkmigrate.parsers.emitter_protocol import EmittedExpression
+from wkmigrate.parsers.expression_ast import AstNode
+from wkmigrate.parsers.expression_parser import parse_expression
+from wkmigrate.parsers.strategy_router import StrategyRouter
 
 
-def parse_variable_value(value: str | dict | int | float | bool, context: TranslationContext) -> str | UnsupportedValue:
+@dataclass(frozen=True, slots=True)
+class ResolvedExpression:
+    """Result of resolving an ADF value to a Python expression string."""
+
+    code: str
+    is_dynamic: bool
+    required_imports: frozenset[str]
+
+
+def get_literal_or_expression(
+    value: str | dict | int | float | bool,
+    context: TranslationContext | None = None,
+    expression_context: ExpressionContext = ExpressionContext.GENERIC,
+    emission_config: EmissionConfig | None = None,
+) -> ResolvedExpression | UnsupportedValue:
+    """Resolve an ADF property value into Python expression code."""
+
+    if isinstance(value, dict):
+        if value.get("type") != "Expression":
+            return UnsupportedValue(value=value, message=f"Unsupported variable value type '{value.get('type')}'")
+        expression = value.get("value")
+        if expression is None or expression == "":
+            return UnsupportedValue(value=value, message="Missing property 'value' of expression")
+        expression_string = str(expression)
+        if not expression_string.startswith("@"):
+            expression_string = f"@{expression_string}"
+        return _resolve_expression_string(
+            expression_string,
+            context=context,
+            expression_context=expression_context,
+            emission_config=emission_config,
+        )
+
+    if not isinstance(value, str):
+        return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
+
+    if not value.startswith("@"):
+        return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
+
+    return _resolve_expression_string(
+        value,
+        context=context,
+        expression_context=expression_context,
+        emission_config=emission_config,
+    )
+
+
+def parse_variable_value(
+    value: str | dict | int | float | bool,
+    context: TranslationContext,
+    expression_context: ExpressionContext = ExpressionContext.SET_VARIABLE,
+    emission_config: EmissionConfig | None = None,
+) -> str | UnsupportedValue:
     """
     Parses an ADF variable value or expression into a Python code snippet. Unsupported dynamic expressions return
     `UnsupportedValue`.
@@ -37,21 +85,52 @@ def parse_variable_value(value: str | dict | int | float | bool, context: Transl
         A Python expression string suitable for embedding in a generated notebook, or an `UnsupportedValue` when the
         expression cannot be translated.
     """
-    if isinstance(value, dict):
-        if value.get("type") != "Expression":
-            return UnsupportedValue(value=value, message=f"Unsupported variable value type '{value.get('type')}'")
-        expression = value.get("value", "")
-        if not expression:
-            return UnsupportedValue(value=value, message="Missing property 'value' of expression")
-        return _parse_expression_string(expression, context)
-
-    if not isinstance(value, str):
-        return repr(value)
-
-    return _parse_expression_string(value, context)
+    resolved = get_literal_or_expression(
+        value,
+        context=context,
+        expression_context=expression_context,
+        emission_config=emission_config,
+    )
+    if isinstance(resolved, UnsupportedValue):
+        return resolved
+    return resolved.code
 
 
-def _parse_expression_string(expression: str, context: TranslationContext) -> str | UnsupportedValue:
+def resolve_expression(
+    value: str | dict | int | float | bool,
+    context: TranslationContext,
+    expression_context: ExpressionContext = ExpressionContext.GENERIC,
+    emission_config: EmissionConfig | None = None,
+) -> str | UnsupportedValue:
+    """Resolve a raw value or ADF expression payload into a Python expression string."""
+
+    return parse_variable_value(
+        value,
+        context=context,
+        expression_context=expression_context,
+        emission_config=emission_config,
+    )
+
+
+def resolve_expression_node(
+    node: AstNode,
+    context: TranslationContext | None = None,
+    expression_context: ExpressionContext = ExpressionContext.GENERIC,
+    emission_config: EmissionConfig | None = None,
+    exact: bool | None = None,
+) -> EmittedExpression | UnsupportedValue:
+    """Resolve a parsed AST node via the strategy router."""
+
+    router = StrategyRouter(config=emission_config, translation_context=context)
+    return router.emit(node, expression_context=expression_context, exact=exact)
+
+
+def _resolve_expression_string(
+    expression: str,
+    context: TranslationContext | None,
+    expression_context: ExpressionContext,
+    emission_config: EmissionConfig | None,
+) -> ResolvedExpression | UnsupportedValue:
     """
     Parses an expression string into a Python code snippet.
 
@@ -64,48 +143,23 @@ def _parse_expression_string(expression: str, context: TranslationContext) -> st
     """
 
     if not expression.startswith("@"):
-        return repr(expression)
+        return ResolvedExpression(code=repr(expression), is_dynamic=False, required_imports=frozenset())
 
-    expression = expression[1:].strip()
-    if expression.startswith("{") and expression.endswith("}"):
-        expression = expression[1:-1].strip()
+    parsed = parse_expression(expression)
+    if isinstance(parsed, UnsupportedValue):
+        return parsed
 
-    if match := re.match(_ACTIVITY_OUTPUT_PATTERN, expression):
-        task_key, output_key = match.group(1), match.group(2)
-        output_parts = output_key.split(".")
-        output_root = output_parts[0]
-        if output_root in _SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES:
-            base = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
-            if len(output_parts) > 1:
-                property_path = output_parts[1:]
-                accessors = "".join(f"[{p!r}]" for p in property_path)
-                return f"json.loads({base}){accessors}"
-            return base
-        return UnsupportedValue(
-            value=expression,
-            message=f"Unsupported activity output reference type '@activity('{task_key}').output.{output_key}'",
-        )
+    emitted = resolve_expression_node(
+        parsed,
+        context=context,
+        expression_context=expression_context,
+        emission_config=emission_config,
+    )
+    if isinstance(emitted, UnsupportedValue):
+        return emitted
 
-    if match := re.match(r"pipeline\(\)\.(\w+)$", expression):
-        var_name = match.group(1)
-        if var_name in _PIPELINE_VARS:
-            return _PIPELINE_VARS[var_name]
-        return UnsupportedValue(
-            value=expression,
-            message=f"Unsupported pipeline system variable '@pipeline().{var_name}'",
-        )
-
-    if match := re.match(_NAMED_VARIABLE_PATTERN, expression):
-        variable_name = match.group(1)
-        task_key = context.get_variable_task_key(variable_name)
-        if task_key is not None:
-            return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r})"
-        return UnsupportedValue(
-            value=expression,
-            message=f"Variable '{variable_name}' not set by a previous activity",
-        )
-
-    return UnsupportedValue(
-        value=expression,
-        message=f"Unsupported expression '{expression}'",
+    return ResolvedExpression(
+        code=emitted.code,
+        is_dynamic=True,
+        required_imports=frozenset(emitted.required_imports),
     )
