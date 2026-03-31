@@ -10,7 +10,6 @@ from wkmigrate.parsers.emission_config import EmissionConfig, EmissionStrategy, 
 from wkmigrate.parsers.emitter_protocol import EmittedExpression, EmitterProtocol
 from wkmigrate.parsers.expression_ast import AstNode
 from wkmigrate.parsers.expression_emitter import PythonEmitter
-from wkmigrate.parsers.spark_sql_emitter import SparkSqlEmitter
 
 _EXACT_CONTEXTS: frozenset[ExpressionContext] = frozenset(
     {
@@ -32,7 +31,6 @@ class StrategyRouter:
         self._config = config or EmissionConfig()
         self._emitters: dict[str, EmitterProtocol] = {
             EmissionStrategy.NOTEBOOK_PYTHON.value: PythonEmitter(context=translation_context),
-            EmissionStrategy.SPARK_SQL.value: SparkSqlEmitter(context=translation_context),
         }
         if emitters:
             self._emitters.update(emitters)

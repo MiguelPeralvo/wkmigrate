@@ -14,15 +14,12 @@ from importlib import import_module
 from wkmigrate.models.ir.pipeline import SetVariableActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
+from wkmigrate.parsers.emission_config import ExpressionContext
 from wkmigrate.parsers.expression_parsers import parse_variable_value
 
 
 def translate_set_variable_activity(
-    activity: dict,
-    base_kwargs: dict,
-    context: TranslationContext | None = None,
-    emission_config: EmissionConfig | None = None,
+    activity: dict, base_kwargs: dict, context: TranslationContext | None = None
 ) -> tuple[SetVariableActivity | UnsupportedValue, TranslationContext]:
     """
     Translates an ADF Set Variable activity into a ``SetVariableActivity`` object.
@@ -67,7 +64,6 @@ def translate_set_variable_activity(
         raw_value,
         context,
         expression_context=ExpressionContext.SET_VARIABLE,
-        emission_config=emission_config,
     )
     if isinstance(parsed_variable_value, UnsupportedValue):
         return (

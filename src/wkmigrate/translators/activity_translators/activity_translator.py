@@ -22,7 +22,6 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
-from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.translators.activity_translators.copy_activity_translator import translate_copy_activity
 from wkmigrate.translators.activity_translators.databricks_job_activity_translator import (
     translate_databricks_job_activity,
@@ -62,7 +61,6 @@ def default_context() -> TranslationContext:
 def translate_activities_with_context(
     activities: list[dict] | None,
     context: TranslationContext | None = None,
-    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity] | None, TranslationContext]:
     """
     Translates a collection of ADF activities in dependency-first order, returning the
@@ -87,13 +85,10 @@ def translate_activities_with_context(
         return None, context
 
     index, order = _build_activity_index(activities)
-    return _topological_visit(index, order, context, emission_config=emission_config)
+    return _topological_visit(index, order, context)
 
 
-def translate_activities(
-    activities: list[dict] | None,
-    emission_config: EmissionConfig | None = None,
-) -> list[Activity] | None:
+def translate_activities(activities: list[dict] | None) -> list[Activity] | None:
     """
     Translates a collection of ADF activities into a flattened list of ``Activity`` objects.
 
@@ -107,15 +102,11 @@ def translate_activities(
         Flattened list of translated activities as a ``list[Activity]`` or ``None`` when
         no input was provided.
     """
-    result, _ = translate_activities_with_context(activities, emission_config=emission_config)
+    result, _ = translate_activities_with_context(activities)
     return result
 
 
-def translate_activity(
-    activity: dict,
-    is_conditional_task: bool = False,
-    emission_config: EmissionConfig | None = None,
-) -> Activity:
+def translate_activity(activity: dict, is_conditional_task: bool = False) -> Activity:
     """
     Translates a single ADF activity into an ``Activity`` object.
 
@@ -127,7 +118,7 @@ def translate_activity(
         Translated ``Activity`` object.
     """
     context = default_context()
-    translated, _ = visit_activity(activity, is_conditional_task, context, emission_config=emission_config)
+    translated, _ = visit_activity(activity, is_conditional_task, context)
     return translated
 
 
@@ -135,7 +126,6 @@ def visit_activity(
     activity: dict,
     is_conditional_task: bool,
     context: TranslationContext,
-    emission_config: EmissionConfig | None = None,
 ) -> tuple[Activity, TranslationContext]:
     """
     Translates a single ADF activity, returning the result and an updated context.
@@ -159,13 +149,7 @@ def visit_activity(
     activity_type = activity.get("type") or "Unsupported"
     with not_translatable_context(name, activity_type):
         base_properties = _get_base_properties(activity, is_conditional_task)
-        result, context = _dispatch_activity(
-            activity_type,
-            activity,
-            base_properties,
-            context,
-            emission_config=emission_config,
-        )
+        result, context = _dispatch_activity(activity_type, activity, base_properties, context)
         translated = normalize_translated_result(result, base_properties)
 
     if name:
@@ -178,7 +162,6 @@ def _dispatch_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext,
-    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Dispatches activity translation to the appropriate translator.
@@ -197,23 +180,15 @@ def _dispatch_activity(
     """
     match activity_type:
         case "DatabricksNotebook":
-            return (
-                translate_notebook_activity(
-                    activity,
-                    base_kwargs,
-                    context,
-                    emission_config=emission_config,
-                ),
-                context,
-            )
+            return translate_notebook_activity(activity, base_kwargs, context), context
         case "WebActivity":
-            return translate_web_activity(activity, base_kwargs, context, emission_config=emission_config), context
+            return translate_web_activity(activity, base_kwargs, context), context
         case "IfCondition":
-            return translate_if_condition_activity(activity, base_kwargs, context, emission_config=emission_config)
+            return translate_if_condition_activity(activity, base_kwargs, context)
         case "ForEach":
-            return translate_for_each_activity(activity, base_kwargs, context, emission_config=emission_config)
+            return translate_for_each_activity(activity, base_kwargs, context)
         case "SetVariable":
-            return translate_set_variable_activity(activity, base_kwargs, context, emission_config=emission_config)
+            return translate_set_variable_activity(activity, base_kwargs, context)
         case _:
             translator = context.registry.get(activity_type)
             if translator is not None:
@@ -254,7 +229,6 @@ def _topological_visit(
     activity_index: dict[str, dict],
     visit_order: list[str],
     context: TranslationContext,
-    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
     """
     Visits activities in dependency-first (topological) order.
@@ -289,7 +263,7 @@ def _topological_visit(
             if dep_name and dep_name in activity_index:
                 context = _visit(dep_name, context)
 
-        translated, context = visit_activity(raw, False, context, emission_config=emission_config)
+        translated, context = visit_activity(raw, False, context)
         result.extend(_flatten_activities(translated))
         return context
 
