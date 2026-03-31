@@ -10,15 +10,13 @@ from importlib import import_module
 
 import ast
 import warnings
-from dataclasses import dataclass
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
-from wkmigrate.parsers.emission_config import ExpressionContext
-from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
-from wkmigrate.parsers.expression_parsers import resolve_expression_node
+from wkmigrate.parsers.expression_ast import FunctionCall
+from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
 
 _CONDITION_FUNCTION_TO_OP: dict[str, str] = {
@@ -155,33 +153,16 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
 
     parsed = parse_expression(condition_value)
     if isinstance(parsed, UnsupportedValue):
-        return _unsupported_condition_expression(condition, condition_value)
+        return UnsupportedValue(
+            value=condition,
+            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
+        )
 
     if not isinstance(parsed, FunctionCall):
-        return _unsupported_condition_expression(condition, condition_value)
-
-    operation = _parse_condition_operation(parsed)
-    if isinstance(operation, UnsupportedValue):
-        return _unsupported_condition_expression(condition, condition_value)
-
-    left = _emit_condition_operand(operation.left, context, ExpressionContext.IF_CONDITION_LEFT)
-    if isinstance(left, UnsupportedValue):
-        return left
-    right = _emit_condition_operand(operation.right, context, ExpressionContext.IF_CONDITION_RIGHT)
-    if isinstance(right, UnsupportedValue):
-        return right
-    return {"op": operation.op, "left": left, "right": right}
-
-
-@dataclass(frozen=True, slots=True)
-class _ConditionOperation:
-    op: str
-    left: AstNode
-    right: AstNode
-
-
-def _parse_condition_operation(parsed: FunctionCall) -> _ConditionOperation | UnsupportedValue:
-    """Parse condition operator + operand nodes from a supported function call."""
+        return UnsupportedValue(
+            value=condition,
+            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
+        )
 
     lowered_name = parsed.name.lower()
     if lowered_name == "not":
@@ -191,30 +172,44 @@ def _parse_condition_operation(parsed: FunctionCall) -> _ConditionOperation | Un
             and parsed.args[0].name.lower() == "equals"
             and len(parsed.args[0].args) == 2
         ):
-            return _ConditionOperation(op="NOT_EQUAL", left=parsed.args[0].args[0], right=parsed.args[0].args[1])
-        return UnsupportedValue(value=parsed, message="Unsupported conditional operator")
+            left = _emit_condition_operand(parsed.args[0].args[0], context)
+            if isinstance(left, UnsupportedValue):
+                return left
+            right = _emit_condition_operand(parsed.args[0].args[1], context)
+            if isinstance(right, UnsupportedValue):
+                return right
+            return {"op": "NOT_EQUAL", "left": left, "right": right}
+        return UnsupportedValue(
+            value=condition,
+            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
+        )
 
     op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
     if op_name is None or len(parsed.args) != 2:
-        return UnsupportedValue(value=parsed, message="Unsupported conditional operator")
+        return UnsupportedValue(
+            value=condition,
+            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
+        )
 
-    return _ConditionOperation(op=op_name, left=parsed.args[0], right=parsed.args[1])
+    left = _emit_condition_operand(parsed.args[0], context)
+    if isinstance(left, UnsupportedValue):
+        return left
+    right = _emit_condition_operand(parsed.args[1], context)
+    if isinstance(right, UnsupportedValue):
+        return right
+    return {"op": op_name, "left": left, "right": right}
 
 
-def _emit_condition_operand(
-    operand: AstNode,
-    context: TranslationContext,
-    operand_context: ExpressionContext,
-) -> str | UnsupportedValue:
+def _emit_condition_operand(operand: object, context: TranslationContext) -> str | UnsupportedValue:
     """Emit condition operand while preserving legacy literal formatting."""
 
-    emitted = resolve_expression_node(operand, context, expression_context=operand_context, exact=True)
+    emitted = emit(operand, context)
     if isinstance(emitted, UnsupportedValue):
         return emitted
     try:
-        literal = ast.literal_eval(emitted.code)
+        literal = ast.literal_eval(emitted)
     except (SyntaxError, ValueError):
-        return emitted.code
+        return emitted
     return str(literal)
 
 
@@ -222,15 +217,8 @@ def _validate_condition_expression(expression: dict) -> UnsupportedValue | None:
     """Validates that parsed condition expression contains required fields."""
     if not expression.get("op"):
         return UnsupportedValue(value=expression, message="Missing field 'op' in if condition expression")
-    if "left" not in expression or expression["left"] is None:
+    if not expression.get("left"):
         return UnsupportedValue(value=expression, message="Missing field 'left' in if condition expression")
-    if "right" not in expression or expression["right"] is None:
+    if not expression.get("right"):
         return UnsupportedValue(value=expression, message="Missing field 'right' in if condition expression")
     return None
-
-
-def _unsupported_condition_expression(condition: dict, condition_value: str) -> UnsupportedValue:
-    return UnsupportedValue(
-        value=condition,
-        message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
-    )

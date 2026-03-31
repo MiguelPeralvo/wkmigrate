@@ -11,7 +11,6 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
-from wkmigrate.parsers.emission_config import ExpressionContext
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 
 
@@ -64,11 +63,7 @@ def _parse_notebook_parameters(
     # Parse the parameters:
     parsed_parameters = {}
     for name, value in parameters.items():
-        resolved = get_literal_or_expression(
-            value,
-            context,
-            expression_context=ExpressionContext.EXECUTE_PIPELINE_PARAM,
-        )
+        resolved = get_literal_or_expression(value, context)
         if isinstance(resolved, UnsupportedValue):
             warnings.warn(
                 NotTranslatableWarning(

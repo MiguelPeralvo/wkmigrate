@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.emission_config import ExpressionContext
-from wkmigrate.parsers.emitter_protocol import EmittedExpression
-from wkmigrate.parsers.expression_emitter import PythonEmitter, emit
+from wkmigrate.parsers.expression_emitter import emit, emit_with_imports
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, parse_variable_value
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -34,6 +34,24 @@ def test_emit_math_functions() -> None:
     assert _emit_expression("mod(10, 3)") == "(10 % 3)"
 
 
+def test_emit_math_functions_coerce_pipeline_parameter_widget_values() -> None:
+    emitted_mul = _emit_expression("mul(pipeline().parameters.count, 2)")
+    assert isinstance(emitted_mul, str)
+    assert "dbutils.widgets.get('count') * 2" not in emitted_mul
+    assert "int(__wkm_p)" in emitted_mul
+    assert "float(__wkm_p)" in emitted_mul
+
+    emitted_add = _emit_expression("add(mul(pipeline().parameters.count, 2), 1)")
+    assert isinstance(emitted_add, str)
+    assert "dbutils.widgets.get('count')" in emitted_add
+    assert " + 1" in emitted_add
+
+    emitted_div = _emit_expression("div(pipeline().parameters.count, 2)")
+    assert isinstance(emitted_div, str)
+    assert "int(" in emitted_div
+    assert "dbutils.widgets.get('count')" in emitted_div
+
+
 def test_emit_logical_functions() -> None:
     assert _emit_expression("if(equals(1, 1), 'yes', 'no')") == "('yes' if (1 == 1) else 'no')"
     assert _emit_expression("and(true, false)") == "(True and False)"
@@ -47,6 +65,27 @@ def test_emit_conversion_and_collection_functions() -> None:
     assert _emit_expression("json('{\"a\": 1}')") == "json.loads('{\"a\": 1}')"
     assert _emit_expression("first(createArray('x', 'y'))") == "(['x', 'y'])[0]"
     assert _emit_expression("coalesce(null, 'x')") == "next((v for v in [None, 'x'] if v is not None), None)"
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("toUpper('abc')", "str('abc').upper()"),
+        ("trim('  hi  ')", "str('  hi  ').strip()"),
+        ("length('abcd')", "len('abcd')"),
+        ("contains('abcd', 'bc')", "('bc' in str('abcd'))"),
+        ("split('a,b', ',')", "str('a,b').split(',')"),
+        ("greater(3, 2)", "(3 > 2)"),
+        ("less(2, 3)", "(2 < 3)"),
+        ("greaterOrEquals(3, 3)", "(3 >= 3)"),
+        ("lessOrEquals(3, 3)", "(3 <= 3)"),
+        ("first(createArray('x', 'y'))", "(['x', 'y'])[0]"),
+        ("last(createArray('x', 'y'))", "(['x', 'y'])[-1]"),
+        ("empty(createArray())", "(len([]) == 0)"),
+    ],
+)
+def test_emit_additional_registry_functions(expression: str, expected: str) -> None:
+    assert _emit_expression(expression) == expected
 
 
 def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None:
@@ -64,8 +103,17 @@ def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None
     )
 
 
-def test_emit_wrong_arity_returns_unsupported() -> None:
-    emitted = _emit_expression("@union(createArray('a'))")
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "@substring('abc', 1)",
+        "@add(1)",
+        "@union(createArray('a'))",
+    ],
+)
+def test_emit_wrong_arity_returns_unsupported(expression: str) -> None:
+    emitted = _emit_expression(expression)
+
     assert isinstance(emitted, UnsupportedValue)
     assert "expects" in emitted.message
 
@@ -102,6 +150,17 @@ def test_emit_unknown_function_returns_unsupported() -> None:
     assert isinstance(emitted, UnsupportedValue)
     assert "Unsupported function" in emitted.message
 
+
+def test_emit_datetime_functions_to_runtime_helpers() -> None:
+    assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
+    assert _emit_expression("utcNow('yyyy-MM-dd')") == "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
+    assert _emit_expression("formatDateTime(utcNow())") == "str(_wkmigrate_utc_now())"
+    assert _emit_expression("formatDateTime(utcNow(), 'yyyy-MM-dd')") == (
+        "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
+    )
+    assert _emit_expression("addDays(utcNow(), 2)") == "_wkmigrate_add_days(_wkmigrate_utc_now(), 2)"
+
+
 def test_get_literal_or_expression_static_literal() -> None:
     resolved = get_literal_or_expression("hello")
     assert not isinstance(resolved, UnsupportedValue)
@@ -124,6 +183,12 @@ def test_get_literal_or_expression_handles_zero_in_expression_payload() -> None:
     assert resolved.is_dynamic is True
 
 
+def test_get_literal_or_expression_with_non_expression_dict_type_returns_unsupported() -> None:
+    resolved = get_literal_or_expression({"type": "Literal", "value": "abc"})
+    assert isinstance(resolved, UnsupportedValue)
+    assert "Unsupported variable value type" in resolved.message
+
+
 def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() -> None:
     resolved = get_literal_or_expression("@json('{\"x\": 1}')")
     assert not isinstance(resolved, UnsupportedValue)
@@ -131,24 +196,13 @@ def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() 
     assert resolved.required_imports == frozenset({"json"})
 
 
-def test_python_emitter_emit_node_returns_emitted_expression() -> None:
-    parsed = parse_expression("@concat('a', 'b')")
+def test_emit_with_imports_tracks_datetime_helper_dependency() -> None:
+    parsed = parse_expression("@formatDateTime(utcNow(), 'yyyy-MM-dd')")
     assert not isinstance(parsed, UnsupportedValue)
 
-    emitter = PythonEmitter(context=TranslationContext())
-    emitted = emitter.emit_node(parsed, ExpressionContext.SET_VARIABLE)
-    assert isinstance(emitted, EmittedExpression)
-    assert emitted.code == "str('a') + str('b')"
-
-
-def test_python_emitter_emit_node_merges_required_imports_once() -> None:
-    parsed = parse_expression("@concat(json('{\"x\": 1}'), json('{\"y\": 2}'))")
-    assert not isinstance(parsed, UnsupportedValue)
-
-    emitter = PythonEmitter(context=TranslationContext())
-    emitted = emitter.emit_node(parsed, ExpressionContext.WEB_BODY)
+    emitted = emit_with_imports(parsed, TranslationContext())
     assert not isinstance(emitted, UnsupportedValue)
-    assert emitted.required_imports == ("json",)
+    assert "wkmigrate_datetime_helpers" in emitted.required_imports
 
 
 def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
@@ -161,6 +215,19 @@ def test_get_literal_or_expression_context_free_activity_reference_is_unsupporte
     resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")
     assert isinstance(resolved, UnsupportedValue)
     assert "requires TranslationContext" in resolved.message
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "@pipeline().unknownProp",
+        "@pipeline().parameters",
+    ],
+)
+def test_emit_pipeline_error_paths(expression: str) -> None:
+    emitted = _emit_expression(expression)
+    assert isinstance(emitted, UnsupportedValue)
+    assert "Unsupported pipeline" in emitted.message
 
 
 def test_parse_variable_value_is_thin_wrapper() -> None:
