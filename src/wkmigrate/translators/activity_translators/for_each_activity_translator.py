@@ -16,7 +16,7 @@ from wkmigrate.models.ir.pipeline import Activity, ForEachActivity, Pipeline, Ru
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
 from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, resolve_expression_node
 from wkmigrate.parsers.expression_parser import parse_expression
@@ -27,6 +27,7 @@ def translate_for_each_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF ForEach activity into a ``ForEachActivity`` object.
@@ -60,7 +61,7 @@ def translate_for_each_activity(
             context,
         )
 
-    items_string = _parse_for_each_items(items, context)
+    items_string = _parse_for_each_items(items, context, emission_config=emission_config)
     if isinstance(items_string, UnsupportedValue):
         return items_string, context
 
@@ -71,7 +72,12 @@ def translate_for_each_activity(
             context,
         )
 
-    for_each_task, context = _translate_inner_activities(activity, inner_activity_defs, context)
+    for_each_task, context = _translate_inner_activities(
+        activity,
+        inner_activity_defs,
+        context,
+        emission_config=emission_config,
+    )
     if isinstance(for_each_task, UnsupportedValue):
         return for_each_task, context
 
@@ -88,6 +94,7 @@ def _translate_inner_activities(
     activity: dict,
     inner_activity_defs: list[dict],
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[Activity, TranslationContext]:
     """
     Translates the inner activities of a ForEach into either a direct task or a RunJobActivity.
@@ -104,14 +111,15 @@ def _translate_inner_activities(
         A tuple with the inner task and the updated context.
     """
     if len(inner_activity_defs) == 1:
-        return _translate_single_inner(inner_activity_defs[0], context)
+        return _translate_single_inner(inner_activity_defs[0], context, emission_config=emission_config)
 
-    return _build_inner_pipeline(activity, inner_activity_defs), context
+    return _build_inner_pipeline(activity, inner_activity_defs, emission_config=emission_config), context
 
 
 def _translate_single_inner(
     task_def: dict,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[Activity, TranslationContext]:
     """
     Translates a single inner activity within a ForEach.
@@ -129,10 +137,14 @@ def _translate_single_inner(
     filtered = _filter_parameters(task_def)
     if isinstance(filtered, UnsupportedValue):
         filtered = task_def
-    return visit_activity(filtered, False, context)
+    return visit_activity(filtered, False, context, emission_config=emission_config)
 
 
-def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> RunJobActivity:
+def _build_inner_pipeline(
+    activity: dict,
+    inner_activity_defs: list[dict],
+    emission_config: EmissionConfig | None = None,
+) -> RunJobActivity:
     """
     Wraps multiple inner activities into a ``RunJobActivity`` backed by a synthetic pipeline.
 
@@ -151,7 +163,7 @@ def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> Ru
 
     activity_name = activity.get("name") or "FOR_EACH"
     inner_job_name = f"{activity_name}_inner_activities"
-    inner_tasks = translate_activities(inner_activity_defs)
+    inner_tasks = translate_activities(inner_activity_defs, emission_config=emission_config)
 
     inner_pipeline = Pipeline(
         name=inner_job_name,
@@ -167,7 +179,11 @@ def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> Ru
     )
 
 
-def _parse_for_each_items(items: dict, context: TranslationContext) -> str | UnsupportedValue:
+def _parse_for_each_items(
+    items: dict,
+    context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
+) -> str | UnsupportedValue:
     """
     Parses a list of items passed to a ForEach task into a serialized list expression.
 
@@ -194,6 +210,7 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
         items,
         context,
         expression_context=ExpressionContext.FOREACH_ITEMS,
+        emission_config=emission_config,
     )
     if isinstance(resolved, UnsupportedValue):
         return UnsupportedValue(
@@ -208,9 +225,14 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
 
     if isinstance(parsed, FunctionCall) and parsed.name.lower() in {"createarray", "array"}:
         list_items: list[str] = []
-        router = StrategyRouter(config=None, translation_context=context)
+        router = StrategyRouter(config=emission_config, translation_context=context)
         for arg in parsed.args:
-            item = _evaluate_for_each_item(arg, context, router=router)
+            item = _evaluate_for_each_item(
+                arg,
+                context,
+                router=router,
+                emission_config=emission_config,
+            )
             if isinstance(item, UnsupportedValue):
                 return UnsupportedValue(
                     value=items,
@@ -253,6 +275,7 @@ def _evaluate_for_each_item(
     item: object,
     context: TranslationContext,
     router: StrategyRouter | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> str | UnsupportedValue:
     """Evaluate supported item expressions to a string for Databricks for-each inputs."""
 
@@ -265,7 +288,7 @@ def _evaluate_for_each_item(
     if isinstance(item, FunctionCall) and item.name.lower() == "concat":
         parts: list[str] = []
         for arg in item.args:
-            part = _evaluate_for_each_item(arg, context, router=router)
+            part = _evaluate_for_each_item(arg, context, router=router, emission_config=emission_config)
             if isinstance(part, UnsupportedValue):
                 return part
             parts.append(part)
@@ -278,6 +301,7 @@ def _evaluate_for_each_item(
         item,
         context,
         expression_context=ExpressionContext.FOREACH_ITEMS,
+        emission_config=emission_config,
         router=router,
     )
     if isinstance(emitted, UnsupportedValue):

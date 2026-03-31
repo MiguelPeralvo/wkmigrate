@@ -6,6 +6,7 @@ the Web activity notebook builder and configurable credentials scope.
 
 from __future__ import annotations
 from datetime import datetime, timezone
+
 import pytest
 
 from wkmigrate.code_generator import (
@@ -19,7 +20,15 @@ from wkmigrate.code_generator import (
 )
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning
-from wkmigrate.runtime.datetime_helpers import format_datetime
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
+from wkmigrate.runtime.datetime_helpers import (
+    add_days,
+    add_hours,
+    convert_time_zone,
+    format_datetime,
+    start_of_day,
+    utc_now,
+)
 
 
 def test_web_activity_notebook_with_auth_and_cert_validation() -> None:
@@ -63,6 +72,92 @@ def test_web_activity_notebook_contains_request_call() -> None:
     assert "taskValues.set" in content
     assert "status_code" in content
     assert "response_body" in content
+
+
+def test_web_activity_notebook_accepts_resolved_expression_values() -> None:
+    """Resolved-expression inputs are injected as raw Python expressions."""
+    content = get_web_activity_notebook_content(
+        activity_name="dynamic_web_activity",
+        activity_type="WebActivity",
+        url=ResolvedExpression(
+            code="str('https://api.example.com/') + str('v1')",
+            is_dynamic=True,
+            required_imports=frozenset(),
+        ),
+        method="GET",
+        headers={
+            "X-Test": ResolvedExpression(code="str('token')", is_dynamic=True, required_imports=frozenset()),
+        },
+        body=ResolvedExpression(code="str('payload')", is_dynamic=True, required_imports=frozenset()),
+    )
+
+    assert "url = str('https://api.example.com/') + str('v1')" in content
+    assert "headers = {'X-Test': str('token')}" in content
+    assert "body = str('payload')" in content
+
+
+def test_web_activity_notebook_includes_required_expression_imports() -> None:
+    """Required imports from resolved expressions are included in notebook header."""
+    content = get_web_activity_notebook_content(
+        activity_name="json_expr_activity",
+        activity_type="WebActivity",
+        url=ResolvedExpression(
+            code="json.loads('{\"u\": \"https://api.example.com\"}')['u']",
+            is_dynamic=True,
+            required_imports=frozenset({"json"}),
+        ),
+        method="GET",
+        body=None,
+        headers=None,
+    )
+
+    assert "import requests" in content
+    assert "import json" in content
+
+
+def test_web_activity_notebook_inlines_datetime_helpers_for_expressions() -> None:
+    """Datetime helper source is inlined when web expressions require it."""
+    content = get_web_activity_notebook_content(
+        activity_name="datetime_web_expr",
+        activity_type="WebActivity",
+        url=ResolvedExpression(
+            code="_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')",
+            is_dynamic=True,
+            required_imports=frozenset({"wkmigrate_datetime_helpers"}),
+        ),
+        method="GET",
+        body=None,
+        headers=None,
+    )
+
+    assert "def _wkmigrate_utc_now" in content
+    assert "def _wkmigrate_format_datetime" in content
+
+
+def test_inline_datetime_helpers_match_runtime_helpers() -> None:
+    """Inlined helper code remains behaviorally aligned with runtime helpers."""
+    helper_namespace: dict[str, object] = {}
+    exec("\n".join(_INLINE_DATETIME_HELPERS), helper_namespace)  # noqa: S102
+
+    dt = datetime(2026, 3, 25, 10, 20, 30, 123000, tzinfo=timezone.utc)
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "yyyy-MM-dd HH:mm:ss.fff") == format_datetime(
+        dt, "yyyy-MM-dd HH:mm:ss.fff"
+    )
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.ff") == format_datetime(dt, "HH:mm:ss.ff")
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.f") == format_datetime(dt, "HH:mm:ss.f")
+    assert helper_namespace["_wkmigrate_format_datetime"](dt, "offset") == format_datetime(dt, "offset")
+    assert helper_namespace["_wkmigrate_add_days"](dt, 2) == add_days(dt, 2)
+    assert helper_namespace["_wkmigrate_add_hours"](dt, 5) == add_hours(dt, 5)
+    assert helper_namespace["_wkmigrate_start_of_day"](dt) == start_of_day(dt)
+    assert helper_namespace["_wkmigrate_convert_time_zone"](dt, "UTC", "Europe/Madrid") == convert_time_zone(
+        dt, "UTC", "Europe/Madrid"
+    )
+    assert helper_namespace["_wkmigrate_utc_now"]().tzinfo == utc_now().tzinfo
+
+    with pytest.raises(ValueError):
+        convert_time_zone(dt, "Invalid/Zone", "UTC")
+    with pytest.raises(ValueError):
+        helper_namespace["_wkmigrate_convert_time_zone"](dt, "Invalid/Zone", "UTC")
 
 
 def test_web_activity_notebook_with_unsupported_auth_type() -> None:
@@ -110,6 +205,22 @@ def test_file_options_uses_custom_scope() -> None:
     joined = "\n".join(lines)
     assert 'scope="my_custom_scope"' in joined
     assert "wkmigrate_credentials_scope" not in joined
+
+
+def test_file_options_generate_valid_python_for_escaped_quote_values() -> None:
+    """Generated option lines remain valid Python when values contain backslash-quote sequences."""
+    dataset_def = {
+        "dataset_name": "src",
+        "service_name": "adls_svc",
+        "type": "csv",
+        "storage_account_name": "mystorage",
+        "quote": '\\"',
+    }
+    lines = get_file_options(dataset_def, "csv")
+    generated_source = "\n".join(lines)
+
+    assert 'r"\\""' not in generated_source
+    compile(generated_source, "<generated_file_options>", "exec")
 
 
 def test_database_options_uses_custom_scope() -> None:
@@ -200,17 +311,3 @@ def test_set_variable_notebook_skips_datetime_helpers_for_simple_values() -> Non
     )
 
     assert "def _wkmigrate_utc_now" not in content
-
-
-def test_inline_datetime_helpers_match_runtime_helpers() -> None:
-    """Inlined helper code remains behaviorally aligned with runtime helpers."""
-    helper_namespace: dict[str, object] = {}
-    exec("\n".join(_INLINE_DATETIME_HELPERS), helper_namespace)  # noqa: S102
-
-    dt = datetime(2026, 3, 25, 10, 20, 30, 123000, tzinfo=timezone.utc)
-    assert helper_namespace["_wkmigrate_format_datetime"](dt, "yyyy-MM-dd HH:mm:ss.fff") == format_datetime(
-        dt, "yyyy-MM-dd HH:mm:ss.fff"
-    )
-    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.ff") == format_datetime(dt, "HH:mm:ss.ff")
-    assert helper_namespace["_wkmigrate_format_datetime"](dt, "HH:mm:ss.f") == format_datetime(dt, "HH:mm:ss.f")
-    assert helper_namespace["_wkmigrate_format_datetime"](dt, "offset") == format_datetime(dt, "offset")

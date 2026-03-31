@@ -7,6 +7,7 @@ and warnings so that callers can surface translation diagnostics alongside the g
 
 import warnings
 
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.translators.activity_translators.activity_translator import translate_activities_with_context
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.not_translatable import NotTranslatableWarning
@@ -15,7 +16,7 @@ from wkmigrate.translators.trigger_translators.schedule_trigger_translator impor
 from wkmigrate.utils import append_system_tags
 
 
-def translate_pipeline(pipeline: dict) -> Pipeline:
+def translate_pipeline(pipeline: dict, emission_config: EmissionConfig | None = None) -> Pipeline:
     """
     Translates an ADF pipeline dictionary into a ``Pipeline``.
 
@@ -38,7 +39,10 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
                 ),
                 stacklevel=2,
             )
-        translated_tasks, _ctx = translate_activities_with_context(pipeline.get("activities"))
+        translated_tasks, _ctx = translate_activities_with_context(
+            pipeline.get("activities"),
+            emission_config=emission_config,
+        )
         pipeline_ir = Pipeline(
             name=pipeline.get("name", "UNNAMED_WORKFLOW"),
             parameters=translate_parameters(pipeline.get("parameters")),

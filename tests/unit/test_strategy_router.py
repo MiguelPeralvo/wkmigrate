@@ -115,17 +115,17 @@ def test_strategy_router_exact_context_fails_when_selected_emitter_cannot_emit()
     assert "Exact emission context" in emitted.message
 
 
-def test_resolve_expression_node_exact_true_fails_for_missing_strategy() -> None:
-    """exact=True causes UnsupportedValue when the configured strategy has no emitter."""
+def test_resolve_expression_node_exact_true_fails_when_selected_strategy_cannot_emit_context() -> None:
+    """exact=True causes UnsupportedValue when the selected strategy cannot emit the context."""
     from wkmigrate.parsers.expression_parsers import resolve_expression_node
 
     node = parse_expression("@concat('a', 'b')")
     assert not isinstance(node, UnsupportedValue)
 
-    config = EmissionConfig(strategies={ExpressionContext.GENERIC.value: EmissionStrategy.SPARK_SQL.value})
+    config = EmissionConfig(strategies={ExpressionContext.SET_VARIABLE.value: EmissionStrategy.SPARK_SQL.value})
     result = resolve_expression_node(
         node,
-        expression_context=ExpressionContext.GENERIC,
+        expression_context=ExpressionContext.SET_VARIABLE,
         emission_config=config,
         exact=True,
     )

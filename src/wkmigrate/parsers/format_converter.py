@@ -1,0 +1,110 @@
+"""ADF/.NET datetime format conversion utilities for Spark SQL emission."""
+
+from __future__ import annotations
+
+from wkmigrate.models.ir.unsupported import UnsupportedValue
+
+_ADF_TO_SPARK_PATTERN_TOKENS: list[tuple[str, str]] = [
+    # Year
+    ("yyyy", "yyyy"),
+    ("yyy", "yyy"),
+    ("yy", "yy"),
+    # Month
+    ("MMMM", "MMMM"),
+    ("MMM", "MMM"),
+    ("MM", "MM"),
+    ("M", "M"),
+    # Day
+    ("dddd", "EEEE"),
+    ("ddd", "E"),
+    ("dd", "dd"),
+    ("d", "d"),
+    # Hour (24h)
+    ("HH", "HH"),
+    ("H", "H"),
+    # Hour (12h)
+    ("hh", "hh"),
+    ("h", "h"),
+    # Minute
+    ("mm", "mm"),
+    ("m", "m"),
+    # Second
+    ("ss", "ss"),
+    ("s", "s"),
+    # Fractional seconds
+    ("fff", "SSS"),
+    ("ff", "SS"),
+    ("f", "S"),
+    # AM/PM
+    ("tt", "a"),
+    # Timezone
+    ("zzz", "XXX"),
+    ("zz", "XX"),
+    ("z", "X"),
+    ("K", "XXX"),
+]
+_SPARK_PATTERN_LETTERS = frozenset("GyYuQqMLwWdDFEecabBhHkKmsSAzZOvVXx")
+
+
+def convert_adf_datetime_format_to_spark(adf_format: str) -> str | UnsupportedValue:
+    """Convert an ADF/.NET datetime pattern into Spark SQL ``date_format`` syntax."""
+
+    if not isinstance(adf_format, str):
+        return UnsupportedValue(value=adf_format, message="Datetime format must be a string")
+
+    result: list[str] = []
+    i = 0
+    while i < len(adf_format):
+        match = _match_supported_token(adf_format, i)
+        if match is not None:
+            token, spark_token = match
+            result.append(spark_token)
+            i += len(token)
+            continue
+
+        current = adf_format[i]
+        if current.isalpha():
+            start = i
+            while i < len(adf_format) and (adf_format[i].isalpha() or adf_format[i] == "_"):
+                if (
+                    i > start
+                    and _match_supported_token(adf_format, i) is not None
+                    and _remaining_alpha_suffix_is_tokenizable(adf_format, i)
+                ):
+                    break
+                i += 1
+            literal_or_token = adf_format[start:i]
+            if all(char in _SPARK_PATTERN_LETTERS for char in literal_or_token):
+                return UnsupportedValue(
+                    value=adf_format,
+                    message=f"Unsupported datetime format token '{literal_or_token}'",
+                )
+            escaped = literal_or_token.replace("'", "''")
+            result.append(f"'{escaped}'")
+            continue
+
+        result.append(current)
+        i += 1
+    return "".join(result)
+
+
+def _match_supported_token(format_string: str, index: int) -> tuple[str, str] | None:
+    for token, mapped in _ADF_TO_SPARK_PATTERN_TOKENS:
+        if format_string.startswith(token, index):
+            return token, mapped
+    return None
+
+
+def _remaining_alpha_suffix_is_tokenizable(format_string: str, index: int) -> bool:
+    suffix_end = index
+    while suffix_end < len(format_string) and format_string[suffix_end].isalpha():
+        suffix_end += 1
+
+    suffix = format_string[index:suffix_end]
+    cursor = 0
+    while cursor < len(suffix):
+        match = _match_supported_token(suffix, cursor)
+        if match is None:
+            return False
+        cursor += len(match[0])
+    return True

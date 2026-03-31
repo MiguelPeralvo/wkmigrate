@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.emitter_protocol import EmittedExpression, EmitterProtocol
 from wkmigrate.parsers.expression_ast import (
     AstNode,
     BoolLiteral,
@@ -17,7 +19,7 @@ from wkmigrate.parsers.expression_ast import (
     StringInterpolation,
     StringLiteral,
 )
-from wkmigrate.parsers.expression_functions import FUNCTION_REGISTRY
+from wkmigrate.parsers.expression_functions import get_function_registry
 
 _PIPELINE_VARS: dict[str, str] = {
     "Pipeline": "spark.conf.get('spark.databricks.job.parentName', '')",
@@ -36,14 +38,6 @@ _DATETIME_HELPER_FUNCTIONS: set[str] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class EmittedExpression:
-    """Emitted expression and required import names."""
-
-    code: str
-    required_imports: tuple[str, ...] = ()
-
-
 def emit(node: AstNode, context: TranslationContext | None = None) -> str | UnsupportedValue:
     """Emit a Python expression string for an AST node."""
 
@@ -56,40 +50,60 @@ def emit(node: AstNode, context: TranslationContext | None = None) -> str | Unsu
 def emit_with_imports(node: AstNode, context: TranslationContext | None = None) -> EmittedExpression | UnsupportedValue:
     """Emit Python expression and import metadata for an AST node."""
 
-    emitter = _Emitter(context=context)
-    code = emitter.emit_node(node)
-    if isinstance(code, UnsupportedValue):
-        return code
-    return EmittedExpression(code=code, required_imports=tuple(sorted(emitter.required_imports)))
+    return PythonEmitter(context=context).emit_node(node)
 
 
 @dataclass(slots=True)
-class _Emitter:
-    """Stateful recursive emitter."""
+class PythonEmitter(EmitterProtocol):
+    """Stateful recursive emitter for the notebook-python strategy.
+
+    ``required_imports`` is a shared mutable set that accumulates across the entire
+    recursive emit. The ``EmittedExpression`` returned by ``emit_node`` therefore
+    represents the cumulative imports of the full expression tree rooted at the call,
+    not just the leaf node. Callers that emit sub-expressions (like
+    ``_emit_function_call``) should extract ``.code`` from intermediate results and
+    rely on the top-level ``emit_node`` call to provide the complete import set.
+    """
 
     context: TranslationContext | None
     required_imports: set[str] = field(default_factory=set)
 
-    def emit_node(self, node: AstNode) -> str | UnsupportedValue:
-        """Emit node recursively."""
+    def can_emit(self, node: AstNode, context: ExpressionContext) -> bool:
+        del node, context
+        return True
 
+    def emit_node(
+        self,
+        node: AstNode,
+        context: ExpressionContext = ExpressionContext.GENERIC,
+    ) -> EmittedExpression | UnsupportedValue:
+        """Emit node recursively."""
+        del context  # Python emission currently ignores context-specific semantics.
+
+        emitted: str | UnsupportedValue
         if isinstance(node, StringLiteral):
-            return repr(node.value)
-        if isinstance(node, NumberLiteral):
-            return repr(node.value)
-        if isinstance(node, BoolLiteral):
-            return repr(node.value)
-        if isinstance(node, NullLiteral):
-            return "None"
-        if isinstance(node, FunctionCall):
-            return self._emit_function_call(node)
-        if isinstance(node, PropertyAccess):
-            return self._emit_property_access(node)
-        if isinstance(node, IndexAccess):
-            return self._emit_index_access(node)
-        if isinstance(node, StringInterpolation):
-            return self._emit_string_interpolation(node)
-        return UnsupportedValue(value=node, message=f"Unsupported AST node type '{type(node).__name__}'")
+            emitted = repr(node.value)
+        elif isinstance(node, NumberLiteral):
+            emitted = repr(node.value)
+        elif isinstance(node, BoolLiteral):
+            emitted = repr(node.value)
+        elif isinstance(node, NullLiteral):
+            emitted = "None"
+        elif isinstance(node, FunctionCall):
+            emitted = self._emit_function_call(node)
+        elif isinstance(node, PropertyAccess):
+            emitted = self._emit_property_access(node)
+        elif isinstance(node, IndexAccess):
+            emitted = self._emit_index_access(node)
+        elif isinstance(node, StringInterpolation):
+            emitted = self._emit_string_interpolation(node)
+        else:
+            return UnsupportedValue(value=node, message=f"Unsupported AST node type '{type(node).__name__}'")
+
+        if isinstance(emitted, UnsupportedValue):
+            return emitted
+        # ``required_imports`` is cumulative for this emitter instance.
+        return EmittedExpression(code=emitted, required_imports=tuple(sorted(self.required_imports)))
 
     def _emit_function_call(self, node: FunctionCall) -> str | UnsupportedValue:
         """Emit a function-call node."""
@@ -131,9 +145,9 @@ class _Emitter:
             emitted_arg = self.emit_node(arg)
             if isinstance(emitted_arg, UnsupportedValue):
                 return emitted_arg
-            emitted_args.append(emitted_arg)
+            emitted_args.append(emitted_arg.code)
 
-        function_emitter = FUNCTION_REGISTRY.get(lowered)
+        function_emitter = get_function_registry("notebook_python").get(lowered)
         if function_emitter is None:
             return UnsupportedValue(
                 value=node.name,
@@ -168,9 +182,10 @@ class _Emitter:
                     )
                 return self._emit_activity_property_access(root, properties, index_segments=[])
 
-        root_expression = self.emit_node(root)
-        if isinstance(root_expression, UnsupportedValue):
-            return root_expression
+        root_emitted = self.emit_node(root)
+        if isinstance(root_emitted, UnsupportedValue):
+            return root_emitted
+        root_expression = root_emitted.code
 
         for property_name in properties:
             root_expression = f"({root_expression})[{property_name!r}]"
@@ -189,13 +204,15 @@ class _Emitter:
                     )
                 return self._emit_activity_property_access(root, properties, index_segments=[node.index])
 
-        object_expression = self.emit_node(node.object)
-        if isinstance(object_expression, UnsupportedValue):
-            return object_expression
+        object_emitted = self.emit_node(node.object)
+        if isinstance(object_emitted, UnsupportedValue):
+            return object_emitted
+        object_expression = object_emitted.code
 
-        index_expression = self.emit_node(node.index)
-        if isinstance(index_expression, UnsupportedValue):
-            return index_expression
+        index_emitted = self.emit_node(node.index)
+        if isinstance(index_emitted, UnsupportedValue):
+            return index_emitted
+        index_expression = index_emitted.code
 
         return f"({object_expression})[{index_expression}]"
 
@@ -211,7 +228,7 @@ class _Emitter:
             emitted = self.emit_node(part)
             if isinstance(emitted, UnsupportedValue):
                 return emitted
-            emitted_parts.append(f"str({emitted})")
+            emitted_parts.append(f"str({emitted.code})")
 
         if not emitted_parts:
             return "''"
@@ -285,7 +302,7 @@ class _Emitter:
             emitted_index = self.emit_node(index_node)
             if isinstance(emitted_index, UnsupportedValue):
                 return emitted_index
-            accessors.append(f"[{emitted_index}]")
+            accessors.append(f"[{emitted_index.code}]")
 
         self.required_imports.add("json")
         return f"json.loads({base}){''.join(accessors)}"
