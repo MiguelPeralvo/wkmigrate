@@ -8,14 +8,26 @@ Each translator must validate required fields, parse the activity's condition ex
 from __future__ import annotations
 from importlib import import_module
 
-import re
+import ast
 import warnings
+from dataclasses import dataclass
 
-from wkmigrate.enums.condition_operation_pattern import ConditionOperationPattern
-from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
-from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
+from wkmigrate.models.ir.translator_result import TranslationResult
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
+from wkmigrate.parsers.expression_parsers import resolve_expression_node
+from wkmigrate.parsers.expression_parser import parse_expression
+
+_CONDITION_FUNCTION_TO_OP: dict[str, str] = {
+    "equals": "EQUAL_TO",
+    "greater": "GREATER_THAN",
+    "greaterorequals": "GREATER_THAN_OR_EQUAL",
+    "less": "LESS_THAN",
+    "lessorequals": "LESS_THAN_OR_EQUAL",
+}
 
 
 def translate_if_condition_activity(
@@ -51,7 +63,7 @@ def translate_if_condition_activity(
             context,
         )
 
-    parsed = _parse_condition_expression(source_expression)
+    parsed = _parse_condition_expression(source_expression, context)
     if isinstance(parsed, UnsupportedValue):
         return UnsupportedValue(value=activity, message=parsed.message), context
 
@@ -124,7 +136,7 @@ def _translate_child_activities(
     return translated, context
 
 
-def _parse_condition_expression(condition: dict) -> dict | UnsupportedValue:
+def _parse_condition_expression(condition: dict, context: TranslationContext) -> dict | UnsupportedValue:
     """
     Parses a condition expression in an If Condition activity definition.
 
@@ -140,34 +152,85 @@ def _parse_condition_expression(condition: dict) -> dict | UnsupportedValue:
         return UnsupportedValue(
             value=condition, message="Missing property 'value' in IfCondition activity 'expression'"
         )
-    for operation in ConditionOperationPattern:
-        match = re.match(string=condition_value, pattern=operation.value)
-        if match is not None:
-            return {
-                "op": operation.name,
-                "left": match.group(1).replace('"', "").replace("'", ""),
-                "right": match.group(2).replace('"', "").replace("'", ""),
-            }
+
+    parsed = parse_expression(condition_value)
+    if isinstance(parsed, UnsupportedValue):
+        return _unsupported_condition_expression(condition, condition_value)
+
+    if not isinstance(parsed, FunctionCall):
+        return _unsupported_condition_expression(condition, condition_value)
+
+    operation = _parse_condition_operation(parsed)
+    if isinstance(operation, UnsupportedValue):
+        return _unsupported_condition_expression(condition, condition_value)
+
+    left = _emit_condition_operand(operation.left, context, ExpressionContext.IF_CONDITION_LEFT)
+    if isinstance(left, UnsupportedValue):
+        return left
+    right = _emit_condition_operand(operation.right, context, ExpressionContext.IF_CONDITION_RIGHT)
+    if isinstance(right, UnsupportedValue):
+        return right
+    return {"op": operation.op, "left": left, "right": right}
+
+
+@dataclass(frozen=True, slots=True)
+class _ConditionOperation:
+    op: str
+    left: AstNode
+    right: AstNode
+
+
+def _parse_condition_operation(parsed: FunctionCall) -> _ConditionOperation | UnsupportedValue:
+    """Parse condition operator + operand nodes from a supported function call."""
+
+    lowered_name = parsed.name.lower()
+    if lowered_name == "not":
+        if (
+            len(parsed.args) == 1
+            and isinstance(parsed.args[0], FunctionCall)
+            and parsed.args[0].name.lower() == "equals"
+            and len(parsed.args[0].args) == 2
+        ):
+            return _ConditionOperation(op="NOT_EQUAL", left=parsed.args[0].args[0], right=parsed.args[0].args[1])
+        return UnsupportedValue(value=parsed, message="Unsupported conditional operator")
+
+    op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
+    if op_name is None or len(parsed.args) != 2:
+        return UnsupportedValue(value=parsed, message="Unsupported conditional operator")
+
+    return _ConditionOperation(op=op_name, left=parsed.args[0], right=parsed.args[1])
+
+
+def _emit_condition_operand(
+    operand: AstNode,
+    context: TranslationContext,
+    operand_context: ExpressionContext,
+) -> str | UnsupportedValue:
+    """Emit condition operand while preserving legacy literal formatting."""
+
+    emitted = resolve_expression_node(operand, context, expression_context=operand_context, exact=True)
+    if isinstance(emitted, UnsupportedValue):
+        return emitted
+    try:
+        literal = ast.literal_eval(emitted.code)
+    except (SyntaxError, ValueError):
+        return emitted.code
+    return str(literal)
+
+
+def _validate_condition_expression(expression: dict) -> UnsupportedValue | None:
+    """Validates that parsed condition expression contains required fields."""
+    if not expression.get("op"):
+        return UnsupportedValue(value=expression, message="Missing field 'op' in if condition expression")
+    if "left" not in expression or expression["left"] is None:
+        return UnsupportedValue(value=expression, message="Missing field 'left' in if condition expression")
+    if "right" not in expression or expression["right"] is None:
+        return UnsupportedValue(value=expression, message="Missing field 'right' in if condition expression")
+    return None
+
+
+def _unsupported_condition_expression(condition: dict, condition_value: str) -> UnsupportedValue:
     return UnsupportedValue(
         value=condition,
         message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
     )
-
-
-def _validate_condition_expression(expression: dict) -> UnsupportedValue | None:
-    """
-    Validates that a parsed condition expression contains the required fields.
-
-    Args:
-        expression: Parsed condition expression dictionary.
-
-    Returns:
-        ``UnsupportedValue`` describing the validation failure, or ``None`` when valid.
-    """
-    if not expression.get("op"):
-        return UnsupportedValue(value=expression, message="Missing field 'op' in if condition expression")
-    if not expression.get("left"):
-        return UnsupportedValue(value=expression, message="Missing field 'left' in if condition expression")
-    if not expression.get("right"):
-        return UnsupportedValue(value=expression, message="Missing field 'right' in if condition expression")
-    return None

@@ -16,6 +16,11 @@ from wkmigrate.models.ir.pipeline import Activity, ForEachActivity, Pipeline, Ru
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import ExpressionContext
+from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
+from wkmigrate.parsers.expression_parsers import get_literal_or_expression, resolve_expression_node
+from wkmigrate.parsers.expression_parser import parse_expression
+from wkmigrate.parsers.strategy_router import StrategyRouter
 
 
 def translate_for_each_activity(
@@ -55,7 +60,7 @@ def translate_for_each_activity(
             context,
         )
 
-    items_string = _parse_for_each_items(items)
+    items_string = _parse_for_each_items(items, context)
     if isinstance(items_string, UnsupportedValue):
         return items_string, context
 
@@ -162,7 +167,7 @@ def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> Ru
     )
 
 
-def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
+def _parse_for_each_items(items: dict, context: TranslationContext) -> str | UnsupportedValue:
     """
     Parses a list of items passed to a ForEach task into a serialized list expression.
 
@@ -177,21 +182,57 @@ def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
     value = items.get("value")
     if value is None:
         return UnsupportedValue(value=items, message="Missing property 'value' in ForEach activity 'items'")
-    # TODO: Move all dynamic function patterns to a common enum list
-    array_pattern = r"@array\(\[(.+)\]\)"
-    match = re.match(string=value, pattern=array_pattern)
-    if match:
-        matched_item = match.group(1)
-        return _parse_array_string(matched_item)
 
-    create_array_pattern = r"@createArray\((.+)\)"
-    match = re.match(string=value, pattern=create_array_pattern)
-    if match:
-        matched_item = match.group(1)
-        list_items = ast.literal_eval(matched_item)
+    if isinstance(value, str):
+        array_pattern = r"@array\(\[(.+)\]\)"
+        match = re.match(string=value, pattern=array_pattern)
+        if match:
+            matched_item = match.group(1)
+            return _parse_array_string(matched_item)
+
+    resolved = get_literal_or_expression(
+        items,
+        context,
+        expression_context=ExpressionContext.FOREACH_ITEMS,
+    )
+    if isinstance(resolved, UnsupportedValue):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    parsed = parse_expression(value)
+    if isinstance(parsed, UnsupportedValue):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    if isinstance(parsed, FunctionCall) and parsed.name.lower() in {"createarray", "array"}:
+        list_items: list[str] = []
+        router = StrategyRouter(config=None, translation_context=context)
+        for arg in parsed.args:
+            item = _evaluate_for_each_item(arg, context, router=router)
+            if isinstance(item, UnsupportedValue):
+                return UnsupportedValue(
+                    value=items,
+                    message=f"Unsupported array item in expression '{value}' for ForEach activity 'items': {item.message}",
+                )
+            list_items.append(item)
         quoted_items = ",".join([f'"{item}"' for item in list_items])
         return _parse_array_string(quoted_items)
-    return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+
+    try:
+        literal_value = ast.literal_eval(resolved.code)
+    except (SyntaxError, ValueError):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    if not isinstance(literal_value, list):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+    quoted_items = ",".join(f'"{str(item)}"' for item in literal_value)
+    return _parse_array_string(quoted_items)
 
 
 def _parse_array_string(array_string: str) -> str:
@@ -206,6 +247,46 @@ def _parse_array_string(array_string: str) -> str:
     """
     items = [item.replace("'", "").replace('"', "") for item in array_string.split(",")]
     return '["' + '","'.join(items) + '"]'
+
+
+def _evaluate_for_each_item(
+    item: object,
+    context: TranslationContext,
+    router: StrategyRouter | None = None,
+) -> str | UnsupportedValue:
+    """Evaluate supported item expressions to a string for Databricks for-each inputs."""
+
+    if isinstance(item, StringLiteral):
+        return item.value
+    if isinstance(item, NumberLiteral):
+        return str(item.value)
+    if isinstance(item, BoolLiteral):
+        return str(item.value).lower()
+    if isinstance(item, FunctionCall) and item.name.lower() == "concat":
+        parts: list[str] = []
+        for arg in item.args:
+            part = _evaluate_for_each_item(arg, context, router=router)
+            if isinstance(part, UnsupportedValue):
+                return part
+            parts.append(part)
+        return "".join(parts)
+
+    if not isinstance(item, AstNode):
+        return UnsupportedValue(value=item, message="Expression cannot be resolved to a literal for ForEach items")
+
+    emitted = resolve_expression_node(
+        item,
+        context,
+        expression_context=ExpressionContext.FOREACH_ITEMS,
+        router=router,
+    )
+    if isinstance(emitted, UnsupportedValue):
+        return emitted
+    try:
+        literal = ast.literal_eval(emitted.code)
+    except (SyntaxError, ValueError):
+        return UnsupportedValue(value=item, message="Expression cannot be resolved to a literal for ForEach items")
+    return str(literal)
 
 
 def _filter_parameters(activity: dict) -> dict | UnsupportedValue:

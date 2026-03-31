@@ -14,6 +14,7 @@ from importlib import import_module
 from wkmigrate.models.ir.pipeline import SetVariableActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import ExpressionContext
 from wkmigrate.parsers.expression_parsers import parse_variable_value
 
 
@@ -59,7 +60,11 @@ def translate_set_variable_activity(
             context,
         )
 
-    parsed_variable_value = parse_variable_value(raw_value, context)
+    parsed_variable_value = parse_variable_value(
+        raw_value,
+        context,
+        expression_context=ExpressionContext.SET_VARIABLE,
+    )
     if isinstance(parsed_variable_value, UnsupportedValue):
         return (
             UnsupportedValue(

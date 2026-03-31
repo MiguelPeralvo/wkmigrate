@@ -7,11 +7,15 @@ from __future__ import annotations
 
 from wkmigrate.models.ir.pipeline import SparkJarActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_spark_jar_activity(activity: SparkJarActivity) -> PreparedActivity:
+def prepare_spark_jar_activity(
+    activity: SparkJarActivity,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedActivity:
     """
     Builds the task payload for a Spark JAR activity.
 
@@ -21,6 +25,7 @@ def prepare_spark_jar_activity(activity: SparkJarActivity) -> PreparedActivity:
     Returns:
         Spark JAR task configuration
     """
+    del emission_config
     task = parse_mapping(
         {
             **get_base_task(activity),

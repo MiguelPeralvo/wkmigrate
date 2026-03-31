@@ -4,13 +4,18 @@ task definition from the translated notebook activity.
 """
 
 from __future__ import annotations
+
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> PreparedActivity:
+def prepare_notebook_activity(
+    activity: DatabricksNotebookActivity,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedActivity:
     """
     Builds the task payload for a Databricks notebook activity.
 
@@ -19,6 +24,7 @@ def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> PreparedA
     Returns:
         Databricks notebook task configuration
     """
+    del emission_config
     task = parse_mapping(
         {
             **get_base_task(activity),

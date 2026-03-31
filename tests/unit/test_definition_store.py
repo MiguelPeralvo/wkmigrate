@@ -10,6 +10,7 @@ from wkmigrate.definition_stores.definition_store import DefinitionStore
 from wkmigrate.definition_stores.factory_definition_store import FactoryDefinitionStore
 from wkmigrate.definition_stores.json_definition_store import JsonDefinitionStore
 from wkmigrate.definition_stores.workspace_definition_store import WorkspaceDefinitionStore
+from wkmigrate.parsers.emission_config import EmissionStrategy
 from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
     ForEachActivity,
@@ -177,6 +178,43 @@ def test_factory_definition_store_loads_pipeline_without_trigger(mock_factory_cl
     assert isinstance(pipeline, Pipeline)
     assert pipeline.name == "test_pipeline_no_triggers"
     assert pipeline.schedule is None
+
+
+def test_workspace_definition_store_uses_definition_store_interface(mock_workspace_client) -> None:
+    """WorkspaceDefinitionStore should behave as a DefinitionStore when wired with a mock workspace client."""
+    assert mock_workspace_client is not None
+
+    store = WorkspaceDefinitionStore(
+        authentication_type="pat",
+        host_name="https://example.com",
+        pat="DUMMY_TOKEN",
+    )
+
+    assert isinstance(store, DefinitionStore)
+    assert hasattr(store, "to_job")
+    assert hasattr(store, "to_asset_bundle")
+
+
+def test_workspace_definition_store_client_secret_uses_azure_sdk_kwargs() -> None:
+    """Azure client-secret login passes azure-prefixed credential kwargs to WorkspaceClient."""
+    with patch("wkmigrate.definition_stores.workspace_definition_store.WorkspaceClient") as mock_workspace_client_class:
+        mock_workspace_client_class.return_value = object()
+
+        store = object.__new__(WorkspaceDefinitionStore)
+        store.authentication_type = "azure-client-secret"
+        store.host_name = "https://adb.example.azuredatabricks.net"
+        store.resource_id = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Databricks/workspaces/ws"
+        store.tenant_id = "tenant-id"
+        store.client_id = "client-id"
+        store.client_secret = "client-secret"
+
+        store._login_client_secret()
+
+        _, kwargs = mock_workspace_client_class.call_args
+        assert kwargs["azure_client_id"] == "client-id"
+        assert kwargs["azure_client_secret"] == "client-secret"
+        assert "client_id" not in kwargs
+        assert "client_secret" not in kwargs
 
 
 def _make_workspace_store(mock_workspace_client) -> WorkspaceDefinitionStore:
@@ -419,6 +457,16 @@ def test_set_and_get_option(mock_workspace_client) -> None:
     assert store.options.get('root_path') == '/migrated'
 
 
+def test_set_and_get_emission_strategy_option(mock_workspace_client) -> None:
+    """set_option accepts emission_strategy payloads."""
+    store = _make_workspace_store(mock_workspace_client)
+    emission_strategy = {"copy_source_query": EmissionStrategy.PARAMETERIZED_SQL.value}
+
+    store.set_option('emission_strategy', emission_strategy)
+
+    assert store.options.get('emission_strategy') == emission_strategy
+
+
 def test_set_all_options_replaces_existing(mock_workspace_client) -> None:
     """set_options replaces the entire options dictionary."""
     store = _make_workspace_store(mock_workspace_client)
@@ -426,6 +474,19 @@ def test_set_all_options_replaces_existing(mock_workspace_client) -> None:
     store.set_options({'schema': 'new_schema'})
     assert store.options.get('schema') == 'new_schema'
     assert store.options.get('catalog') is None
+
+
+def test_set_options_accepts_emission_strategy(mock_workspace_client) -> None:
+    """set_options accepts emission_strategy alongside other valid options."""
+    store = _make_workspace_store(mock_workspace_client)
+    options = {
+        "schema": "new_schema",
+        "emission_strategy": {"default": EmissionStrategy.NOTEBOOK_PYTHON.value},
+    }
+
+    store.set_options(options)
+
+    assert store.options == options
 
 
 def test_options_dict_is_independent_of_caller(mock_workspace_client) -> None:
@@ -474,6 +535,58 @@ def test_options_can_be_passed_at_construction(mock_workspace_client) -> None:
     )
     assert store.options['root_path'] == '/prod'
     assert store.options['compute_type'] == 'serverless'
+
+
+def test_emission_strategy_option_can_be_passed_at_construction(mock_workspace_client) -> None:
+    """emission_strategy option is accepted at construction time."""
+    assert mock_workspace_client is not None
+    strategy = {"copy_source_query": EmissionStrategy.PARAMETERIZED_SQL.value}
+    store = WorkspaceDefinitionStore(
+        authentication_type='pat',
+        host_name='https://example.com',
+        pat='DUMMY_TOKEN',
+        options={'emission_strategy': strategy},
+    )
+    assert store.options['emission_strategy'] == strategy
+
+
+def test_invalid_emission_strategy_raises_on_set(mock_workspace_client) -> None:
+    """set_option raises ValueError for unknown emission_strategy values."""
+    store = _make_workspace_store(mock_workspace_client)
+    with pytest.raises(ValueError, match='Unknown emission strategy'):
+        store.set_option('emission_strategy', {'default': 'invalid_strategy'})
+
+
+def test_invalid_emission_strategy_raises_on_init(mock_workspace_client) -> None:
+    """Invalid emission_strategy payload in constructor raises ValueError."""
+    assert mock_workspace_client is not None
+    with pytest.raises(ValueError, match='Unknown emission strategy'):
+        WorkspaceDefinitionStore(
+            authentication_type='pat',
+            host_name='https://example.com',
+            pat='DUMMY_TOKEN',
+            options={'emission_strategy': {'default': 'invalid_strategy'}},
+        )
+
+
+def test_prepare_workflow_threads_emission_config(mock_workspace_client) -> None:
+    """_prepare_workflow forwards parsed EmissionConfig into prepare_workflow()."""
+    store = _make_workspace_store(mock_workspace_client)
+    store.set_option(
+        'emission_strategy',
+        {'copy_source_query': EmissionStrategy.PARAMETERIZED_SQL.value},
+    )
+    pipeline = _simple_pipeline()
+    fake_prepared = PreparedWorkflow(pipeline=pipeline, activities=[])
+    with patch("wkmigrate.definition_stores.workspace_definition_store.prepare_workflow") as mock_prepare_workflow:
+        with patch.object(WorkspaceDefinitionStore, "_apply_options", return_value=fake_prepared):
+            mock_prepare_workflow.return_value = fake_prepared
+            store._prepare_workflow(pipeline)
+
+    kwargs = mock_prepare_workflow.call_args.kwargs
+    config = kwargs["emission_config"]
+    assert config.get_strategy("copy_source_query") == EmissionStrategy.PARAMETERIZED_SQL.value
+    assert config.default == EmissionStrategy.NOTEBOOK_PYTHON.value
 
 
 def test_root_path_option_rewrites_notebook_paths(mock_workspace_client, tmp_path) -> None:

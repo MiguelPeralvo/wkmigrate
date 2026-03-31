@@ -5,11 +5,16 @@ from __future__ import annotations
 from typing import Callable
 
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import _VALID_STRATEGIES
 
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
+_PIPELINE_PARAMETER_EXPRESSION_PREFIX = "dbutils.widgets.get("
+_DEFAULT_EMISSION_STRATEGY = "notebook_python"
 
 
-def _require_arity(function_name: str, args: list[str], minimum: int, maximum: int | None = None) -> UnsupportedValue | None:
+def _require_arity(
+    function_name: str, args: list[str], minimum: int, maximum: int | None = None
+) -> UnsupportedValue | None:
     """Validate function arity before emitting Python code."""
 
     if len(args) < minimum:
@@ -97,6 +102,25 @@ def _emit_binary_operator(name: str, operator: str) -> FunctionEmitter:
     return _emit
 
 
+def _coerce_numeric_operand(arg: str) -> str:
+    """Coerce pipeline parameter widget expressions to numeric values in math contexts."""
+
+    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX):
+        return f"(lambda __wkm_p: int(__wkm_p) if __wkm_p.lstrip('-').isdigit() else float(__wkm_p))(str({arg}))"
+    return arg
+
+
+def _emit_numeric_binary_operator(name: str, operator: str) -> FunctionEmitter:
+    def _emit(args: list[str]) -> str | UnsupportedValue:
+        if error := _require_arity(name, args, 2, 2):
+            return error
+        left = _coerce_numeric_operand(args[0])
+        right = _coerce_numeric_operand(args[1])
+        return f"({left} {operator} {right})"
+
+    return _emit
+
+
 def _emit_ternary_if(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("if", args, 3, 3):
         return error
@@ -112,7 +136,9 @@ def _emit_not(args: list[str]) -> str | UnsupportedValue:
 def _emit_div(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("div", args, 2, 2):
         return error
-    return f"int({args[0]} / {args[1]})"
+    left = _coerce_numeric_operand(args[0])
+    right = _coerce_numeric_operand(args[1])
+    return f"int({left} / {right})"
 
 
 def _emit_cast(cast_name: str, py_cast: str) -> FunctionEmitter:
@@ -178,6 +204,46 @@ def _emit_empty(args: list[str]) -> str | UnsupportedValue:
     return f"(len({args[0]}) == 0)"
 
 
+def _emit_utc_now(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("utcNow", args, 0, 1):
+        return error
+    if len(args) == 1:
+        return f"_wkmigrate_format_datetime(_wkmigrate_utc_now(), {args[0]})"
+    return "_wkmigrate_utc_now()"
+
+
+def _emit_format_datetime(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("formatDateTime", args, 1, 2):
+        return error
+    if len(args) == 1:
+        return f"str({args[0]})"
+    return f"_wkmigrate_format_datetime({args[0]}, {args[1]})"
+
+
+def _emit_add_days(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addDays", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_days({args[0]}, {args[1]})"
+
+
+def _emit_add_hours(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addHours", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_hours({args[0]}, {args[1]})"
+
+
+def _emit_start_of_day(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("startOfDay", args, 1, 1):
+        return error
+    return f"_wkmigrate_start_of_day({args[0]})"
+
+
+def _emit_convert_time_zone(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("convertTimeZone", args, 3, 3):
+        return error
+    return f"_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]})"
+
+
 FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "concat": _emit_concat,
     "substring": _emit_substring,
@@ -191,11 +257,11 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "endswith": _emit_ends_with,
     "contains": _emit_contains,
     "split": _emit_split,
-    "add": _emit_binary_operator("add", "+"),
-    "sub": _emit_binary_operator("sub", "-"),
-    "mul": _emit_binary_operator("mul", "*"),
+    "add": _emit_numeric_binary_operator("add", "+"),
+    "sub": _emit_numeric_binary_operator("sub", "-"),
+    "mul": _emit_numeric_binary_operator("mul", "*"),
     "div": _emit_div,
-    "mod": _emit_binary_operator("mod", "%"),
+    "mod": _emit_numeric_binary_operator("mod", "%"),
     "equals": _emit_binary_operator("equals", "=="),
     "not": _emit_not,
     "and": _emit_binary_operator("and", "and"),
@@ -220,12 +286,41 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "array": _emit_array,
     "coalesce": _emit_coalesce,
     "empty": _emit_empty,
+    "utcnow": _emit_utc_now,
+    "formatdatetime": _emit_format_datetime,
+    "adddays": _emit_add_days,
+    "addhours": _emit_add_hours,
+    "startofday": _emit_start_of_day,
+    "converttimezone": _emit_convert_time_zone,
+}
+
+_FUNCTION_REGISTRIES: dict[str, dict[str, FunctionEmitter]] = {
+    _DEFAULT_EMISSION_STRATEGY: FUNCTION_REGISTRY,
 }
 
 
-def get_function_registry(strategy: str = "notebook_python") -> dict[str, FunctionEmitter]:
-    """Return the function registry for the requested strategy."""
+def get_function_registry(strategy: str = _DEFAULT_EMISSION_STRATEGY) -> dict[str, FunctionEmitter]:
+    """Return the function registry for the requested emission strategy."""
 
-    if strategy.lower() != "notebook_python":
+    if not isinstance(strategy, str):
+        raise ValueError("strategy must be a string")
+    normalized_strategy = strategy.lower()
+    if normalized_strategy not in _VALID_STRATEGIES and normalized_strategy not in _FUNCTION_REGISTRIES:
         raise ValueError(f"Unknown emission strategy '{strategy}'")
-    return FUNCTION_REGISTRY
+    return _FUNCTION_REGISTRIES.setdefault(normalized_strategy, {})
+
+
+def register_function(
+    name: str,
+    emitter: FunctionEmitter,
+    strategy: str = _DEFAULT_EMISSION_STRATEGY,
+) -> None:
+    """Register or replace a function emitter for a strategy registry."""
+
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name must be a non-empty string")
+    if not callable(emitter):
+        raise ValueError("emitter must be callable")
+
+    registry = get_function_registry(strategy)
+    registry[name.lower()] = emitter

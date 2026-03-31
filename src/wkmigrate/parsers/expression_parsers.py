@@ -118,11 +118,17 @@ def resolve_expression_node(
     expression_context: ExpressionContext = ExpressionContext.GENERIC,
     emission_config: EmissionConfig | None = None,
     exact: bool | None = None,
+    router: StrategyRouter | None = None,
 ) -> EmittedExpression | UnsupportedValue:
-    """Resolve a parsed AST node via the strategy router."""
+    """Resolve a parsed AST node via the strategy router.
 
-    router = StrategyRouter(config=emission_config, translation_context=context)
-    return router.emit(node, expression_context=expression_context, exact=exact)
+    By default this function builds a per-call ``StrategyRouter`` to preserve
+    backwards-compatible behavior. Callers that emit many sibling expressions
+    can pass a pre-built router to reuse emitter instances.
+    """
+
+    effective_router = router or StrategyRouter(config=emission_config, translation_context=context)
+    return effective_router.emit(node, expression_context=expression_context, exact=exact)
 
 
 def _resolve_expression_string(

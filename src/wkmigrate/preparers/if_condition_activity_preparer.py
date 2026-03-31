@@ -7,14 +7,19 @@ task definition and any nested activity tasks or artifacts.
 """
 
 from __future__ import annotations
+
 from databricks.sdk.service.jobs import ConditionTaskOp
 from wkmigrate.models.ir.pipeline import IfConditionActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.preparers.utils import get_base_task
 from wkmigrate.utils import parse_mapping
 
 
-def prepare_if_condition_activity(activity: IfConditionActivity) -> PreparedActivity:
+def prepare_if_condition_activity(
+    activity: IfConditionActivity,
+    emission_config: EmissionConfig | None = None,
+) -> PreparedActivity:
     """
     Builds the task payload for an If Condition activity.
 
@@ -24,6 +29,7 @@ def prepare_if_condition_activity(activity: IfConditionActivity) -> PreparedActi
     Returns:
         Databricks condition task configuration
     """
+    del emission_config
     task = parse_mapping(
         {
             **get_base_task(activity),

@@ -50,16 +50,20 @@ def emit(node: AstNode, context: TranslationContext | None = None) -> str | Unsu
 def emit_with_imports(node: AstNode, context: TranslationContext | None = None) -> EmittedExpression | UnsupportedValue:
     """Emit Python expression and import metadata for an AST node."""
 
-    emitter = PythonEmitter(context=context)
-    emitted = emitter.emit_node(node)
-    if isinstance(emitted, UnsupportedValue):
-        return emitted
-    return emitted
+    return PythonEmitter(context=context).emit_node(node)
 
 
 @dataclass(slots=True)
 class PythonEmitter(EmitterProtocol):
-    """Stateful recursive emitter for the notebook-python strategy."""
+    """Stateful recursive emitter for the notebook-python strategy.
+
+    ``required_imports`` is a shared mutable set that accumulates across the entire
+    recursive emit. The ``EmittedExpression`` returned by ``emit_node`` therefore
+    represents the cumulative imports of the full expression tree rooted at the call,
+    not just the leaf node. Callers that emit sub-expressions (like
+    ``_emit_function_call``) should extract ``.code`` from intermediate results and
+    rely on the top-level ``emit_node`` call to provide the complete import set.
+    """
 
     context: TranslationContext | None
     required_imports: set[str] = field(default_factory=set)
@@ -98,6 +102,7 @@ class PythonEmitter(EmitterProtocol):
 
         if isinstance(emitted, UnsupportedValue):
             return emitted
+        # ``required_imports`` is cumulative for this emitter instance.
         return EmittedExpression(code=emitted, required_imports=tuple(sorted(self.required_imports)))
 
     def _emit_function_call(self, node: FunctionCall) -> str | UnsupportedValue:
