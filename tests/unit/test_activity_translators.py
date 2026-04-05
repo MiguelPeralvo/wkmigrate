@@ -370,7 +370,9 @@ def test_foreach_parse_items_literal_eval_fallback_path(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         for_each_activity_translator_module,
         "get_literal_or_expression",
-        lambda _items, _ctx: ResolvedExpression(code="['a', 'b']", is_dynamic=True, required_imports=frozenset()),
+        lambda _items, _ctx, **_kwargs: ResolvedExpression(
+            code="['a', 'b']", is_dynamic=True, required_imports=frozenset()
+        ),
     )
     monkeypatch.setattr(
         for_each_activity_translator_module,

@@ -11,6 +11,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 
 
@@ -18,6 +19,7 @@ def translate_notebook_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> DatabricksNotebookActivity | UnsupportedValue:
     """
     Translates an ADF Databricks Notebook activity into a ``DatabricksNotebookActivity`` object.
@@ -37,7 +39,9 @@ def translate_notebook_activity(
     return DatabricksNotebookActivity(
         **base_kwargs,
         notebook_path=notebook_path,
-        base_parameters=_parse_notebook_parameters(activity.get("base_parameters"), context or TranslationContext()),
+        base_parameters=_parse_notebook_parameters(
+            activity.get("base_parameters"), context or TranslationContext(), emission_config
+        ),
         linked_service_definition=activity.get("linked_service_definition"),
     )
 
@@ -45,6 +49,7 @@ def translate_notebook_activity(
 def _parse_notebook_parameters(
     parameters: dict | None,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> dict | None:
     """
     Parses task parameters in a Databricks notebook activity definition.
@@ -63,7 +68,7 @@ def _parse_notebook_parameters(
     # Parse the parameters:
     parsed_parameters = {}
     for name, value in parameters.items():
-        resolved = get_literal_or_expression(value, context)
+        resolved = get_literal_or_expression(value, context, emission_config=emission_config)
         if isinstance(resolved, UnsupportedValue):
             warnings.warn(
                 NotTranslatableWarning(

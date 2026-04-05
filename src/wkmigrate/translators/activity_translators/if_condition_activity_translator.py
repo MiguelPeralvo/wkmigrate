@@ -15,6 +15,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
 from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
@@ -32,6 +33,7 @@ def translate_if_condition_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF IfCondition activity into a ``IfConditionActivity`` object.

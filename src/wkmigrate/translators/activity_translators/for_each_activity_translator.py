@@ -17,6 +17,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -25,6 +26,7 @@ def translate_for_each_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF ForEach activity into a ``ForEachActivity`` object.
@@ -58,7 +60,7 @@ def translate_for_each_activity(
             context,
         )
 
-    items_string = _parse_for_each_items(items, context)
+    items_string = _parse_for_each_items(items, context, emission_config)
     if isinstance(items_string, UnsupportedValue):
         return items_string, context
 
@@ -165,7 +167,9 @@ def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> Ru
     )
 
 
-def _parse_for_each_items(items: dict, context: TranslationContext) -> str | UnsupportedValue:
+def _parse_for_each_items(
+    items: dict, context: TranslationContext, emission_config: EmissionConfig | None = None
+) -> str | UnsupportedValue:
     """
     Parses a list of items passed to a ForEach task into a serialized list expression.
 
@@ -188,7 +192,7 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
             matched_item = match.group(1)
             return _parse_array_string(matched_item)
 
-    resolved = get_literal_or_expression(items, context)
+    resolved = get_literal_or_expression(items, context, emission_config=emission_config)
     if isinstance(resolved, UnsupportedValue):
         return UnsupportedValue(
             value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
