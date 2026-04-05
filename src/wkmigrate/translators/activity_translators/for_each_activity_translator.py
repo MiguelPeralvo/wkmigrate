@@ -16,7 +16,7 @@ from wkmigrate.models.ir.pipeline import Activity, ForEachActivity, Pipeline, Ru
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
-from wkmigrate.parsers.expression_ast import BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
+from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -190,11 +190,15 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
 
     resolved = get_literal_or_expression(items, context)
     if isinstance(resolved, UnsupportedValue):
-        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
 
     parsed = parse_expression(value)
     if isinstance(parsed, UnsupportedValue):
-        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
 
     if isinstance(parsed, FunctionCall) and parsed.name.lower() in {"createarray", "array"}:
         list_items: list[str] = []
@@ -212,10 +216,14 @@ def _parse_for_each_items(items: dict, context: TranslationContext) -> str | Uns
     try:
         literal_value = ast.literal_eval(resolved.code)
     except (SyntaxError, ValueError):
-        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
 
     if not isinstance(literal_value, list):
-        return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
     quoted_items = ",".join(f'"{str(item)}"' for item in literal_value)
     return _parse_array_string(quoted_items)
 
@@ -234,7 +242,7 @@ def _parse_array_string(array_string: str) -> str:
     return '["' + '","'.join(items) + '"]'
 
 
-def _evaluate_for_each_item(item: object, context: TranslationContext) -> str | UnsupportedValue:
+def _evaluate_for_each_item(item: AstNode, context: TranslationContext) -> str | UnsupportedValue:
     """Evaluate supported item expressions to a string for Databricks for-each inputs."""
 
     if isinstance(item, StringLiteral):

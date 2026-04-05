@@ -1,5 +1,7 @@
 """Datetime helper functions for ADF-compatible runtime evaluation."""
 
+# pylint: disable=invalid-name  # 'dt' is conventional for datetime parameters
+
 from __future__ import annotations
 
 import re
@@ -46,15 +48,15 @@ def format_datetime(dt: datetime, adf_format: str) -> str:
     ):
         source_format = working_format
 
-        def _replace(match: re.Match[str]) -> str:
+        def _replace(match: re.Match[str], _src: str = source_format, _mkr: str = marker) -> str:
             start, end = match.span()
-            previous = source_format[start - 1] if start > 0 else ""
-            following = source_format[end] if end < len(source_format) else ""
+            previous = _src[start - 1] if start > 0 else ""
+            following = _src[end] if end < len(_src) else ""
             previous_is_literal_alpha = previous.isalpha() and previous not in _ADF_TOKEN_CONTEXT_CHARS
             following_is_literal_alpha = following.isalpha() and following not in _ADF_TOKEN_CONTEXT_CHARS
             if previous_is_literal_alpha or following_is_literal_alpha:
                 return match.group(0)
-            return marker
+            return _mkr
 
         working_format = re.sub(pattern, _replace, source_format)
 

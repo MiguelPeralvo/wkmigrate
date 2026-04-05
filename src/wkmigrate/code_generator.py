@@ -407,8 +407,7 @@ def get_web_activity_notebook_content(
     Returns:
         Formatted Python notebook source as a ``str``.
     """
-    required_imports = sorted(_collect_required_imports(url) | _collect_required_imports(headers) | _collect_required_imports(body))
-    required_imports = (
+    required_imports: set[str] = (
         _collect_required_imports(url) | _collect_required_imports(headers) | _collect_required_imports(body)
     )
     include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
@@ -418,7 +417,6 @@ def get_web_activity_notebook_content(
         "# Databricks notebook source",
         "import requests",
     ]
-    script_lines.extend(f"import {module_name}" for module_name in required_imports if module_name != "requests")
     script_lines.extend(
         f"import {module_name}" for module_name in sorted(required_imports) if module_name != "requests"
     )
@@ -505,10 +503,10 @@ def _collect_required_imports(value: Any) -> set[str]:
             imports.update(_collect_required_imports(item))
         return imports
     if isinstance(value, (list, tuple, set)):
-        imports: set[str] = set()
+        seq_imports: set[str] = set()
         for item in value:
-            imports.update(_collect_required_imports(item))
-        return imports
+            seq_imports.update(_collect_required_imports(item))
+        return seq_imports
     return set()
 
 

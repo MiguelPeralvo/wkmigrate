@@ -15,7 +15,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
-from wkmigrate.parsers.expression_ast import FunctionCall
+from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
 from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -200,7 +200,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
     return {"op": op_name, "left": left, "right": right}
 
 
-def _emit_condition_operand(operand: object, context: TranslationContext) -> str | UnsupportedValue:
+def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:
     """Emit condition operand while preserving legacy literal formatting."""
 
     emitted = emit(operand, context)

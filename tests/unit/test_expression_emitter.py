@@ -7,7 +7,7 @@ import pytest
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.expression_emitter import emit
-from wkmigrate.parsers.expression_emitter import emit, emit_with_imports
+from wkmigrate.parsers.expression_emitter import emit_with_imports
 from wkmigrate.parsers.expression_parsers import get_literal_or_expression, parse_variable_value
 from wkmigrate.parsers.expression_parser import parse_expression
 
@@ -104,8 +104,6 @@ def test_emit_union_and_intersection_are_order_preserving_and_variadic() -> None
     )
 
 
-def test_emit_wrong_arity_returns_unsupported() -> None:
-    emitted = _emit_expression("@union(createArray('a'))")
 @pytest.mark.parametrize(
     "expression",
     [
@@ -153,6 +151,7 @@ def test_emit_unknown_function_returns_unsupported() -> None:
     assert isinstance(emitted, UnsupportedValue)
     assert "Unsupported function" in emitted.message
 
+
 def test_emit_datetime_functions_to_runtime_helpers() -> None:
     assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
     assert _emit_expression("utcNow('yyyy-MM-dd')") == "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
@@ -161,7 +160,6 @@ def test_emit_datetime_functions_to_runtime_helpers() -> None:
         "_wkmigrate_format_datetime(_wkmigrate_utc_now(), 'yyyy-MM-dd')"
     )
     assert _emit_expression("addDays(utcNow(), 2)") == "_wkmigrate_add_days(_wkmigrate_utc_now(), 2)"
-
 
 
 def test_get_literal_or_expression_static_literal() -> None:
