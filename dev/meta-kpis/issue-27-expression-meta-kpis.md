@@ -96,6 +96,39 @@ The PythonEmitter handles all 3. ForEach and IfCondition add context-specific po
 
 ---
 
+## IT: Integration Testing (Live ADF + Databricks)
+
+Predicts: end-to-end correctness against real Azure resources.
+
+**Prerequisite:** `.env` file with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,
+`AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_FACTORY_NAME` for the test ADF instance.
+
+### IT1: ADF-to-IR Integration
+
+| ID | Meta-KPI | Target | Measurement | Phase |
+|----|----------|--------|-------------|-------|
+| IT-1 | Integration test pass rate | 100% | `poetry run pytest -m integration --tb=short -v` | 5+ |
+| IT-2 | Expression integration test count | >= 11 | Tests in `test_expression_integration.py` | 5 |
+| IT-3 | ADF pipeline deployment success | 100% | All `_deploy_adf_resource` fixtures succeed without error | 5+ |
+| IT-4 | Activity type integration coverage | >= 10 types | Count distinct activity types in integration tests (Notebook, ForEach, IfCondition, SetVariable, WebActivity, Copy, Lookup, SparkJar, SparkPython, DatabricksJob) | 5+ |
+
+### IT2: Configurable Emission Integration
+
+| ID | Meta-KPI | Target | Measurement | Phase |
+|----|----------|--------|-------------|-------|
+| IT-5 | SQL emission integration tests | >= 3 | Tests deploying pipelines with COPY_SOURCE_QUERY/LOOKUP_QUERY expressions, verifying Spark SQL output via `EmissionConfig(strategies={"copy_source_query": "spark_sql"})` | 6 |
+| IT-6 | Emission strategy override test | >= 1 | Test passing `emission_config` to `translate_pipeline()` and verifying SQL output for configured contexts | 6 |
+| IT-7 | Python fallback integration test | >= 1 | Test verifying non-SQL contexts still emit Python when SQL strategy is configured globally | 6 |
+
+### IT3: Generated Notebook Quality
+
+| ID | Meta-KPI | Target | Measurement | Phase |
+|----|----------|--------|-------------|-------|
+| IT-8 | Generated notebook syntax validity | 100% | All notebooks from `prepare_workflow()` pass `ast.parse()` | 5+ |
+| IT-9 | Required imports present | 100% | Notebooks using `json.loads()` include `import json`; datetime notebooks include inline helpers | 5+ |
+
+---
+
 ## Phase-to-KPI Mapping
 
 | Implementation Phase | PR Slug | Ratchet KPIs |
@@ -106,4 +139,5 @@ The PythonEmitter handles all 3. ForEach and IfCondition add context-specific po
 | Phase 4a: Notebook + WebActivity | `feature/27-notebook-web-expressions` | EA-1 (2/7), EA-3 |
 | Phase 4b: ForEach + IfCondition | `feature/27-foreach-ifcondition-expressions` | EA-1 (4/7), EA-2, EA-3 |
 | Phase 4c: Lookup + Copy | `feature/27-lookup-copy-expressions` | EA-1 (7/7), EA-2 (100%), EA-3 |
-| Phase 5: Integration Tests | `feature/27-expression-integration-tests` | EQ-1, EQ-3 |
+| Phase 5: Integration Tests | `feature/27-expression-integration-tests` | EQ-1, EQ-3, IT-1, IT-2, IT-4 |
+| Phase 6: Emission Integration Tests | `alpha_1` | IT-5, IT-6, IT-7, IT-8, IT-9 |
