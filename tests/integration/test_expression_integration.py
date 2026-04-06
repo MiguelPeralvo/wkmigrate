@@ -29,7 +29,8 @@ def test_load_complex_expression_pipeline(
 
     assert isinstance(result, Pipeline)
     assert result.name == "integration_test_complex_expression_pipeline"
-    assert len(result.tasks) == 4
+    # 4 top-level activities + 1 flattened IfCondition child = 5 tasks
+    assert len(result.tasks) == 5
 
 
 def test_set_variable_datetime_expression_translates(
@@ -117,8 +118,10 @@ def test_set_variable_nested_math_translates(
     result = factory_store.load("integration_test_complex_expression_additional_cases_pipeline")
 
     task = next(t for t in result.tasks if isinstance(t, SetVariableActivity) and t.variable_name == "nested_math")
-    assert "(dbutils.widgets.get('count') * 2)" in task.variable_value
-    assert " + 1" in task.variable_value
+    # Numeric coercion wraps pipeline parameters in a lambda for runtime type conversion
+    assert "dbutils.widgets.get('count')" in task.variable_value
+    assert "* 2" in task.variable_value
+    assert "+ 1" in task.variable_value
 
 
 def test_set_variable_concat_with_lookup_output_translates_with_dependency(

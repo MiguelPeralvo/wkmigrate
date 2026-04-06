@@ -202,11 +202,17 @@ def adf_factory(
     Yields:
         The ``Factory`` resource object.
     """
-    factory = adf_management_client.factories.create_or_update(
-        resource_group_name=azure_config.resource_group,
-        factory_name=azure_config.factory_name,
-        factory=Factory(location="eastus2"),
-    )
+    try:
+        factory = adf_management_client.factories.get(
+            resource_group_name=azure_config.resource_group,
+            factory_name=azure_config.factory_name,
+        )
+    except Exception:
+        factory = adf_management_client.factories.create_or_update(
+            resource_group_name=azure_config.resource_group,
+            factory_name=azure_config.factory_name,
+            factory=Factory(location="eastus2"),
+        )
     yield factory
 
 
