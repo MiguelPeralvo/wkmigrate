@@ -61,6 +61,13 @@ Predicts: P2 feedback about missing docs.
 | GD-1 | Public API docstrings | 100% | Every new public function has a Google-style docstring | General convention |
 | GD-2 | Design doc updated | Yes | `dev/design.md` updated if architecture changes | PR #31 |
 | GD-3 | Docs build clean | 0 errors | `make docs` succeeds (when applicable) | PR #37, #39 |
+| GD-4 | Expression system in design.md | Complete | `dev/design.md` has section covering expression pipeline: tokenizer → parser → AST → StrategyRouter → emitter → code | Emission architecture undocumented |
+| GD-5 | Architecture Decision Records | >= 3 ADRs | `dev/adr/` directory with ADRs for key design choices | No ADRs exist |
+| GD-6 | Plan document phase status | All phases annotated | Each phase in plan docs has status: COMPLETE / IN_PROGRESS / PLANNED | plan-issue-27 has no status markers |
+| GD-7 | Module-level docstrings | 100% of new files | All new `.py` files have module-level docstrings | ghanse convention |
+| GD-8 | Configuration documentation | Complete | design.md or standalone doc explains EmissionConfig usage and defaults | 16 strategies, 26 contexts, no user docs |
+| GD-9 | API surface catalog | Updated | Docusaurus API reference entries for expression/emission modules | No API reference entries |
+| GD-10 | Inline code examples | >= 3 | Docstrings for key public functions include usage examples | PRs #31, #45 pattern |
 
 ---
 
