@@ -68,6 +68,10 @@ Predicts: P2 feedback about missing docs.
 | GD-8 | Configuration documentation | Complete | design.md or standalone doc explains EmissionConfig usage and defaults | 16 strategies, 26 contexts, no user docs |
 | GD-9 | API surface catalog | Updated | Docusaurus API reference entries for expression/emission modules | No API reference entries |
 | GD-10 | Inline code examples | >= 3 | Docstrings for key public functions include usage examples | PRs #31, #45 pattern |
+| GD-11 | Module docstring substance | >= 5 lines median | Module docstrings explain role + grammar/design intent + relation to design.md — not one-liners | Prevents "thin docstring" feedback |
+| GD-12 | Private function docstrings | 100% for emitters | All `_emit_*` and dispatch functions have docstrings showing ADF input → emitted output mapping | ghanse's output-oriented review style |
+| GD-13 | Grammar/spec documentation | 1 spec per parser | Each parser module has a grammar specification comment (EBNF or equivalent) | Parser code is opaque without grammar reference |
+| GD-14 | Before/after code examples | >= 1 per transformer module | Modules that transform data include at least one `# Example:` block showing input → output | Output-oriented review style |
 
 ---
 

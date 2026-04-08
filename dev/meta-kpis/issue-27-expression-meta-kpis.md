@@ -232,6 +232,12 @@ Predicts: approval rate and review transaction count when proposing to ghanse/wk
 | PR-2c | Design context link | Required | Link to design.md section or ADR |
 | PR-2d | Before/after examples | Required (translators) | >= 1 input/output example per behavioral change |
 | PR-2e | KPI delta table | Required | Before/after meta-KPI values |
+| PR-2f | Motivation section | Required | `## Motivation` explaining why this PR exists, what problem it solves, why now |
+| PR-2g | Architecture section | Required | `## Architecture` linking to design.md section and summarizing data flow for the changes in this PR |
+| PR-2h | Reviewer walkthrough | Required | `## Reviewer walkthrough` telling the reviewer which file to read first, then second, with rationale |
+| PR-2i | Per-file rationale | Required | Table: file path × lines changed × one-sentence purpose — for every file in the diff |
+| PR-2j | PR body word count | >= 500 words | Substantive description, not a one-liner. ghanse's approved PRs average 600+ words |
+| PR-2k | Known tradeoffs section | Required | `## Tradeoffs` explaining what this PR does NOT do, and why — pre-empts "why didn't you..." questions |
 
 ### PR-3: Dependency Ordering
 
