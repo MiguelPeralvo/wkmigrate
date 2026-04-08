@@ -202,11 +202,17 @@ def adf_factory(
     Yields:
         The ``Factory`` resource object.
     """
-    factory = adf_management_client.factories.create_or_update(
-        resource_group_name=azure_config.resource_group,
-        factory_name=azure_config.factory_name,
-        factory=Factory(location="eastus2"),
-    )
+    try:
+        factory = adf_management_client.factories.get(
+            resource_group_name=azure_config.resource_group,
+            factory_name=azure_config.factory_name,
+        )
+    except Exception:
+        factory = adf_management_client.factories.create_or_update(
+            resource_group_name=azure_config.resource_group,
+            factory_name=azure_config.factory_name,
+            factory=Factory(location="eastus2"),
+        )
     yield factory
 
 
@@ -1404,6 +1410,215 @@ def set_variable_pipeline(
             ],
             variables={
                 "output_path": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
+def complex_expression_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    adf_factory: Factory,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline that exercises complex expression translation paths."""
+
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_run_date",
+                    variable_name="run_date",
+                    value={
+                        "type": "Expression",
+                        "value": "@formatDateTime(utcNow(), 'yyyy-MM-dd')",
+                    },
+                    depends_on=[],
+                ),
+                IfConditionActivity(
+                    name="check_not_prod",
+                    expression=Expression(
+                        type="Expression",
+                        value="@not(equals(pipeline().parameters.env, 'prod'))",
+                    ),
+                    if_true_activities=[
+                        DatabricksNotebookActivity(
+                            name="non_prod_notebook",
+                            notebook_path="/Shared/non_prod",
+                            depends_on=[],
+                            policy=ActivityPolicy(timeout="0.01:00:00"),
+                        ),
+                    ],
+                    if_false_activities=[],
+                    depends_on=[],
+                ),
+                ForEachActivity(
+                    name="foreach_concat_items",
+                    is_sequential=False,
+                    batch_count=2,
+                    items=Expression(
+                        type="Expression",
+                        value="@createArray(concat('a', '1'), concat('b', '2'))",
+                    ),
+                    activities=[
+                        DatabricksNotebookActivity(
+                            name="foreach_inner_notebook",
+                            notebook_path="/Shared/foreach_inner",
+                            depends_on=[],
+                            policy=ActivityPolicy(timeout="0.01:00:00"),
+                        ),
+                    ],
+                    depends_on=[],
+                ),
+                WebActivity(
+                    name="dynamic_web_call",
+                    method="GET",
+                    url=Expression(
+                        type="Expression",
+                        value="@concat('https://api.example.com/', pipeline().parameters.version)",
+                    ),
+                    depends_on=[],
+                    policy=ActivityPolicy(timeout="0.00:05:00"),
+                ),
+            ],
+            parameters={
+                "env": {"type": "String", "defaultValue": "dev"},
+                "version": {"type": "String", "defaultValue": "v1"},
+            },
+            variables={
+                "run_date": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
+def complex_expression_additional_cases_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    abfs_csv_dataset: DatasetResource,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline with additional complex-expression scenarios from the plan.
+
+    Args:
+        azure_config: Azure configuration fixture.
+        adf_management_client: Data Factory management client fixture.
+        abfs_csv_dataset: Ensures a dataset exists for the lookup + activity-output scenario.
+
+    Yields:
+        The created ``PipelineResource``.
+    """
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_additional_cases_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_concat_now",
+                    variable_name="concat_now",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat(pipeline().parameters.prefix, '-', utcNow())",
+                    },
+                    depends_on=[],
+                ),
+                SetVariableActivity(
+                    name="set_conditional_url",
+                    variable_name="conditional_url",
+                    value={
+                        "type": "Expression",
+                        "value": "@if(equals(pipeline().parameters.env, 'prod'), 'https://prod.api', 'https://dev.api')",
+                    },
+                    depends_on=[],
+                ),
+                SetVariableActivity(
+                    name="set_nested_math",
+                    variable_name="nested_math",
+                    value={
+                        "type": "Expression",
+                        "value": "@add(mul(pipeline().parameters.count, 2), 1)",
+                    },
+                    depends_on=[],
+                ),
+                LookupActivity(
+                    name="LookupStep",
+                    source=DelimitedTextSource(
+                        store_settings=AzureBlobFSReadSettings(recursive=True),
+                    ),
+                    dataset=DatasetReference(
+                        type="DatasetReference",
+                        reference_name="test_abfs_csv_dataset",
+                    ),
+                    first_row_only=True,
+                    depends_on=[],
+                    policy=ActivityPolicy(timeout="0.00:10:00"),
+                ),
+                SetVariableActivity(
+                    name="set_lookup_concat",
+                    variable_name="lookup_result_message",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat('Result: ', string(activity('LookupStep').output.firstRow.id))",
+                    },
+                    depends_on=[ActivityDependency(activity="LookupStep", dependency_conditions=["Succeeded"])],
+                ),
+            ],
+            parameters={
+                "prefix": {"type": "String", "defaultValue": "pre"},
+                "env": {"type": "String", "defaultValue": "dev"},
+                "count": {"type": "Int", "defaultValue": 2},
+            },
+            variables={
+                "concat_now": {"type": "String", "defaultValue": ""},
+                "conditional_url": {"type": "String", "defaultValue": ""},
+                "nested_math": {"type": "String", "defaultValue": ""},
+                "lookup_result_message": {"type": "String", "defaultValue": ""},
+            },
+        ),
+    ) as pl:
+        yield pl
+
+
+@pytest.fixture(scope="session")
+def complex_expression_unsupported_pipeline(
+    azure_config: AzureTestConfig,
+    adf_management_client: DataFactoryManagementClient,
+    adf_factory: Factory,
+) -> Generator[PipelineResource, None, None]:
+    """Deploy a pipeline containing an unsupported nested expression.
+
+    Args:
+        azure_config: Azure configuration fixture.
+        adf_management_client: Data Factory management client fixture.
+        adf_factory: Ensures the factory exists before provisioning.
+
+    Yields:
+        The created ``PipelineResource``.
+    """
+    with _deploy_adf_resource(
+        adf_management_client.pipelines,
+        azure_config,
+        "integration_test_complex_expression_unsupported_pipeline",
+        PipelineResource(
+            activities=[
+                SetVariableActivity(
+                    name="set_unsupported_expression",
+                    variable_name="unsupported_value",
+                    value={
+                        "type": "Expression",
+                        "value": "@concat('x', unknownOuter(unknownInner('y')))",
+                    },
+                    depends_on=[],
+                ),
+            ],
+            variables={
+                "unsupported_value": {"type": "String", "defaultValue": ""},
             },
         ),
     ) as pl:
