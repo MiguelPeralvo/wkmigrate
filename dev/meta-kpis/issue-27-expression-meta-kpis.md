@@ -330,3 +330,71 @@ head_short=$(git rev-parse --short HEAD)
 audit_rev=$(grep '^> \*\*Last verified commit' dev/docs/property-adoption-audit.md | sed 's/.*`\([^`]*\)`.*/\1/')
 [ "$head_short" = "$audit_rev" ] && echo "AD-6 OK" || echo "AD-6 STALE (HEAD=$head_short audit=$audit_rev)"
 ```
+
+---
+
+## BR: Brevity (Secondary Mission)
+
+Predicts: whether the code achieves the same capability with fewer lines, simpler
+functions, and less duplication. This is a **secondary mission** — it runs **after**
+all other meta-KPIs pass. The BR series never blocks progress; it guides the refactor
+pass that follows a green test suite.
+
+**Governing principle:** once everything works, we should be able to achieve the
+same with less code. Brevity must not come at the cost of readability, type safety,
+error handling, or docstrings (GD-7/GD-11/GD-12 are still hard gates).
+
+**Ratchet rule:** BR metrics can only improve — each code-changing commit must not
+worsen the BR baseline. A commit that adds new capability with new SLOC is allowed
+as long as the added SLOC is justified by the new functionality; reviewers enforce
+this with the `BR-0` rule below.
+
+### BR-0..BR-10: Code brevity meta-KPIs
+
+| ID | Meta-KPI | Target | How to Measure |
+|----|----------|--------|----------------|
+| BR-0 | Brevity is secondary | Always | This series runs only after `make test` + `make fmt` + all other meta-KPIs are green. Never sacrifice correctness or documentation for brevity. |
+| BR-1 | Total source LLOC | Monotonic decrease OR justified increase | Count non-blank, non-comment lines in `src/wkmigrate/` via AST parsing. |
+| BR-2 | Median function length | <= 15 LLOC | Per-function body LLOC (excluding docstring). Median across the codebase. |
+| BR-3 | p95 function length | <= 40 LLOC | 95th percentile of function body LLOC. Catches outlier bloated functions. |
+| BR-4 | Max function length | <= 80 LLOC | No single function body exceeds 80 LLOC (excluding docstring). |
+| BR-5 | Median cyclomatic complexity | <= 3 | Per-function McCabe complexity via `pylint`'s mccabe extension. |
+| BR-6 | p95 cyclomatic complexity | <= 8 | 95th percentile of cyclomatic complexity across all functions. |
+| BR-7 | Max cyclomatic complexity | <= 12 | No single function exceeds McCabe complexity 12. |
+| BR-8 | Deep nesting count | 0 | Functions with > 4 levels of indentation in their body. Deep nesting = code smell. |
+| BR-9 | Long parameter lists | 0 | Functions with > 6 positional parameters. Suggests missing dataclass. |
+| BR-10 | Duplicated helper count | 0 | Functions with body-identical twins (detected via AST hashing). |
+
+### Ratchet categorization
+
+| KPI | Gate type | Tolerance |
+|-----|-----------|-----------|
+| BR-0 | Hard (process rule) | N/A |
+| BR-1 | Soft (ratchet) | 0% for refactor-only commits |
+| BR-2, BR-3 | Soft | 5% |
+| BR-4, BR-7 | Hard | 0 |
+| BR-5, BR-6 | Soft | 5% |
+| BR-8, BR-9, BR-10 | Hard | 0 |
+
+### Measurement commands
+
+```bash
+# BR-1..BR-4, BR-8, BR-9, BR-10: AST-based metrics
+poetry run python tools/brevity_metrics.py src/wkmigrate/
+
+# BR-5..BR-7: McCabe cyclomatic complexity via pylint
+poetry run pylint --load-plugins=pylint.extensions.mccabe \
+    --max-complexity=12 --disable=all --enable=too-complex \
+    src/wkmigrate/ 2>&1 | tail -20
+```
+
+The `tools/brevity_metrics.py` script writes `dev/docs/brevity-audit.md` with the
+full metrics snapshot, making BR measurements reproducible and diff-able across
+commits.
+
+### What BR-series does NOT measure
+
+- **Docstring lines** (GD-7/GD-11/GD-12 add these intentionally). BR-1 counts LLOC, not total lines.
+- **Test code** (tests should be clear, not compressed). BR applies to `src/` only.
+- **Dataclass boilerplate** (structural, not expressive) — excluded via the AST walker.
+- **Comments** (inline comments can improve readability).
