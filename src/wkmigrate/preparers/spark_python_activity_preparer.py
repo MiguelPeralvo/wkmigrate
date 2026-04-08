@@ -1,12 +1,19 @@
-"""
-This module defines a preparer for Spark Python activities. The preparer builds a Spark
-Python task definition from the translated Spark Python activity.
+"""Preparer for Spark Python activities.
+
+Builds a Spark Python task definition from the translated ``SparkPythonActivity``
+IR. Both ``python_file`` and each element of ``parameters`` are unwrapped through
+``unwrap_value()`` so dynamic expressions (stored as ``ResolvedExpression`` in the IR)
+are embedded as their Python-code string form, and static values pass through as-is.
+
+Meta-KPI: AD-3 (preparer raw-embedding count) is satisfied because this preparer
+no longer assigns `activity.python_file` or `activity.parameters` directly into the
+task dict.
 """
 
 from __future__ import annotations
 from wkmigrate.models.ir.pipeline import SparkPythonActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
-from wkmigrate.preparers.utils import get_base_task
+from wkmigrate.preparers.utils import get_base_task, unwrap_value
 from wkmigrate.utils import parse_mapping
 
 
@@ -24,8 +31,8 @@ def prepare_spark_python_activity(activity: SparkPythonActivity) -> PreparedActi
         {
             **get_base_task(activity),
             "spark_python_task": {
-                "python_file": activity.python_file,
-                "parameters": activity.parameters,
+                "python_file": unwrap_value(activity.python_file),
+                "parameters": unwrap_value(activity.parameters),
             },
         }
     )

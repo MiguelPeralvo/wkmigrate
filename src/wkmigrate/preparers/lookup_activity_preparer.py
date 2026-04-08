@@ -15,7 +15,7 @@ from wkmigrate.parsers.dataset_parsers import collect_data_source_secrets, merge
 from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE, get_option_expressions, get_read_expression
 from wkmigrate.models.ir.pipeline import LookupActivity
 from wkmigrate.models.workflows.artifacts import NotebookArtifact, PreparedActivity
-from wkmigrate.preparers.utils import get_base_task
+from wkmigrate.preparers.utils import get_base_task, unwrap_value
 from wkmigrate.utils import parse_mapping
 
 
@@ -34,6 +34,10 @@ def prepare_lookup_activity(
     4. Collects the rows and publishes them as a task value via
        ``dbutils.jobs.taskValues.set()``.
 
+    ``source_query`` is unwrapped through ``unwrap_value()`` so dynamic expressions
+    (stored as ``ResolvedExpression`` in the IR) are embedded as their Python-code or
+    Spark-SQL string form in the generated notebook. Meta-KPI AD-3 is satisfied.
+
     Args:
         activity: Activity definition emitted by the translators.
         credentials_scope: Name of the Databricks secret scope used for storing credentials.
@@ -49,7 +53,7 @@ def prepare_lookup_activity(
     notebook_path, notebook = _create_lookup_notebook(
         source_definition=source_definition,
         first_row_only=activity.first_row_only,
-        source_query=activity.source_query,
+        source_query=unwrap_value(activity.source_query),
         credentials_scope=credentials_scope,
     )
 

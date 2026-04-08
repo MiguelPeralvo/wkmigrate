@@ -1,12 +1,15 @@
-"""
-This module defines a preparer for Notebook activities. The preparer builds a notebook
-task definition from the translated notebook activity.
+"""Preparer for Databricks Notebook activities.
+
+Builds the Databricks notebook task payload from the translated
+``DatabricksNotebookActivity`` IR. ``notebook_path`` is unwrapped through
+``unwrap_value()`` so dynamic paths (stored as ``ResolvedExpression`` in the IR when
+the ADF payload uses an expression) are embedded as their Python-code string form.
 """
 
 from __future__ import annotations
 from wkmigrate.models.ir.pipeline import DatabricksNotebookActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
-from wkmigrate.preparers.utils import get_base_task
+from wkmigrate.preparers.utils import get_base_task, unwrap_value
 from wkmigrate.utils import parse_mapping
 
 
@@ -23,7 +26,7 @@ def prepare_notebook_activity(activity: DatabricksNotebookActivity) -> PreparedA
         {
             **get_base_task(activity),
             "notebook_task": {
-                "notebook_path": activity.notebook_path,
+                "notebook_path": unwrap_value(activity.notebook_path),
                 "base_parameters": activity.base_parameters,
             },
         }

@@ -1,13 +1,36 @@
-"""This module defines an activity translator from ADF payloads to internal IR.
+"""Activity translator: routes ADF activities to type-specific translators.
 
-The activity translator routes each ADF activity to its corresponding translator, stitches in
-shared metadata (policy, dependencies, cluster specs), and flattens nested control-flow
-constructs. It also captures non-translatable warnings so that callers receive structured
-diagnostics with the translated activities.
+This module is the top-level dispatcher for activity translation. Its responsibilities:
 
-Translation state is captured in a ``TranslationContext`` that is threaded through function calls
-and returned alongside results.  No mutable state is shared between functions — each state transition
-produces a new context, making the data flow fully explicit.
+* **Visit activities in topological order** — each activity is translated after all
+  its ``depends_on`` references have been resolved. This lets downstream translators
+  look up previously-translated activities by name.
+* **Dispatch by ADF ``type`` string** — activity translators are registered in a dict
+  (``_TRANSLATOR_REGISTRY``). Unknown types emit ``NotTranslatableWarning`` and use a
+  placeholder notebook activity as fallback.
+* **Flatten nested control-flow** — ``IfCondition.ifTrue/ifFalse`` and ``ForEach.activities``
+  are flattened into top-level tasks with dependency edges, matching Databricks Jobs'
+  flat task model.
+* **Thread ``TranslationContext``** — each state transition produces a new immutable
+  context. No mutable state is shared between translator functions.
+* **Thread ``emission_config``** — the per-context emission strategy mapping flows
+  from ``translate_pipeline()`` through this module to every leaf translator, which
+  passes it to every call of ``get_literal_or_expression()``. If any layer drops the
+  parameter, the router silently falls back to ``notebook_python``. The threading path
+  is::
+
+    translate_pipeline(raw, emission_config)
+      └─ translate_activities_with_context(raw_activities, context, emission_config)
+           └─ _topological_visit(..., emission_config)
+                └─ visit_activity(..., emission_config)
+                     └─ _dispatch_activity(..., emission_config)
+                          └─ <leaf>_activity_translator(..., emission_config)
+                               └─ get_literal_or_expression(value, ..., emission_config)
+
+The translator registry only exposes "simple" type translators that don't need to
+thread the context through child translations. Control-flow types (``IfCondition``,
+``ForEach``, ``SetVariable``) are handled via a ``match`` statement because they
+recursively invoke the dispatcher for child activities.
 """
 
 from __future__ import annotations
@@ -22,6 +45,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.translators.activity_translators.copy_activity_translator import translate_copy_activity
 from wkmigrate.translators.activity_translators.databricks_job_activity_translator import (
     translate_databricks_job_activity,
@@ -40,13 +64,10 @@ from wkmigrate.utils import get_placeholder_activity, normalize_translated_resul
 TypeTranslator = Callable[[dict, dict], TranslationResult]
 
 _default_type_translators: dict[str, TypeTranslator] = {
-    "DatabricksJob": translate_databricks_job_activity,
-    "DatabricksNotebook": translate_notebook_activity,
-    "DatabricksSparkJar": translate_spark_jar_activity,
-    "DatabricksSparkPython": translate_spark_python_activity,
+    # Copy is the only remaining simple-dispatch translator. All other activity
+    # types are handled in the match statement below so they can receive
+    # ``context`` and ``emission_config`` (AD-series adoption).
     "Copy": translate_copy_activity,
-    "Lookup": translate_lookup_activity,
-    "WebActivity": translate_web_activity,
 }
 
 
@@ -63,6 +84,7 @@ def default_context() -> TranslationContext:
 def translate_activities_with_context(
     activities: list[dict] | None,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity] | None, TranslationContext]:
     """
     Translates a collection of ADF activities in dependency-first order, returning the
@@ -87,7 +109,7 @@ def translate_activities_with_context(
         return None, context
 
     index, order = _build_activity_index(activities)
-    return _topological_visit(index, order, context)
+    return _topological_visit(index, order, context, emission_config)
 
 
 def translate_activities(activities: list[dict] | None) -> list[Activity] | None:
@@ -128,6 +150,7 @@ def visit_activity(
     activity: dict,
     is_conditional_task: bool,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[Activity, TranslationContext]:
     """
     Translates a single ADF activity, returning the result and an updated context.
@@ -151,7 +174,7 @@ def visit_activity(
     activity_type = activity.get("type") or "Unsupported"
     with not_translatable_context(name, activity_type):
         base_properties = _get_base_properties(activity, is_conditional_task)
-        result, context = _dispatch_activity(activity_type, activity, base_properties, context)
+        result, context = _dispatch_activity(activity_type, activity, base_properties, context, emission_config)
         translated = normalize_translated_result(result, base_properties)
 
     if name:
@@ -164,6 +187,7 @@ def _dispatch_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Dispatches activity translation to the appropriate translator.
@@ -181,12 +205,46 @@ def _dispatch_activity(
         Tuple of ``(translator_result, updated_context)``.
     """
     match activity_type:
+        case "DatabricksNotebook":
+            return (
+                translate_notebook_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "WebActivity":
+            return (
+                translate_web_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
         case "IfCondition":
-            return translate_if_condition_activity(activity, base_kwargs, context)
+            return translate_if_condition_activity(activity, base_kwargs, context, emission_config=emission_config)
         case "ForEach":
-            return translate_for_each_activity(activity, base_kwargs, context)
+            return translate_for_each_activity(activity, base_kwargs, context, emission_config=emission_config)
         case "SetVariable":
-            return translate_set_variable_activity(activity, base_kwargs, context)
+            return translate_set_variable_activity(activity, base_kwargs, context, emission_config=emission_config)
+        case "DatabricksSparkPython":
+            # AD-series: adopted for python_file + parameters
+            return (
+                translate_spark_python_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "DatabricksSparkJar":
+            # AD-series: adopted for main_class_name + parameters
+            return (
+                translate_spark_jar_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "DatabricksJob":
+            # AD-series: adopted for existing_job_id + job_parameters
+            return (
+                translate_databricks_job_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "Lookup":
+            # AD-series: adopted for source_query (LOOKUP_QUERY context — SQL-safe)
+            return (
+                translate_lookup_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
         case _:
             translator = context.registry.get(activity_type)
             if translator is not None:
@@ -227,6 +285,7 @@ def _topological_visit(
     activity_index: dict[str, dict],
     visit_order: list[str],
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
     """
     Visits activities in dependency-first (topological) order.
@@ -261,7 +320,7 @@ def _topological_visit(
             if dep_name and dep_name in activity_index:
                 context = _visit(dep_name, context)
 
-        translated, context = visit_activity(raw, False, context)
+        translated, context = visit_activity(raw, False, context, emission_config)
         result.extend(_flatten_activities(translated))
         return context
 

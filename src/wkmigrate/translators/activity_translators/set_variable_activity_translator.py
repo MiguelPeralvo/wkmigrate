@@ -1,11 +1,29 @@
-"""
-This module defines a translator for translating Set Variable activities.
+"""Translator for ADF SetVariable activities.
 
-Translators in this module normalize Set Variable activity payloads into internal
-representations. The variable name and value are pulled from the Set Variable activity.
+Normalizes SetVariable activity payloads into ``SetVariableActivity`` IR. The
+variable name and value are pulled from the raw payload; the value is resolved
+through ``parse_variable_value()`` which is a thin wrapper around
+``get_literal_or_expression()``.
 
-If the Set Variable activity references a complex expression (e.g. '@activity("activity_name").output.value'),
-the expression is parsed into an equivalent Python expression.
+Expression handling:
+
+SetVariable was the **only** activity type with expression handling prior to issue
+#27. This translator was the reference implementation that the shared utility was
+extracted from. The current implementation delegates entirely to
+``parse_variable_value()`` so that SetVariable behavior stays consistent with every
+other adopted translator.
+
+Supported value shapes:
+
+* Static string → Python literal (``'hello'``)
+* Numeric/boolean literal → Python literal (``42``, ``True``)
+* Expression dict ``{"type": "Expression", "value": "@..."}`` → resolved expression
+* ``@activity('X').output.Y`` → ``json.loads(dbutils.jobs.taskValues.get(...))['Y']``
+* ``@pipeline().parameters.X`` → ``dbutils.widgets.get('X')``
+* ``@variables('Y')`` → task value reference via TranslationContext
+
+``emission_config`` is threaded through to allow future SQL-context strategies,
+though SetVariable's current use case (notebook cells) always emits Python.
 """
 
 from __future__ import annotations
@@ -14,11 +32,15 @@ from importlib import import_module
 from wkmigrate.models.ir.pipeline import SetVariableActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_parsers import parse_variable_value
 
 
 def translate_set_variable_activity(
-    activity: dict, base_kwargs: dict, context: TranslationContext | None = None
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[SetVariableActivity | UnsupportedValue, TranslationContext]:
     """
     Translates an ADF Set Variable activity into a ``SetVariableActivity`` object.
@@ -59,7 +81,7 @@ def translate_set_variable_activity(
             context,
         )
 
-    parsed_variable_value = parse_variable_value(raw_value, context)
+    parsed_variable_value = parse_variable_value(raw_value, context, emission_config=emission_config)
     if isinstance(parsed_variable_value, UnsupportedValue):
         return (
             UnsupportedValue(

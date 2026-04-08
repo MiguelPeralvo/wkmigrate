@@ -19,6 +19,86 @@ from wkmigrate.parsers.dataset_parsers import (
 )
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
+
+_DATETIME_HELPER_MARKER = "_wkmigrate_"
+_INLINE_DATETIME_HELPERS = [
+    "import re",
+    "from datetime import datetime, timedelta, timezone",
+    "from zoneinfo import ZoneInfo, ZoneInfoNotFoundError",
+    "",
+    "def _wkmigrate_utc_now():",
+    "    return datetime.now(timezone.utc)",
+    "",
+    "def _wkmigrate_format_datetime(dt, adf_format):",
+    "    working_format = adf_format",
+    "    millisecond_marker = '__WK_MILLISECOND__'",
+    "    hundredth_marker = '__WK_HUNDREDTH__'",
+    "    tenth_marker = '__WK_TENTH__'",
+    "    token_context_chars = frozenset('yMdHhmsft')",
+    "    for pattern, marker in (",
+    "        (r'(?<!f)fff(?!f)', millisecond_marker),",
+    "        (r'(?<!f)ff(?!f)', hundredth_marker),",
+    "        (r'(?<!f)f(?!f)', tenth_marker),",
+    "    ):",
+    "        source_format = working_format",
+    "",
+    "        def _replace(match):",
+    "            start, end = match.span()",
+    "            previous = source_format[start - 1] if start > 0 else ''",
+    "            following = source_format[end] if end < len(source_format) else ''",
+    "            previous_is_literal_alpha = previous.isalpha() and previous not in token_context_chars",
+    "            following_is_literal_alpha = following.isalpha() and following not in token_context_chars",
+    "            if previous_is_literal_alpha or following_is_literal_alpha:",
+    "                return match.group(0)",
+    "            return marker",
+    "",
+    "        working_format = re.sub(pattern, _replace, source_format)",
+    "    for adf_token, py_token in [",
+    "        ('yyyy', '%Y'),",
+    "        ('yy', '%y'),",
+    "        ('MM', '%m'),",
+    "        ('dd', '%d'),",
+    "        ('HH', '%H'),",
+    "        ('hh', '%I'),",
+    "        ('mm', '%M'),",
+    "        ('ss', '%S'),",
+    "        ('tt', '%p'),",
+    "    ]:",
+    "        working_format = working_format.replace(adf_token, py_token)",
+    "    formatted = dt.strftime(working_format)",
+    "    if millisecond_marker in formatted:",
+    "        formatted = formatted.replace(millisecond_marker, f'{dt.microsecond // 1000:03d}')",
+    "    if hundredth_marker in formatted:",
+    "        formatted = formatted.replace(hundredth_marker, f'{dt.microsecond // 10000:02d}')",
+    "    if tenth_marker in formatted:",
+    "        formatted = formatted.replace(tenth_marker, str(dt.microsecond // 100000))",
+    "    return formatted",
+    "",
+    "def _wkmigrate_add_days(dt, days):",
+    "    return dt + timedelta(days=days)",
+    "",
+    "def _wkmigrate_add_hours(dt, hours):",
+    "    return dt + timedelta(hours=hours)",
+    "",
+    "def _wkmigrate_start_of_day(dt):",
+    "    return dt.replace(hour=0, minute=0, second=0, microsecond=0)",
+    "",
+    "def _wkmigrate_convert_time_zone(dt, source_tz, target_tz):",
+    "    try:",
+    "        source_zone = ZoneInfo(source_tz)",
+    "    except ZoneInfoNotFoundError as exc:",
+    "        raise ValueError(f\"Invalid source timezone '{source_tz}'\") from exc",
+    "    try:",
+    "        target_zone = ZoneInfo(target_tz)",
+    "    except ZoneInfoNotFoundError as exc:",
+    "        raise ValueError(f\"Invalid target timezone '{target_tz}'\") from exc",
+    "    if dt.tzinfo is None:",
+    "        localized = dt.replace(tzinfo=source_zone)",
+    "    else:",
+    "        localized = dt.astimezone(source_zone)",
+    "    return localized.astimezone(target_zone)",
+]
 
 
 def get_set_variable_notebook_content(variable_name: str, variable_value: str) -> str:
@@ -36,6 +116,8 @@ def get_set_variable_notebook_content(variable_name: str, variable_value: str) -
     script_lines = ["# Databricks notebook source"]
     if "json.loads(" in variable_value:
         script_lines.append("import json")
+    if _DATETIME_HELPER_MARKER in variable_value:
+        script_lines.extend(["", *_INLINE_DATETIME_HELPERS])
     script_lines.extend(
         [
             "",
@@ -86,7 +168,7 @@ def get_file_options(
     service_name = dataset_definition["service_name"]
     provider_type = dataset_definition.get("provider_type", "abfs")
     config_lines = [
-        rf'{dataset_name}_options["{option}"] = r"{dataset_definition.get(option)}"'
+        f'{dataset_name}_options["{option}"] = {str(dataset_definition.get(option))!r}'
         for option in DATASET_OPTIONS.get(file_type, [])
         if dataset_definition.get(option)
     ]
@@ -293,10 +375,10 @@ def get_jdbc_read_expression(source_definition: dict, source_query: str | None =
 def get_web_activity_notebook_content(
     activity_name: str,
     activity_type: str,
-    url: str,
-    method: str,
+    url: str | ResolvedExpression,
+    method: str | ResolvedExpression,
     body: Any,
-    headers: dict[str, str] | None,
+    headers: dict[str, Any] | ResolvedExpression | None,
     authentication: Authentication | None = None,
     disable_cert_validation: bool = False,
     http_request_timeout_seconds: int | None = None,
@@ -325,24 +407,42 @@ def get_web_activity_notebook_content(
     Returns:
         Formatted Python notebook source as a ``str``.
     """
+    required_imports: set[str] = (
+        _collect_required_imports(url)
+        | _collect_required_imports(method)
+        | _collect_required_imports(headers)
+        | _collect_required_imports(body)
+    )
+    include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
+    required_imports.discard("wkmigrate_datetime_helpers")
+
     script_lines = [
         "# Databricks notebook source",
         "import requests",
-        "",
-        f"url = {url!r}",
-        f"method = {method!r}",
-        f"headers = {headers!r}",
-        f"body = {body!r}",
-        "",
-        "kwargs = {}",
-        "if headers:",
-        '    kwargs["headers"] = headers',
-        "if body is not None:",
-        "    if isinstance(body, dict):",
-        '        kwargs["json"] = body',
-        "    else:",
-        '        kwargs["data"] = body',
     ]
+    script_lines.extend(
+        f"import {module_name}" for module_name in sorted(required_imports) if module_name != "requests"
+    )
+    if include_datetime_helpers:
+        script_lines.extend(["", *_INLINE_DATETIME_HELPERS])
+    script_lines.extend(
+        [
+            "",
+            f"url = {_as_python_expression(url)}",
+            f"method = {_as_python_expression(method)}",
+            f"headers = {_as_python_expression(headers)}",
+            f"body = {_as_python_expression(body)}",
+            "",
+            "kwargs = {}",
+            "if headers:",
+            '    kwargs["headers"] = headers',
+            "if body is not None:",
+            "    if isinstance(body, dict):",
+            '        kwargs["json"] = body',
+            "    else:",
+            '        kwargs["data"] = body',
+        ]
+    )
 
     if disable_cert_validation:
         script_lines.append('kwargs["verify"] = False')
@@ -369,6 +469,48 @@ def get_web_activity_notebook_content(
         ]
     )
     return autopep8.fix_code("\n".join(script_lines))
+
+
+def _as_python_expression(value: Any) -> str:
+    """Return a safe Python expression string for generated notebook assignment."""
+
+    if isinstance(value, ResolvedExpression):
+        return value.code
+
+    if isinstance(value, dict):
+        items = ", ".join(f"{_as_python_expression(k)}: {_as_python_expression(v)}" for k, v in value.items())
+        return "{" + items + "}"
+    if isinstance(value, list):
+        items = ", ".join(_as_python_expression(item) for item in value)
+        return "[" + items + "]"
+    if isinstance(value, tuple):
+        items = ", ".join(_as_python_expression(item) for item in value)
+        if len(value) == 1:
+            items += ","
+        return "(" + items + ")"
+
+    if isinstance(value, str):
+        return repr(value)
+    return repr(value)
+
+
+def _collect_required_imports(value: Any) -> set[str]:
+    """Collect required import modules from nested resolved-expression values."""
+
+    if isinstance(value, ResolvedExpression):
+        return set(value.required_imports)
+    if isinstance(value, dict):
+        imports: set[str] = set()
+        for key, item in value.items():
+            imports.update(_collect_required_imports(key))
+            imports.update(_collect_required_imports(item))
+        return imports
+    if isinstance(value, (list, tuple, set)):
+        seq_imports: set[str] = set()
+        for item in value:
+            seq_imports.update(_collect_required_imports(item))
+        return seq_imports
+    return set()
 
 
 def _get_file_credential_lines(

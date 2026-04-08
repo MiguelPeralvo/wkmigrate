@@ -11,8 +11,11 @@ payloads into internal representations that can be used to generate Databricks L
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from wkmigrate.models.ir.datasets import Dataset
+
+if TYPE_CHECKING:
+    from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 
 @dataclass(slots=True)
@@ -71,12 +74,14 @@ class DatabricksNotebookActivity(Activity):
     Databricks notebook activity metadata.
 
     Attributes:
-        notebook_path: Workspace path to the Databricks notebook to execute.
+        notebook_path: Workspace path to the Databricks notebook to execute. Either a
+            plain string (static path) or a ``ResolvedExpression`` when the ADF payload
+            uses an expression (AD-series property-level adoption).
         base_parameters: Mapping of parameter names to default values passed to the notebook.
         linked_service_definition: Raw ADF linked-service dictionary used to configure the cluster.
     """
 
-    notebook_path: str
+    notebook_path: "str | ResolvedExpression"
     base_parameters: dict[str, str] | None = None
     linked_service_definition: dict | None = None
 
@@ -114,7 +119,7 @@ class ForEachActivity(Activity):
 
     items_string: str
     for_each_task: Activity
-    concurrency: int | None = None
+    concurrency: "int | ResolvedExpression | None" = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -131,8 +136,8 @@ class RunJobActivity(Activity):
 
     name: str
     pipeline: Pipeline | None = None
-    existing_job_id: str | None = None
-    job_parameters: dict[str, Any] | None = None
+    existing_job_id: "str | ResolvedExpression | None" = None
+    job_parameters: "dict[str, Any | ResolvedExpression] | None" = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -146,8 +151,8 @@ class SparkJarActivity(Activity):
         libraries: Additional library descriptors attached to the task.
     """
 
-    main_class_name: str
-    parameters: list[str] | None = None
+    main_class_name: "str | ResolvedExpression"
+    parameters: "list[str | ResolvedExpression] | None" = None
     libraries: list[dict[str, Any]] | None = None
 
 
@@ -161,8 +166,8 @@ class SparkPythonActivity(Activity):
         parameters: List of string arguments passed to the Python entry point.
     """
 
-    python_file: str
-    parameters: list[str] | None = None
+    python_file: "str | ResolvedExpression"
+    parameters: "list[str | ResolvedExpression] | None" = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -183,7 +188,7 @@ class LookupActivity(Activity):
     source_dataset: Dataset | None = None
     source_properties: dict[str, Any] | None = None
     first_row_only: bool = True
-    source_query: str | None = None
+    source_query: "str | ResolvedExpression | None" = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -205,10 +210,10 @@ class WebActivity(Activity):
         turn_off_async: When ``True``, the activity executes synchronously rather than polling.
     """
 
-    url: str
-    method: str
-    body: Any = None
-    headers: dict[str, str] | None = None
+    url: str | ResolvedExpression
+    method: "str | ResolvedExpression"
+    body: Any | ResolvedExpression = None
+    headers: dict[str, Any | ResolvedExpression] | ResolvedExpression | None = None
     authentication: Authentication | None = None
     disable_cert_validation: bool = False
     http_request_timeout_seconds: int | None = None

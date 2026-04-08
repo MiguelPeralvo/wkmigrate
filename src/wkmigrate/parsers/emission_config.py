@@ -90,6 +90,15 @@ class ExpressionContext(StrEnum):
     FAIL_ERROR_CODE = "fail_error_code"
     WAIT_SECONDS = "wait_seconds"
     SCRIPT_TEXT = "script_text"
+    # Property-level adoption contexts (PR 3) — AD-series
+    NOTEBOOK_PATH = "notebook_path"
+    SPARK_MAIN_CLASS = "spark_main_class"
+    SPARK_PYTHON_FILE = "spark_python_file"
+    SPARK_PARAMETER = "spark_parameter"
+    JOB_ID = "job_id"
+    JOB_PARAMETER = "job_parameter"
+    FOREACH_BATCH_COUNT = "foreach_batch_count"
+    WEB_METHOD = "web_method"
     GENERIC = "generic"
 
 

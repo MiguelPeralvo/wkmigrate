@@ -1,8 +1,33 @@
-"""This module defines a translator for translating For Each activities.
+"""Translator for ADF ForEach activities.
 
-Translators in this module normalize For Each activity payloads into internal representations.
-Each translator must validate required fields, parse the activity's items expression, and emit
-``UnsupportedValue`` objects for any unparsable inputs.
+Normalizes ForEach activity payloads into the ``ForEachActivity`` IR dataclass. The
+key work is resolving the ``items`` property — which can be a static JSON array, a
+dynamic ``@createArray(...)`` expression, or a pipeline parameter reference — and
+materializing it into the Databricks ``for_each_task.inputs`` format (a JSON string
+array).
+
+Expression handling:
+
+The ``items`` property is routed through ``get_literal_or_expression()`` with the
+``FOREACH_ITEMS`` expression context. The shared utility handles:
+
+* Static array: ``["a", "b", "c"]`` → materialized directly as ``'["a", "b", "c"]'``
+* Expression array: ``@createArray(concat('item-', pipeline().parameters.env), ...)``
+  → emitted as Python code, then ``ast.literal_eval()`` extracts the concrete values
+  if possible
+* Pipeline parameter: ``@pipeline().parameters.items`` → emitted as
+  ``dbutils.widgets.get('items')`` and deferred to runtime
+
+This replaces the previous bespoke regex that only handled ``@array()`` / ``@createArray()``
+function calls. The new implementation supports any valid expression that evaluates
+to an array.
+
+Child activity handling:
+
+The ``activities`` property (child tasks inside the loop body) is recursively
+translated via the top-level dispatcher, threading both ``TranslationContext`` and
+``emission_config``. Child activities become top-level tasks in the Databricks job
+with a ``for_each_task`` parent reference.
 """
 
 from __future__ import annotations
@@ -16,12 +41,17 @@ from wkmigrate.models.ir.pipeline import Activity, ForEachActivity, Pipeline, Ru
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.parsers.expression_ast import AstNode, BoolLiteral, FunctionCall, NumberLiteral, StringLiteral
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
+from wkmigrate.parsers.expression_parsers import ResolvedExpression, get_literal_or_expression
+from wkmigrate.parsers.expression_parser import parse_expression
 
 
 def translate_for_each_activity(
     activity: dict,
     base_kwargs: dict,
     context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[TranslationResult, TranslationContext]:
     """
     Translates an ADF ForEach activity into a ``ForEachActivity`` object.
@@ -55,7 +85,7 @@ def translate_for_each_activity(
             context,
         )
 
-    items_string = _parse_for_each_items(items)
+    items_string = _parse_for_each_items(items, context, emission_config)
     if isinstance(items_string, UnsupportedValue):
         return items_string, context
 
@@ -70,13 +100,51 @@ def translate_for_each_activity(
     if isinstance(for_each_task, UnsupportedValue):
         return for_each_task, context
 
+    concurrency = _resolve_batch_count(activity.get("batch_count"), context, emission_config)
     result = ForEachActivity(
         **base_kwargs,
         items_string=items_string,
         for_each_task=for_each_task,
-        concurrency=activity.get("batch_count"),
+        concurrency=concurrency,
     )
     return result, context
+
+
+def _resolve_batch_count(
+    raw_batch_count: object,
+    context: TranslationContext,
+    emission_config: EmissionConfig | None,
+) -> "int | ResolvedExpression | None":
+    """Resolve the batch_count (concurrency) property via the shared utility.
+
+    AD-series: ``batch_count`` can be a literal integer, a pipeline parameter
+    reference, or an expression. Static integers unwrap to ``int``; dynamic
+    expressions are preserved as ``ResolvedExpression`` so the preparer can embed
+    the runtime value.
+    """
+    if raw_batch_count is None:
+        return None
+    # Integer fast path — skip the parser for the common literal case
+    if isinstance(raw_batch_count, int) and not isinstance(raw_batch_count, bool):
+        return raw_batch_count
+    # Only strings and expression dicts can carry ADF expressions; everything else
+    # is an unsupported shape and is ignored (consistent with the previous raw passthrough).
+    if not isinstance(raw_batch_count, (str, dict)):
+        return None
+    resolved = get_literal_or_expression(
+        raw_batch_count,
+        context,
+        ExpressionContext.FOREACH_BATCH_COUNT,
+        emission_config=emission_config,
+    )
+    if isinstance(resolved, UnsupportedValue):
+        return None
+    if resolved.is_dynamic:
+        return resolved
+    try:
+        return int(ast.literal_eval(resolved.code))
+    except (SyntaxError, ValueError, TypeError):
+        return None
 
 
 def _translate_inner_activities(
@@ -162,7 +230,9 @@ def _build_inner_pipeline(activity: dict, inner_activity_defs: list[dict]) -> Ru
     )
 
 
-def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
+def _parse_for_each_items(
+    items: dict, context: TranslationContext, emission_config: EmissionConfig | None = None
+) -> str | UnsupportedValue:
     """
     Parses a list of items passed to a ForEach task into a serialized list expression.
 
@@ -177,21 +247,52 @@ def _parse_for_each_items(items: dict) -> str | UnsupportedValue:
     value = items.get("value")
     if value is None:
         return UnsupportedValue(value=items, message="Missing property 'value' in ForEach activity 'items'")
-    # TODO: Move all dynamic function patterns to a common enum list
-    array_pattern = r"@array\(\[(.+)\]\)"
-    match = re.match(string=value, pattern=array_pattern)
-    if match:
-        matched_item = match.group(1)
-        return _parse_array_string(matched_item)
 
-    create_array_pattern = r"@createArray\((.+)\)"
-    match = re.match(string=value, pattern=create_array_pattern)
-    if match:
-        matched_item = match.group(1)
-        list_items = ast.literal_eval(matched_item)
+    if isinstance(value, str):
+        array_pattern = r"@array\(\[(.+)\]\)"
+        match = re.match(string=value, pattern=array_pattern)
+        if match:
+            matched_item = match.group(1)
+            return _parse_array_string(matched_item)
+
+    resolved = get_literal_or_expression(items, context, emission_config=emission_config)
+    if isinstance(resolved, UnsupportedValue):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    parsed = parse_expression(value)
+    if isinstance(parsed, UnsupportedValue):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    if isinstance(parsed, FunctionCall) and parsed.name.lower() in {"createarray", "array"}:
+        list_items: list[str] = []
+        for arg in parsed.args:
+            item = _evaluate_for_each_item(arg, context)
+            if isinstance(item, UnsupportedValue):
+                return UnsupportedValue(
+                    value=items,
+                    message=f"Unsupported array item in expression '{value}' for ForEach activity 'items': {item.message}",
+                )
+            list_items.append(item)
         quoted_items = ",".join([f'"{item}"' for item in list_items])
         return _parse_array_string(quoted_items)
-    return UnsupportedValue(value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'")
+
+    try:
+        literal_value = ast.literal_eval(resolved.code)
+    except (SyntaxError, ValueError):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+
+    if not isinstance(literal_value, list):
+        return UnsupportedValue(
+            value=items, message=f"Unsupported array expression '{value}' in ForEach activity 'items'"
+        )
+    quoted_items = ",".join(f'"{str(item)}"' for item in literal_value)
+    return _parse_array_string(quoted_items)
 
 
 def _parse_array_string(array_string: str) -> str:
@@ -206,6 +307,36 @@ def _parse_array_string(array_string: str) -> str:
     """
     items = [item.replace("'", "").replace('"', "") for item in array_string.split(",")]
     return '["' + '","'.join(items) + '"]'
+
+
+def _evaluate_for_each_item(item: AstNode, context: TranslationContext) -> str | UnsupportedValue:
+    """Evaluate supported item expressions to a string for Databricks for-each inputs."""
+
+    if isinstance(item, StringLiteral):
+        return item.value
+    if isinstance(item, NumberLiteral):
+        return str(item.value)
+    if isinstance(item, BoolLiteral):
+        return str(item.value).lower()
+    if isinstance(item, FunctionCall) and item.name.lower() == "concat":
+        parts: list[str] = []
+        for arg in item.args:
+            part = _evaluate_for_each_item(arg, context)
+            if isinstance(part, UnsupportedValue):
+                return part
+            parts.append(part)
+        return "".join(parts)
+
+    from wkmigrate.parsers.expression_emitter import emit  # Local import to avoid cycle at import time.
+
+    emitted = emit(item, context)
+    if isinstance(emitted, UnsupportedValue):
+        return emitted
+    try:
+        literal = ast.literal_eval(emitted)
+    except (SyntaxError, ValueError):
+        return UnsupportedValue(value=item, message="Expression cannot be resolved to a literal for ForEach items")
+    return str(literal)
 
 
 def _filter_parameters(activity: dict) -> dict | UnsupportedValue:
