@@ -79,7 +79,7 @@ Predicts: P2 feedback about missing docs.
 
 | Gate Type | KPIs | Tolerance |
 |-----------|------|-----------|
-| **Hard gate** | GR-1, GR-2, backward compat | Zero — any regression = immediate failure |
-| **Soft gate** | All others | Counts can only grow; percentages allow 5% degradation |
+| **Hard gate** | GR-1, GR-2, backward compat, AD-2 (for adopted translators), AD-3 (for adopted preparers), AD-5, AD-8, AD-9 | Zero — any regression = immediate failure |
+| **Soft gate** | All others (including AD-1, AD-4, AD-6, AD-7) | Counts can only grow; percentages allow 5% degradation |
 
 The ratchet is checked after each implementation phase. Hard gate failure requires immediate fix before proceeding.

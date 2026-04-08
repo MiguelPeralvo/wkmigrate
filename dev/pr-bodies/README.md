@@ -45,6 +45,31 @@ Each draft satisfies these PR-series meta-KPIs (from `dev/meta-kpis/issue-27-exp
 | PR-5a Story arc | See `dev/pr-strategy-issue-27.md` |
 | PR-5b Each PR independently valuable | Each draft's `## Motivation` section |
 | PR-5c Cumulative coverage table | See `dev/pr-strategy-issue-27.md` |
+| AD-1 Property-level adoption rate | PR 3 KPI delta table; baseline + PR 3 target + post-follow-up target |
+| AD-2 Translator raw-pass-through count | PR 3 KPI delta table |
+| AD-3 Preparer raw-embedding count | PR 3 KPI delta table |
+| AD-4 Per-activity adoption completeness | PR 3 KPI delta table |
+| AD-5 Audit document exists | See `dev/docs/property-adoption-audit.md` |
+| AD-8 IR widening consistency | PR 3 KPI delta table |
+
+## Adoption Depth (AD-series) Compliance
+
+Beyond the PR-series meta-KPIs, the 5-PR sequence addresses ghanse's **"most
+properties"** ask via the AD-series. The key artifacts:
+
+| Document | Purpose |
+|----------|---------|
+| `dev/docs/property-adoption-audit.md` | Single source of truth — every expression-capable property × adoption status × file:line |
+| `dev/docs/property-adoption-followup.md` | Deferred scope: dataset parsers (#28), linked services (#29), code-generator escaping |
+| `dev/meta-kpis/issue-27-expression-meta-kpis.md` | AD-1..AD-9 meta-KPI definitions and measurement commands |
+
+**Adoption trajectory:**
+
+| Stage | Property adoption rate |
+|-------|-----------------------|
+| Baseline (main) | 0% |
+| After 5-PR sequence (current) | **~51%** |
+| After follow-up #28 + #29 + small escape PR | **~95%** (meets "most properties" target) |
 
 ## Narrative Arc
 

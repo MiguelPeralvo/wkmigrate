@@ -264,3 +264,69 @@ Predicts: approval rate and review transaction count when proposing to ghanse/wk
 | PR-5a | Story arc documented | Yes | Narrative across PR sequence |
 | PR-5b | Each PR independently valuable | Yes | Merged alone still provides value |
 | PR-5c | Cumulative coverage table | Updated per PR | Running scoreboard per PR body |
+
+---
+
+## AD: Adoption Depth (Property-Level Compliance)
+
+Predicts: whether the shared utility `get_literal_or_expression()` is actually invoked
+for **"most properties"** — the specific phrase from ghanse's original issue #27 request.
+Translator-level adoption counters (EA-1) measure breadth; this series measures depth.
+
+**Baseline audit:** `dev/docs/property-adoption-audit.md` identifies 47 expression-capable
+properties across translators, preparers, dataset parsers, linked-service translators, and
+code_generator. Only 10 (21.3%) currently route through the shared utility; the remaining
+37 are raw pass-throughs.
+
+### AD-1..AD-9: Property-level adoption depth
+
+| ID | Meta-KPI | Target | How to Verify |
+|----|----------|--------|---------------|
+| AD-1 | Property-level adoption rate | >= 80% (full compliance) | `(adopted / (total - exceptions))` parsed from `dev/docs/property-adoption-audit.md`. Current **21.3%**, PR 3 target **>= 45%**, post-follow-up target **>= 80%**. |
+| AD-2 | Translator raw-pass-through count (in adopted) | 0 | For each translator marked "adopted" in EA-1, 0 expression-capable properties may still use raw `.get(...)` → IR assignment without routing through `get_literal_or_expression()` or `parse_variable_value()`. |
+| AD-3 | Preparer raw-value-embedding count | <= 5 justified | Each preparer that embeds a value into generated notebook code must handle `ResolvedExpression` via `.code`, use a listed helper (`unwrap_value`), or appear in the audit exceptions list. |
+| AD-4 | Per-activity adoption completeness | >= 80% for adopted types | For each activity type in EA-1, at least 80% of its expression-capable properties must route through the shared utility. Pre-plan: Notebook 50%, Web 60%, SetVariable 100%, ForEach 50%, IfCondition 100%. |
+| AD-5 | Audit document exists | 1 document | `dev/docs/property-adoption-audit.md` exists with a structured table mapping every expression-capable property to its adoption status, file:line, IR field type, and priority. |
+| AD-6 | Audit document freshness | <= 1 commit stale | The audit document's `last_verified_commit` field matches HEAD on the branch being audited. |
+| AD-7 | Justified exceptions list | <= 10 items | Dedicated section of the audit document listing properties that are **intentionally** not routed through the shared utility, each with a written justification. Keeps the denominator honest. |
+| AD-8 | IR widening consistency | 100% for adopted | Every IR field backing an adopted expression-capable property uses the `T \| ResolvedExpression` pattern, matching `WebActivity.url`. Ad-hoc widening (e.g., a field that accepts `str` containing Python code with no type marker) is not allowed. |
+| AD-9 | Adoption regression gate | Monotonically non-decreasing | The adopted count in `property-adoption-audit.md` must only increase per commit on alpha_1 and each `pr/27-*` branch. Soft gate (reviewer-enforced via diff). |
+
+### Ratchet categorization
+
+| KPI | Gate type | Tolerance |
+|-----|-----------|-----------|
+| AD-1 | Soft | 5% |
+| AD-2 | Hard (for translators marked adopted) | 0 |
+| AD-3 | Hard (for adopted preparers) | 0 |
+| AD-4 | Soft | 5% |
+| AD-5 | Hard | exists or not |
+| AD-6 | Soft | reviewer-enforced |
+| AD-7 | Soft | 10-item cap |
+| AD-8 | Hard | 100% |
+| AD-9 | Hard | monotonic |
+
+### Measurement commands
+
+```bash
+# AD-1 adoption rate from the audit document
+python - <<'PY'
+import re
+from pathlib import Path
+doc = Path('dev/docs/property-adoption-audit.md').read_text()
+adopted = len(re.findall(r'\| Adopted\s+\|', doc))
+gap = len(re.findall(r'\| \*\*Gap\*\*\s+\|', doc))
+exception = len(re.findall(r'\| Exception\s+\|', doc))
+denom = adopted + gap  # excludes justified exceptions
+rate = 100 * adopted / denom if denom else 0
+print(f'AD-1 adoption rate: {rate:.1f}% ({adopted}/{denom}, {exception} exceptions)')
+PY
+
+# AD-5: audit document exists
+test -f dev/docs/property-adoption-audit.md && echo "AD-5 OK"
+
+# AD-6: audit document freshness
+head_short=$(git rev-parse --short HEAD)
+audit_rev=$(grep '^> \*\*Last verified commit' dev/docs/property-adoption-audit.md | sed 's/.*`\([^`]*\)`.*/\1/')
+[ "$head_short" = "$audit_rev" ] && echo "AD-6 OK" || echo "AD-6 STALE (HEAD=$head_short audit=$audit_rev)"
+```

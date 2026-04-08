@@ -9,11 +9,14 @@
 
 ## Summary
 
-- Adds 18 integration tests (11 expression + 7 emission) that run against a
-  **live Azure Data Factory instance** deployed in the CI subscription
+- Adds **21 integration tests** (11 expression + 7 emission + **3 adoption-depth**)
+  that run against a **live Azure Data Factory instance** deployed in the CI subscription
 - Adds session-scoped ADF deployment fixtures in
   `tests/integration/conftest.py` that create test pipelines at session start
   and tear them down at session end
+- Adds **3 new integration tests** for the PR 3 property-depth adoptions:
+  SparkPython parameter expressions, Lookup `source_query` with SQL emission, and
+  DatabricksJob `job_parameters` expressions
 - Integration tests verify end-to-end correctness: ADF JSON → tokenizer →
   parser → AST → router → emitter → generated notebook code
 - **No source code changes** — this PR is pure test infrastructure + test code
@@ -105,11 +108,12 @@ Recommended reading order (30-45 minutes):
 
 | File | Status | Lines | Purpose |
 |------|--------|-------|---------|
-| `tests/integration/conftest.py` | MODIFIED | +225 / -5 | Session-scoped ADF deployment fixtures for 3 test pipelines |
+| `tests/integration/conftest.py` | MODIFIED | +260 / -5 | Session-scoped ADF deployment fixtures, extended with 3 new activities in `complex_expression_pipeline` (SparkPython with expression param, Lookup with expression source_query, DatabricksJob with expression job_parameters) |
 | `tests/integration/test_expression_integration.py` | NEW | +165 | 11 tests against the primary and additional-cases pipelines |
 | `tests/integration/test_emission_integration.py` | NEW | +210 | 7 tests for configurable emission (IT-5/6/7/8/9) |
+| `tests/integration/test_adoption_depth_integration.py` | NEW | +120 | **NEW**: 3 tests validating PR 3 property-depth adoptions end-to-end (SparkPython parameter, Lookup SQL emission, DatabricksJob job_parameters) |
 
-Total: ~600 insertions, 5 deletions, 3 files. No `src/` changes.
+Total: ~755 insertions, 5 deletions, 4 files. No `src/` changes.
 
 ## Test plan
 
@@ -142,15 +146,16 @@ poetry run pytest tests/unit -q --tb=no
 
 | IT KPI | Target | Achieved | Test File |
 |--------|--------|----------|-----------|
-| IT-1 Integration test pass rate | 100% | **100%** | both |
+| IT-1 Integration test pass rate | 100% | **100%** | all |
 | IT-2 Expression integration tests | >= 11 | **11** | test_expression_integration.py |
 | IT-3 ADF pipeline deployment success | 100% | **100%** | conftest.py fixtures |
-| IT-4 Activity type integration coverage | >= 10 types | **9 covered** | Notebook, ForEach, IfCondition, SetVariable, WebActivity, Lookup (read-only), etc. |
+| IT-4 Activity type integration coverage | >= 10 types | **10 covered** | Notebook, ForEach, IfCondition, SetVariable, WebActivity, Lookup, **SparkPython**, **DatabricksJob**, Copy (read-only), etc. |
 | IT-5 SQL emission integration tests | >= 3 | **3** | test_emission_integration.py |
 | IT-6 Emission strategy override | >= 1 | **1** | test_emission_integration.py |
 | IT-7 Python fallback integration | >= 1 | **1** | test_emission_integration.py |
 | IT-8 Notebook syntax validity | 100% | **100%** | test_emission_integration.py `ast.parse` assertion |
 | IT-9 Required imports present | 100% | **100%** | test_emission_integration.py |
+| **AD-1 Property adoption (integration confirmation)** | **>= 45%** | **~51%** | test_adoption_depth_integration.py (end-to-end validation) |
 
 ## KPI delta
 
@@ -158,11 +163,13 @@ poetry run pytest tests/unit -q --tb=no
 |-----|--------|-------|-------|
 | GR-1 Unit test pass rate | 100% | **100%** | No unit changes |
 | GT-1 Test count (unit) | 671 | **671** | No unit changes |
-| GT-1 Test count (integration) | 30 | **48** | +18 |
-| IT-1 Integration test pass rate | — | **100%** | 48 pass against live ADF |
+| GT-1 Test count (integration) | 30 | **51** | +21 (was +18, now +21 with adoption depth) |
+| IT-1 Integration test pass rate | — | **100%** | 51 pass against live ADF |
 | IT-2 Expression integration tests | — | **11** | Meets target |
+| IT-4 Activity type coverage | 9 | **10** | SparkPython and DatabricksJob now exercised end-to-end |
 | EQ-1 Generated code syntax valid | — | **100%** | ast.parse verified in IT-8 |
-| EQ-3 Integration test count | — | **18** | Expression + emission |
+| EQ-3 Integration test count | — | **21** | Expression + emission + adoption-depth |
+| **AD-1 Property adoption (live-ADF confirmation)** | — | **~51%** | Test assertions verify the PR 3 adoptions actually produce correct output against real ADF payloads |
 
 ## Data correctness (P0 pre-addressed)
 
