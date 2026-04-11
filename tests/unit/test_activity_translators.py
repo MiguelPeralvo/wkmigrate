@@ -437,6 +437,73 @@ def test_foreach_unsupported_items_expression_returns_unsupported(for_each_activ
     assert fixture["expected_message"] in result.message
 
 
+# ---------------------------------------------------------------------------
+# W-10: ForEach dynamic items
+# ---------------------------------------------------------------------------
+
+
+def test_foreach_createarray_with_dynamic_concat_expression() -> None:
+    """ForEach with createArray(concat(...param...)) should NOT return UnsupportedValue."""
+    activity = {
+        "name": "foreach_dynamic",
+        "type": "ForEach",
+        "depends_on": [],
+        "items": {
+            "type": "Expression",
+            "value": "@createArray(concat('prefix_', pipeline().parameters.env))",
+        },
+        "activities": [
+            {
+                "name": "inner_task",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/notebooks/inner",
+                "depends_on": [],
+                "base_parameters": {},
+            }
+        ],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, ForEachActivity)
+    assert "prefix_" in result.items_string
+    assert "dbutils.widgets.get" in result.items_string
+
+
+def test_foreach_createarray_static_literals_still_works() -> None:
+    """ForEach with createArray(literal, literal) still produces a JSON array."""
+    activity = {
+        "name": "foreach_static",
+        "type": "ForEach",
+        "depends_on": [],
+        "items": {
+            "type": "Expression",
+            "value": "@createArray('alpha', 'beta')",
+        },
+        "activities": [
+            {
+                "name": "inner_task",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/notebooks/inner",
+                "depends_on": [],
+                "base_parameters": {},
+            }
+        ],
+    }
+    result = translate_activity(activity)
+
+    assert isinstance(result, ForEachActivity)
+    assert result.items_string == '["alpha","beta"]'
+
+
+def test_foreach_simple_array_expression_still_works(for_each_activity_fixtures: list[dict]) -> None:
+    """ForEach with @array([...]) still works (regression guard)."""
+    fixture = get_fixture(for_each_activity_fixtures, "single_inner_notebook")
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, ForEachActivity)
+    assert result.items_string == fixture["expected"]["items_string"]
+
+
 def test_if_condition_equals_both_branches(if_condition_activity_fixtures: list[dict]) -> None:
     """Test IfCondition with equals expression and both branches."""
     fixture = get_fixture(if_condition_activity_fixtures, "equals_both_branches")
@@ -1735,6 +1802,74 @@ def test_copy_invalid_translator_returns_unsupported(copy_activity_fixtures: lis
 
     assert isinstance(result, UnsupportedValue)
     assert "translator" in result.message.lower()
+
+
+# ---------------------------------------------------------------------------
+# W-9: Copy sql_reader_query preservation
+# ---------------------------------------------------------------------------
+
+
+def test_copy_sql_source_preserves_sql_reader_query(copy_activity_fixtures: list[dict]) -> None:
+    """Copy with a literal sql_reader_query should preserve it in source_properties."""
+    fixture = next(f for f in copy_activity_fixtures if "SQL to Delta with column mapping" in f["description"])
+    result = translate_copy_activity(fixture["input"], get_base_kwargs(fixture["input"]))
+
+    assert isinstance(result, CopyActivity)
+    assert "sql_reader_query" in result.source_properties
+    assert result.source_properties["sql_reader_query"] == "SELECT * FROM customers WHERE updated_at > @lastRun"
+
+
+def test_copy_sql_source_preserves_expression_sql_reader_query() -> None:
+    """Copy with an Expression sql_reader_query should preserve the raw expression dict."""
+    activity = {
+        "name": "copy_expr_query",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": {
+                "type": "Expression",
+                "value": "@concat('SELECT * FROM ', pipeline().parameters.table)",
+            },
+        },
+        "sink": {"type": "AzureDatabricksDeltaLakeSink"},
+        "input_dataset_definitions": [
+            {
+                "name": "src",
+                "properties": {"type": "AzureSqlTable", "table": "dbo.orders"},
+                "linked_service_definition": {
+                    "name": "sql-svc",
+                    "properties": {"type": "SqlServer", "server": "s", "database": "d"},
+                },
+            }
+        ],
+        "output_dataset_definitions": [
+            {
+                "name": "snk",
+                "properties": {"type": "AzureDatabricksDeltaLakeDataset", "database": "db", "table": "t"},
+                "linked_service_definition": {
+                    "name": "db-svc",
+                    "properties": {"type": "AzureDatabricks", "domain": "https://adb.example.net"},
+                },
+            }
+        ],
+    }
+    result = translate_copy_activity(activity, get_base_kwargs(activity))
+
+    assert isinstance(result, CopyActivity)
+    assert "sql_reader_query" in result.source_properties
+    query = result.source_properties["sql_reader_query"]
+    assert query["type"] == "Expression"
+    assert "concat" in query["value"]
+
+
+def test_copy_sql_source_without_query_still_works(copy_activity_fixtures: list[dict]) -> None:
+    """Copy without sql_reader_query should have None for that key (no regression)."""
+    fixture = next(f for f in copy_activity_fixtures if "PostgreSQL to Delta" in f["description"])
+    result = translate_copy_activity(fixture["input"], get_base_kwargs(fixture["input"]))
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_properties.get("sql_reader_query") is None
 
 
 # ---------------------------------------------------------------------------
