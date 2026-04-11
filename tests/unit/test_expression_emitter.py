@@ -130,10 +130,12 @@ def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() 
     assert resolved.required_imports == frozenset({"json"})
 
 
-def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
+def test_get_literal_or_expression_context_free_variables_reference_resolves() -> None:
+    """variables() resolves to best-effort taskValues.get even without context."""
     resolved = get_literal_or_expression("@variables('x')")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "not set by a previous activity" in resolved.message
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_variable_x" in resolved.code
 
 
 def test_get_literal_or_expression_context_free_activity_reference_resolves() -> None:
@@ -206,12 +208,19 @@ def test_emit_join_with_dynamic_args() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_variables_undefined_gives_clear_error() -> None:
-    """variables('x') with empty context gives 'not set' error, not 'requires TranslationContext'."""
+def test_variables_undefined_emits_best_effort() -> None:
+    """variables('x') with empty context emits best-effort taskValues.get using naming convention."""
     resolved = get_literal_or_expression("@variables('x')", TranslationContext())
-    assert isinstance(resolved, UnsupportedValue)
-    assert "not set by a previous activity" in resolved.message
-    assert "TranslationContext" not in resolved.message
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_variable_x" in resolved.code
+
+
+def test_variables_in_math_expression_resolves() -> None:
+    """variables() inside math expressions should resolve, not propagate UnsupportedValue."""
+    resolved = get_literal_or_expression("@add(int(variables('counter')), 1)", TranslationContext())
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "taskValues.get" in resolved.code
 
 
 def test_variables_defined_resolves() -> None:

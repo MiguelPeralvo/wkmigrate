@@ -1245,14 +1245,14 @@ def test_set_variable_resolves_known_variable_reference(set_variable_activity_fi
     assert result.variable_value == fixture["expected"]["variable_value"]
 
 
-def test_set_variable_unknown_variable_reference_returns_unsupported(
+def test_set_variable_unknown_variable_reference_emits_best_effort(
     set_variable_activity_fixtures: list[dict],
 ) -> None:
-    """Test SetVariable with @variables() for unknown variable returns placeholder."""
+    """Test SetVariable with @variables() for unknown variable emits best-effort code."""
     fixture = get_fixture(set_variable_activity_fixtures, "variables_reference_unknown")
-    placeholder = get_placeholder_activity({"name": fixture["input"]["name"], "task_key": fixture["input"]["name"]})
     result = translate_activity(fixture["input"])
-    assert result == placeholder
+    assert isinstance(result, SetVariableActivity)
+    assert "taskValues.get" in result.variable_value
 
 
 def test_context_cache_visit_populates_cache() -> None:
@@ -1669,13 +1669,14 @@ def test_parse_variable_value_variables_reference_found() -> None:
     assert result == "dbutils.jobs.taskValues.get(taskKey='set_my_var', key='myVar')"
 
 
-def test_parse_variable_value_variables_reference_not_found() -> None:
-    """parse_variable_value returns UnsupportedValue when the variable is not in context."""
+def test_parse_variable_value_variables_reference_emits_best_effort() -> None:
+    """parse_variable_value emits best-effort code for undefined variables."""
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@variables('unknown')", "type": "Expression"}, ctx)
 
-    assert isinstance(result, UnsupportedValue)
-    assert "unknown" in result.message
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "unknown" in result
 
 
 def test_set_variable_integer_value(set_variable_activity_fixtures: list[dict]) -> None:

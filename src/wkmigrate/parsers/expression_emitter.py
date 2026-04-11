@@ -121,10 +121,8 @@ class PythonEmitter(EmitterProtocol):
             variable_name = node.args[0].value
             task_key = self.context.get_variable_task_key(variable_name) if self.context is not None else None
             if task_key is None:
-                return UnsupportedValue(
-                    value=node.name,
-                    message=f"Variable '{variable_name}' not set by a previous activity",
-                )
+                # Best-effort: emit a taskValues lookup using the SetVariable naming convention
+                task_key = f"set_variable_{variable_name}"
             return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r})"
 
         if lowered == "item":
