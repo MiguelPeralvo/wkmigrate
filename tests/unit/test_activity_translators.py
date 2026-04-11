@@ -1873,6 +1873,62 @@ def test_copy_sql_source_without_query_still_works(copy_activity_fixtures: list[
 
 
 # ---------------------------------------------------------------------------
+# W-11: Structural activity coverage — graceful degradation
+# ---------------------------------------------------------------------------
+
+
+def test_copy_without_dataset_defs_preserves_source_properties() -> None:
+    """Copy with source block but no dataset definitions should produce a partial CopyActivity."""
+    activity = {
+        "name": "copy_no_datasets",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": "@concat('SELECT * FROM ', pipeline().parameters.t)",
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_copy_activity(activity, get_base_kwargs(activity))
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_dataset is None
+    assert result.sink_dataset is None
+    assert result.source_properties is not None
+    assert result.source_properties.get("sql_reader_query") is not None
+
+
+def test_copy_fully_empty_still_returns_unsupported() -> None:
+    """Copy with no source, no sink, no datasets should still be UnsupportedValue."""
+    activity = {
+        "name": "copy_empty",
+        "type": "Copy",
+        "depends_on": [],
+    }
+    result = translate_copy_activity(activity, get_base_kwargs(activity))
+
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_copy_partial_translation_emits_warning() -> None:
+    """Partial copy translation should emit NotTranslatableWarning."""
+    activity = {
+        "name": "copy_partial_warn",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": "SELECT 1",
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    with pytest.warns(NotTranslatableWarning, match="Partial copy translation"):
+        translate_copy_activity(activity, get_base_kwargs(activity))
+
+
+# ---------------------------------------------------------------------------
 # AD-series: Property-level adoption tests
 #
 # These tests validate that properties newly adopted via the shared utility

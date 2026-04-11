@@ -6,14 +6,16 @@ properties, and column mappings.  Translators should emit ``UnsupportedValue`` o
 unparsable inputs.
 """
 
+import warnings
+
 from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.utils import (
     get_data_source_definition,
     get_data_source_properties,
     get_value_or_unsupported,
-    merge_unsupported_values,
 )
 
 
@@ -37,15 +39,10 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
         ``CopyActivity`` representation of the Copy task.
     """
     source_dataset = get_data_source_definition(get_value_or_unsupported(activity, "input_dataset_definitions"))
-    if isinstance(source_dataset, UnsupportedValue):
-        return UnsupportedValue(value=activity, message=f"Could not translate copy activity. {source_dataset.message}")
-
     sink_dataset = get_data_source_definition(get_value_or_unsupported(activity, "output_dataset_definitions"))
-    if isinstance(sink_dataset, UnsupportedValue):
-        return UnsupportedValue(value=activity, message=f"Could not translate copy activity. {sink_dataset.message}")
-
     source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
     sink_properties = get_data_source_properties(get_value_or_unsupported(activity, "sink"))
+
     column_mapping = _parse_type_translator(activity.get("translator") or {})
     if any(isinstance(mapping, UnsupportedValue) for mapping in column_mapping):
         unsupported_value_messages = [item.message for item in column_mapping if isinstance(item, UnsupportedValue)]
@@ -54,22 +51,48 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
             f"Could not parse property 'translator' of dataset. {'. '.join(unsupported_value_messages)}.".rstrip(),
         )
 
-    if (
-        isinstance(source_dataset, Dataset)
-        and isinstance(sink_dataset, Dataset)
-        and isinstance(source_properties, dict)
-        and isinstance(sink_properties, dict)
-    ):
-        return CopyActivity(
-            **base_kwargs,
-            source_dataset=source_dataset,
-            sink_dataset=sink_dataset,
-            source_properties=source_properties,
-            sink_properties=sink_properties,
-            column_mapping=column_mapping,  # type: ignore
+    # Normalize UnsupportedValue fields to None/{} for partial translation
+    degraded_fields: list[str] = []
+    resolved_source_dataset: Dataset | None = source_dataset if isinstance(source_dataset, Dataset) else None
+    resolved_sink_dataset: Dataset | None = sink_dataset if isinstance(sink_dataset, Dataset) else None
+    resolved_source_props: dict = source_properties if isinstance(source_properties, dict) else {}
+    resolved_sink_props: dict = sink_properties if isinstance(sink_properties, dict) else {}
+
+    if isinstance(source_dataset, UnsupportedValue):
+        degraded_fields.append(f"source_dataset ({source_dataset.message})")
+    if isinstance(sink_dataset, UnsupportedValue):
+        degraded_fields.append(f"sink_dataset ({sink_dataset.message})")
+    if isinstance(source_properties, UnsupportedValue):
+        degraded_fields.append("source_properties")
+    if isinstance(sink_properties, UnsupportedValue):
+        degraded_fields.append("sink_properties")
+
+    # Require at least one useful piece of data to produce a partial CopyActivity
+    has_dataset = resolved_source_dataset is not None or resolved_sink_dataset is not None
+    has_properties = bool(resolved_source_props) or bool(resolved_sink_props)
+    if not has_dataset and not has_properties:
+        return UnsupportedValue(
+            value=activity,
+            message="Could not translate copy activity. No extractable datasets or properties.",
         )
 
-    return merge_unsupported_values([source_dataset, sink_dataset, source_properties, sink_properties])
+    if degraded_fields:
+        warnings.warn(
+            NotTranslatableWarning(
+                "dataset_definitions",
+                f"Partial copy translation: {'; '.join(degraded_fields)}",
+            ),
+            stacklevel=2,
+        )
+
+    return CopyActivity(
+        **base_kwargs,
+        source_dataset=resolved_source_dataset,
+        sink_dataset=resolved_sink_dataset,
+        source_properties=resolved_source_props,
+        sink_properties=resolved_sink_props,
+        column_mapping=column_mapping,  # type: ignore
+    )
 
 
 def _parse_type_translator(type_translator: dict) -> list[ColumnMapping | UnsupportedValue]:
