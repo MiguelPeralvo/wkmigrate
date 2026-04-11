@@ -66,12 +66,12 @@ class ExpressionContext(StrEnum):
     """Known expression contexts from ADF pipeline activity payloads."""
 
     SET_VARIABLE = "set_variable"
-    APPEND_VARIABLE = "append_variable"
+    APPEND_VARIABLE = "append_variable"  # ghanse/wkmigrate#64
     PIPELINE_PARAMETER = "pipeline_parameter"
     COPY_SOURCE_QUERY = "copy_source_query"
     COPY_SOURCE_PATH = "copy_source_path"
     COPY_SINK_TABLE = "copy_sink_table"
-    COPY_STORED_PROC = "copy_stored_proc"
+    COPY_STORED_PROC = "copy_stored_proc"  # ghanse/wkmigrate#3
     WEB_URL = "web_url"
     WEB_BODY = "web_body"
     WEB_HEADER = "web_header"
@@ -79,16 +79,16 @@ class ExpressionContext(StrEnum):
     IF_CONDITION = "if_condition"
     IF_CONDITION_LEFT = "if_condition_left"
     IF_CONDITION_RIGHT = "if_condition_right"
-    SWITCH_ON = "switch_on"
-    UNTIL_CONDITION = "until_condition"
-    FILTER_CONDITION = "filter_condition"
+    SWITCH_ON = "switch_on"  # ghanse/wkmigrate#52
+    UNTIL_CONDITION = "until_condition"  # ghanse/wkmigrate#62
+    FILTER_CONDITION = "filter_condition"  # ghanse/wkmigrate#65
     LOOKUP_QUERY = "lookup_query"
-    EXECUTE_PIPELINE_PARAM = "execute_pipeline_param"
+    EXECUTE_PIPELINE_PARAM = "execute_pipeline_param"  # ghanse/wkmigrate#61
     DATASET_PARAM = "dataset_param"
     LINKED_SERVICE_PARAM = "linked_service_param"
     FAIL_MESSAGE = "fail_message"
     FAIL_ERROR_CODE = "fail_error_code"
-    WAIT_SECONDS = "wait_seconds"
+    WAIT_SECONDS = "wait_seconds"  # ghanse/wkmigrate#63
     SCRIPT_TEXT = "script_text"
     # Property-level adoption contexts (PR 3) — AD-series
     NOTEBOOK_PATH = "notebook_path"
