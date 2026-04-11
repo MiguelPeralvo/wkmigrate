@@ -179,6 +179,12 @@ def _emit_skip(args: list[str]) -> str | UnsupportedValue:
     return f"({args[0]})[{args[1]}:]"
 
 
+def _emit_join(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("join", args, 2, 2):
+        return error
+    return f"{args[1]}.join(str(x) for x in {args[0]})"
+
+
 def _emit_union(args: list[str]) -> str | UnsupportedValue:
     if error := _require_arity("union", args, 2):
         return error
@@ -285,6 +291,7 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "intersection": _emit_intersection,
     "createarray": _emit_array,
     "array": _emit_array,
+    "join": _emit_join,
     "coalesce": _emit_coalesce,
     "empty": _emit_empty,
     "utcnow": _emit_utc_now,
@@ -563,6 +570,7 @@ _SPARK_SQL_FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "intersection": _emit_sql_intersection,
     "createarray": _emit_sql_array,
     "array": _emit_sql_array,
+    "join": _emit_join,  # Python join works in SQL context too (notebook preamble)
     "coalesce": _emit_sql_coalesce,
     "empty": _emit_sql_empty,
     "utcnow": _emit_sql_utc_now,

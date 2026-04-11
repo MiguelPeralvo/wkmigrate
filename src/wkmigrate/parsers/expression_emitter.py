@@ -113,18 +113,13 @@ class PythonEmitter(EmitterProtocol):
             )
 
         if lowered == "variables":
-            if self.context is None:
-                return UnsupportedValue(
-                    value=node.name,
-                    message="Expression references variables() and requires TranslationContext",
-                )
             if len(node.args) != 1 or not isinstance(node.args[0], StringLiteral):
                 return UnsupportedValue(
                     value=node.name,
                     message="variables() requires exactly one string-literal argument",
                 )
             variable_name = node.args[0].value
-            task_key = self.context.get_variable_task_key(variable_name)
+            task_key = self.context.get_variable_task_key(variable_name) if self.context is not None else None
             if task_key is None:
                 return UnsupportedValue(
                     value=node.name,

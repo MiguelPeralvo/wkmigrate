@@ -133,7 +133,7 @@ def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() 
 def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
     resolved = get_literal_or_expression("@variables('x')")
     assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
+    assert "not set by a previous activity" in resolved.message
 
 
 def test_get_literal_or_expression_context_free_activity_reference_resolves() -> None:
@@ -178,6 +178,49 @@ def test_deep_nested_expression_depth_15_resolves() -> None:
     assert not isinstance(resolved, UnsupportedValue)
     assert resolved.is_dynamic is True
     assert "dbutils.widgets.get" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-15: @join support
+# ---------------------------------------------------------------------------
+
+
+def test_emit_join_simple_array() -> None:
+    """@join(createArray('a','b','c'), ',') resolves to Python join."""
+    emitted = _emit_expression("@join(createArray('a', 'b', 'c'), ',')")
+    assert isinstance(emitted, str)
+    assert "join" in emitted
+    assert "'a'" in emitted
+
+
+def test_emit_join_with_dynamic_args() -> None:
+    """@join with pipeline parameter args resolves."""
+    resolved = get_literal_or_expression("@join(createArray(pipeline().parameters.env, 'suffix'), '/')")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "join" in resolved.code
+    assert "dbutils.widgets.get" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-16: variables() error clarity
+# ---------------------------------------------------------------------------
+
+
+def test_variables_undefined_gives_clear_error() -> None:
+    """variables('x') with empty context gives 'not set' error, not 'requires TranslationContext'."""
+    resolved = get_literal_or_expression("@variables('x')", TranslationContext())
+    assert isinstance(resolved, UnsupportedValue)
+    assert "not set by a previous activity" in resolved.message
+    assert "TranslationContext" not in resolved.message
+
+
+def test_variables_defined_resolves() -> None:
+    """variables('x') with context containing variable resolves to taskValues.get."""
+    ctx = TranslationContext().with_variable("myVar", "set_my_var")
+    resolved = get_literal_or_expression("@variables('myVar')", ctx)
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_my_var" in resolved.code
 
 
 def test_parse_variable_value_is_thin_wrapper() -> None:
