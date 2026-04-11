@@ -34,6 +34,7 @@ from __future__ import annotations
 from importlib import import_module
 
 import ast
+import json
 import re
 import warnings
 
@@ -277,8 +278,7 @@ def _parse_for_each_items(
                     message=f"Unsupported array item in expression '{value}' for ForEach activity 'items': {item.message}",
                 )
             list_items.append(item)
-        quoted_items = ",".join([f'"{item}"' for item in list_items])
-        return _parse_array_string(quoted_items)
+        return json.dumps(list_items, separators=(",", ":"))
 
     try:
         literal_value = ast.literal_eval(resolved.code)
@@ -334,9 +334,9 @@ def _evaluate_for_each_item(item: AstNode, context: TranslationContext) -> str |
         return emitted
     try:
         literal = ast.literal_eval(emitted)
+        return str(literal)
     except (SyntaxError, ValueError):
-        return UnsupportedValue(value=item, message="Expression cannot be resolved to a literal for ForEach items")
-    return str(literal)
+        return emitted
 
 
 def _filter_parameters(activity: dict) -> dict | UnsupportedValue:

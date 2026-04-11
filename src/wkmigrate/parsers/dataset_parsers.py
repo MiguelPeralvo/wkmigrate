@@ -495,6 +495,7 @@ def _parse_sql_format_options(dataset: dict, dataset_type: str) -> dict | Unsupp
     format_settings = dataset.get("format_settings", {})
     return {
         "type": dataset_type,
+        "sql_reader_query": dataset.get("sql_reader_query"),
         "query_isolation_level": _parse_query_isolation_level(format_settings.get("query_isolation_level")),
         "query_timeout_seconds": _parse_query_timeout_seconds(format_settings.get("query_timeout_seconds")),
         "numPartitions": format_settings.get("numPartitions"),
