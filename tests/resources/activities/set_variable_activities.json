@@ -104,7 +104,7 @@
       "depends_on": [],
       "variable_name": "myVar",
       "value": {
-        "value": "@concat('hello', 'world')",
+        "value": "@doesNotExist('hello', 'world')",
         "type": "Expression"
       }
     },
