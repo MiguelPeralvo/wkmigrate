@@ -268,7 +268,7 @@ class PythonEmitter(EmitterProtocol):
 
         task_key = root.args[0].value
         base = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
-        remaining_properties = properties[2:]
+        remaining_properties = properties[1:]
         if not remaining_properties and not index_segments:
             return base
 

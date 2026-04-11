@@ -87,7 +87,7 @@ def test_emit_context_variables_reference() -> None:
 
 def test_emit_activity_output_reference() -> None:
     emitted = _emit_expression("@activity('Lookup').output.firstRow.col")
-    assert emitted == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['col']"
+    assert emitted == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col']"
 
 
 def test_emit_pipeline_system_and_parameter_references() -> None:
@@ -236,3 +236,59 @@ def test_parse_variable_value_is_thin_wrapper() -> None:
     context = TranslationContext()
     parsed = parse_variable_value({"value": "@pipeline().RunId", "type": "Expression"}, context)
     assert parsed == "dbutils.jobs.getContext().tags().get('runId', '')"
+
+
+# ---------------------------------------------------------------------------
+# W-17: activity().output.firstRow preservation
+# ---------------------------------------------------------------------------
+
+
+def test_emit_activity_output_firstrow_preserved() -> None:
+    """firstRow must appear in the accessor chain, not be silently dropped."""
+    emitted = _emit_expression("@activity('Lookup').output.firstRow.config_value")
+    assert isinstance(emitted, str)
+    assert "['firstRow']" in emitted
+    assert "['config_value']" in emitted
+
+
+def test_emit_activity_output_firstrow_only() -> None:
+    """@activity('X').output.firstRow with no further property still includes firstRow."""
+    emitted = _emit_expression("@activity('Lookup').output.firstRow")
+    assert isinstance(emitted, str)
+    assert "['firstRow']" in emitted
+
+
+def test_emit_activity_output_value_preserved() -> None:
+    """@activity('X').output.value preserves the 'value' accessor."""
+    emitted = _emit_expression("@activity('ForEach').output.value")
+    assert isinstance(emitted, str)
+    assert "['value']" in emitted
+
+
+# ---------------------------------------------------------------------------
+# W-18: numeric coercion in comparison operators
+# ---------------------------------------------------------------------------
+
+
+def test_emit_greater_with_pipeline_param_coerces() -> None:
+    """greater(pipeline().parameters.X, 50) must coerce the param to numeric."""
+    emitted = _emit_expression("@greater(pipeline().parameters.threshold, 50)")
+    assert isinstance(emitted, str)
+    assert ">" in emitted
+    assert "dbutils.widgets.get('threshold')" in emitted
+    # The widgets.get call should be wrapped in numeric coercion
+    assert "int(" in emitted or "float(" in emitted
+
+
+def test_emit_less_with_pipeline_param_coerces() -> None:
+    """less(pipeline().parameters.retries, 5) must coerce the param to numeric."""
+    emitted = _emit_expression("@less(pipeline().parameters.retries, 5)")
+    assert isinstance(emitted, str)
+    assert "<" in emitted
+    assert "int(" in emitted or "float(" in emitted
+
+
+def test_emit_greater_with_two_literals_no_redundant_coercion() -> None:
+    """greater(100, 50) with two numeric literals should not add coercion."""
+    emitted = _emit_expression("@greater(100, 50)")
+    assert emitted == "(100 > 50)"
