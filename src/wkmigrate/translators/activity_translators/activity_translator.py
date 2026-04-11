@@ -63,12 +63,7 @@ from wkmigrate.utils import get_placeholder_activity, normalize_translated_resul
 
 TypeTranslator = Callable[[dict, dict], TranslationResult]
 
-_default_type_translators: dict[str, TypeTranslator] = {
-    # Copy is the only remaining simple-dispatch translator. All other activity
-    # types are handled in the match statement below so they can receive
-    # ``context`` and ``emission_config`` (AD-series adoption).
-    "Copy": translate_copy_activity,
-}
+_default_type_translators: dict[str, TypeTranslator] = {}
 
 
 def default_context() -> TranslationContext:
@@ -243,6 +238,11 @@ def _dispatch_activity(
             # AD-series: adopted for source_query (LOOKUP_QUERY context — SQL-safe)
             return (
                 translate_lookup_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "Copy":
+            return (
+                translate_copy_activity(activity, base_kwargs, context, emission_config=emission_config),
                 context,
             )
         case _:

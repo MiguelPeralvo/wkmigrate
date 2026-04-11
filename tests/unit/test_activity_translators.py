@@ -571,14 +571,17 @@ def test_if_condition_missing_expression_returns_unsupported(if_condition_activi
     assert fixture["expected_message"] in result.message
 
 
-def test_if_condition_unsupported_expression_returns_unsupported(if_condition_activity_fixtures: list[dict]) -> None:
-    """Test that unsupported expression type returns UnsupportedValue."""
+def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fixtures: list[dict]) -> None:
+    """Compound expression (previously unsupported) now uses Python fallback."""
     fixture = get_fixture(if_condition_activity_fixtures, "unsupported_expression")
     base_kwargs = get_base_kwargs(fixture["input"])
-    result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
 
-    assert isinstance(result, UnsupportedValue)
-    assert fixture["expected_message"] in result.message
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
 
 
 def test_if_condition_not_equals_expression() -> None:
@@ -632,6 +635,58 @@ def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) ->
 
     assert isinstance(result, IfConditionActivity)
     assert len(result.child_activities) == 0
+
+
+# ---------------------------------------------------------------------------
+# W-13: IfCondition compound predicates
+# ---------------------------------------------------------------------------
+
+
+def test_if_condition_and_compound_predicate() -> None:
+    """IfCondition with @and(equals(...), greater(...)) should NOT return UnsupportedValue."""
+    activity = {
+        "name": "if_and",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@and(equals(1, 1), greater(3, 2))"},
+        "ifTrueActivities": [],
+        "ifFalseActivities": [],
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
+
+
+def test_if_condition_or_compound_predicate() -> None:
+    """IfCondition with @or(...) should produce a fallback condition, not UnsupportedValue."""
+    activity = {
+        "name": "if_or",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@or(equals(1, 0), greater(5, 2))"},
+        "ifTrueActivities": [],
+        "ifFalseActivities": [],
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
+
+
+def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:
+    """IfCondition with simple @equals still uses native EQUAL_TO op (no regression)."""
+    fixture = get_fixture(if_condition_activity_fixtures, "equals_both_branches")
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
 
 
 def test_unsupported_type_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
@@ -1898,6 +1953,34 @@ def test_copy_without_dataset_defs_preserves_source_properties() -> None:
     assert result.sink_dataset is None
     assert result.source_properties is not None
     assert result.source_properties.get("sql_reader_query") is not None
+
+
+def test_copy_expression_query_resolved_with_context() -> None:
+    """Copy with Expression sql_reader_query and context should resolve the expression to Python code."""
+    activity = {
+        "name": "copy_resolved_query",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": {
+                "type": "Expression",
+                "value": "@concat('SELECT * FROM ', pipeline().parameters.table)",
+            },
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    ctx = TranslationContext()
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_copy_activity(activity, get_base_kwargs(activity), context=ctx)
+
+    assert isinstance(result, CopyActivity)
+    query = result.source_properties.get("sql_reader_query")
+    assert query is not None
+    # Should be resolved Python code, not the raw Expression dict
+    assert not isinstance(query, dict)
+    assert "dbutils.widgets.get" in str(query) or "pipeline" in str(query).lower() or "SELECT" in str(query)
 
 
 def test_copy_fully_empty_still_returns_unsupported() -> None:

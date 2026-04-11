@@ -10,8 +10,11 @@ import warnings
 
 from wkmigrate.models.ir.pipeline import ColumnMapping, CopyActivity
 from wkmigrate.models.ir.datasets import Dataset
+from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.emission_config import EmissionConfig, ExpressionContext
+from wkmigrate.parsers.expression_parsers import ResolvedExpression, get_literal_or_expression
 from wkmigrate.utils import (
     get_data_source_definition,
     get_data_source_properties,
@@ -19,7 +22,12 @@ from wkmigrate.utils import (
 )
 
 
-def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity | UnsupportedValue:
+def translate_copy_activity(
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext | None = None,
+    emission_config: EmissionConfig | None = None,
+) -> CopyActivity | UnsupportedValue:
     """
     Translates an ADF Copy activity into a ``CopyActivity`` object. Copy activities are translated
     into Lakeflow Declarative Pipelines tasks or Notebook tasks depending on the source and target
@@ -38,6 +46,17 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
     Returns:
         ``CopyActivity`` representation of the Copy task.
     """
+    # Resolve sql_reader_query expression early, before dataset validation can reject
+    source_block = activity.get("source") or {}
+    raw_query = source_block.get("sql_reader_query")
+    resolved_query: str | ResolvedExpression | None = None
+    if raw_query is not None and context is not None:
+        resolved = get_literal_or_expression(
+            raw_query, context, ExpressionContext.COPY_SOURCE_QUERY, emission_config=emission_config
+        )
+        if not isinstance(resolved, UnsupportedValue):
+            resolved_query = resolved if resolved.is_dynamic else resolved.code
+
     source_dataset = get_data_source_definition(get_value_or_unsupported(activity, "input_dataset_definitions"))
     sink_dataset = get_data_source_definition(get_value_or_unsupported(activity, "output_dataset_definitions"))
     source_properties = get_data_source_properties(get_value_or_unsupported(activity, "source"))
@@ -66,6 +85,10 @@ def translate_copy_activity(activity: dict, base_kwargs: dict) -> CopyActivity |
         degraded_fields.append("source_properties")
     if isinstance(sink_properties, UnsupportedValue):
         degraded_fields.append("sink_properties")
+
+    # Inject resolved query into source_properties if available
+    if resolved_query is not None:
+        resolved_source_props["sql_reader_query"] = resolved_query
 
     # Require at least one useful piece of data to produce a partial CopyActivity
     has_dataset = resolved_source_dataset is not None or resolved_sink_dataset is not None

@@ -49,6 +49,7 @@ from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
 from wkmigrate.models.ir.translator_result import TranslationResult
+from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
 from wkmigrate.parsers.expression_emitter import emit
@@ -221,19 +222,31 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
         )
 
     op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
-    if op_name is None or len(parsed.args) != 2:
+    if op_name is not None and len(parsed.args) == 2:
+        left = _emit_condition_operand(parsed.args[0], context)
+        if isinstance(left, UnsupportedValue):
+            return left
+        right = _emit_condition_operand(parsed.args[1], context)
+        if isinstance(right, UnsupportedValue):
+            return right
+        return {"op": op_name, "left": left, "right": right}
+
+    # Fallback: emit the entire expression as Python code and compare to "True".
+    # This handles @and(...), @or(...), @if(...), and any non-comparison expression.
+    emitted = emit(parsed, context)
+    if isinstance(emitted, UnsupportedValue):
         return UnsupportedValue(
             value=condition,
             message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
         )
-
-    left = _emit_condition_operand(parsed.args[0], context)
-    if isinstance(left, UnsupportedValue):
-        return left
-    right = _emit_condition_operand(parsed.args[1], context)
-    if isinstance(right, UnsupportedValue):
-        return right
-    return {"op": op_name, "left": left, "right": right}
+    warnings.warn(
+        NotTranslatableWarning(
+            "expression",
+            f"IfCondition compound predicate emitted as Python expression: {condition_value}",
+        ),
+        stacklevel=3,
+    )
+    return {"op": "EQUAL_TO", "left": str(emitted), "right": "True"}
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:
