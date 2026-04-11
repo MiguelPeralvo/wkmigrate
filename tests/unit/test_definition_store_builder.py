@@ -18,9 +18,11 @@ DEFINITION_STORE_CASES = [
             "subscription_id": "SUBSCRIPTION_ID",
             "resource_group_name": "RESOURCE_GROUP",
             "factory_name": "FACTORY_NAME",
+            "source_property_case": "camel",
         },
         does_not_raise(),
     ),
+    # WorkspaceDefinitionStore: missing options
     ("workspace_definition_store", None, pytest.raises(ValueError)),
     (
         "workspace_definition_store",
@@ -31,6 +33,8 @@ DEFINITION_STORE_CASES = [
         },
         does_not_raise(),
     ),
+    # JsonDefinitionStore: missing options
+    ("json_definition_store", None, pytest.raises(ValueError)),
     ("invalid_definition_store", {}, pytest.raises(ValueError)),
     ("", None, pytest.raises(ValueError)),
 ]

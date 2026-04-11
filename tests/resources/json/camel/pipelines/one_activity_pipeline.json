@@ -1,0 +1,37 @@
+{
+  "name": "one_activity_pipeline",
+  "properties": {
+    "activities": [
+      {
+        "name": "run maintenance notebook",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureInput": false,
+          "secureOutput": false
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/notebooks/maintenance/nb_execute_maintenance",
+          "baseParameters": {
+            "target_table": {
+              "value": "@pipeline().parameters.target_table",
+              "type": "Expression"
+            },
+            "retention_days": {
+              "value": "@pipeline().parameters.retention_days",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "target_table":   { "type": "string" },
+      "retention_days": { "type": "string" }
+    },
+    "annotations": []
+  }
+}

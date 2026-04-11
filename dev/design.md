@@ -47,7 +47,20 @@ src/wkmigrate/
 
   parsers/
     dataset_parsers.py            # ADF dataset JSON -> Dataset IR
-    expression_parsers.py         # ADF expression strings -> Python expressions
+    expression_parsers.py         # ADF expression strings -> Python expressions (shared utility)
+    expression_ast.py             # Frozen-dataclass AST node types (StringLiteral, FunctionCall, ...)
+    expression_tokenizer.py       # Lexical tokenizer for @concat(...) / @{...} expressions
+    expression_parser.py          # Recursive-descent parser: tokens -> AstNode
+    expression_emitter.py         # PythonEmitter: AST -> Python expression string
+    expression_functions.py       # Registry of 47 ADF function emitters (Python + Spark SQL)
+    emission_config.py            # EmissionConfig, ExpressionContext, EmissionStrategy enums
+    emitter_protocol.py           # EmitterProtocol + EmittedExpression dataclass
+    strategy_router.py            # Routes AST nodes to emitter by context with Python fallback
+    spark_sql_emitter.py          # SparkSqlEmitter for COPY_SOURCE_QUERY / LOOKUP_QUERY contexts
+    format_converter.py           # ADF/.NET datetime format strings -> Spark SQL date_format
+
+  runtime/
+    datetime_helpers.py           # Inline helpers injected into generated notebooks
 
   preparers/
     preparer.py                   # Top-level prepare_workflow() dispatcher
@@ -215,6 +228,216 @@ Dataclass-based stores (`FactoryDefinitionStore`, `WorkspaceDefinitionStore`) va
 ### Code Generation
 
 The `code_generator.py` module emits Python source fragments for Databricks notebooks. Generated code is formatted with `autopep8.fix_code()`. Preparers compose these fragments into complete notebook content stored as `NotebookArtifact` objects.
+
+---
+
+## 3b. Expression Translation System
+
+ADF pipelines are parameterized through an expression language (`@concat(...)`, `@if(...)`,
+`@pipeline().parameters.env`, `@formatDateTime(utcNow(), 'yyyy-MM-dd')`). wkmigrate translates
+these expressions into Python code embedded in generated Databricks notebooks, or into Spark
+SQL for query contexts.
+
+### End-to-end Data Flow
+
+```
+ADF JSON property value (string | dict | int | bool)
+  │
+  ▼
+parsers/expression_parsers.py
+  get_literal_or_expression(value, context, expression_context, emission_config)
+  │
+  ├─ Static literal → repr(value) as ResolvedExpression(is_dynamic=False)
+  │
+  └─ "@..." expression string
+       │
+       ▼
+     parsers/expression_tokenizer.py
+       tokenize(source) → list[Token]
+       │
+       ▼
+     parsers/expression_parser.py
+       parse_expression(source) → AstNode (StringLiteral | FunctionCall | PropertyAccess | ...)
+       │
+       ▼
+     parsers/strategy_router.py
+       StrategyRouter(emission_config).emit(node, context, expression_context)
+       │
+       ├─ Looks up configured EmissionStrategy for expression_context
+       │
+       ├─ Primary: dispatch to configured emitter (e.g., SparkSqlEmitter for COPY_SOURCE_QUERY)
+       │     │
+       │     └─ If emitter.can_emit() returns False for this node type,
+       │        fall back to PythonEmitter (except for exact contexts like IF_CONDITION_LEFT)
+       │
+       └─ Fallback: parsers/expression_emitter.py PythonEmitter
+             emit_node(node, context) → EmittedExpression(code, required_imports)
+             │
+             ▼
+           ResolvedExpression(code, is_dynamic=True, required_imports)
+             │
+             ▼
+           Consumed by translator (e.g., SetVariableActivity.variable_value)
+             │
+             ▼
+           Consumed by code_generator.py for notebook emission
+```
+
+### Key Abstractions
+
+| Concept | Module | Role |
+|---------|--------|------|
+| `AstNode` | `parsers/expression_ast.py` | Union of 8 frozen dataclass node types (`StringLiteral`, `NumberLiteral`, `BoolLiteral`, `NullLiteral`, `FunctionCall`, `PropertyAccess`, `IndexAccess`, `StringInterpolation`) |
+| `tokenize()` | `parsers/expression_tokenizer.py` | Converts an ADF expression string into a `list[Token]` with 13 token types |
+| `parse_expression()` | `parsers/expression_parser.py` | Recursive-descent parser: `list[Token]` → `AstNode`. Handles `@{...}` string interpolation and nested function calls. Returns `UnsupportedValue` on parse errors. |
+| `EmissionConfig` | `parsers/emission_config.py` | Frozen dataclass mapping `ExpressionContext` → `EmissionStrategy`. 26 contexts × 16 strategies. Defaults to `notebook_python` for all contexts. |
+| `ExpressionContext` | `parsers/emission_config.py` | StrEnum of every ADF property location where expressions can appear (e.g., `SET_VARIABLE`, `COPY_SOURCE_QUERY`, `IF_CONDITION_LEFT`). |
+| `EmissionStrategy` | `parsers/emission_config.py` | StrEnum of every possible output format. Currently 2 implemented (`notebook_python`, `spark_sql`), 14 placeholders for future targets (DLT, UC functions, SQL tasks, etc.) |
+| `EmitterProtocol` | `parsers/emitter_protocol.py` | Protocol interface: `can_emit(node, context) -> bool` and `emit_node(node, context) -> EmittedExpression` |
+| `EmittedExpression` | `parsers/emitter_protocol.py` | `@dataclass(frozen=True)`: `code: str` + `required_imports: frozenset[str]` |
+| `StrategyRouter` | `parsers/strategy_router.py` | Routes an `AstNode` to the configured emitter for the given context. Falls back to `PythonEmitter` when the configured emitter rejects a node (except for `IF_CONDITION_LEFT`/`RIGHT` which require exact strategy match). |
+| `PythonEmitter` | `parsers/expression_emitter.py` | Default emitter. Handles all 47 registered functions. Resolves `@pipeline().parameters.X` → `dbutils.widgets.get('X')`, `@activity('Z').output.firstRow.name` → `json.loads(dbutils...get('Z'))['firstRow']['name']`, `@variables('Y')` via TranslationContext. |
+| `SparkSqlEmitter` | `parsers/spark_sql_emitter.py` | SQL emitter for `COPY_SOURCE_QUERY`, `LOOKUP_QUERY`, `SCRIPT_TEXT`, `GENERIC`. Emits SQL literals, `CONCAT(...)`, `:param` named parameters. Rejects `activity()`, `variables()`, index access. |
+| `FUNCTION_REGISTRY` | `parsers/expression_functions.py` | `dict[str, FunctionEmitter]` — 47 ADF functions registered with arity validation. Parallel `_SPARK_SQL_FUNCTION_REGISTRY` for SQL emission. Retrieved via `get_function_registry(strategy)`. |
+| `ResolvedExpression` | `parsers/expression_parsers.py` | Consumer-facing return type: `code: str`, `is_dynamic: bool`, `required_imports: frozenset[str]`. Returned by `get_literal_or_expression()`. |
+
+### Entry Point: `get_literal_or_expression()`
+
+Every translator and code-generation helper that needs to process an ADF property value
+calls this single utility:
+
+```python
+from wkmigrate.parsers.expression_parsers import get_literal_or_expression
+from wkmigrate.parsers.emission_config import ExpressionContext
+
+# Static literal
+result = get_literal_or_expression("hello", context=ctx)
+# → ResolvedExpression(code="'hello'", is_dynamic=False, required_imports=frozenset())
+
+# Dynamic expression
+result = get_literal_or_expression(
+    "@concat('prefix-', pipeline().parameters.env)",
+    context=ctx,
+    expression_context=ExpressionContext.SET_VARIABLE,
+)
+# → ResolvedExpression(
+#       code="str('prefix-') + str(dbutils.widgets.get('env'))",
+#       is_dynamic=True,
+#       required_imports=frozenset(),
+#   )
+
+# Unsupported expression
+result = get_literal_or_expression("@unknownFunction(x)", context=ctx)
+# → UnsupportedValue(value="@unknownFunction(x)", message="Unknown function 'unknownFunction'")
+```
+
+This single entry point replaces previous bespoke regex-based extraction in individual
+translators. Adding a new function to the registry automatically benefits every adoption site.
+
+### Configurable Emission
+
+`EmissionConfig` lets users select an emission strategy per expression context:
+
+```python
+from wkmigrate.parsers.emission_config import EmissionConfig
+from wkmigrate.translators.pipeline_translators.pipeline_translator import translate_pipeline
+
+# Default: emit Python for everything
+result = translate_pipeline(raw_pipeline)
+
+# Emit Spark SQL for Copy/Lookup queries, Python for everything else
+config = EmissionConfig(strategies={
+    "copy_source_query": "spark_sql",
+    "lookup_query": "spark_sql",
+})
+result = translate_pipeline(raw_pipeline, emission_config=config)
+```
+
+`emission_config` is threaded from `translate_pipeline()` through
+`translate_activities_with_context()` → `_dispatch_activity()` → each leaf translator → every
+call to `get_literal_or_expression()`. This threading is required: if any layer drops the
+parameter, the router falls back to the default `notebook_python` strategy silently.
+
+### Design Decisions
+
+1. **Why recursive-descent parser (not PEG or regex)?**
+   The ADF expression grammar is small and unambiguous. A recursive-descent parser is
+   readable, step-through-debuggable, and produces precise error messages. Regex was
+   rejected because nested function calls and string interpolation (`@{@concat(...)}`)
+   exceed regex capabilities. PEG libraries were rejected because they add a runtime
+   dependency for no expressive gain.
+
+2. **Why configurable emission with 16 strategies when only 2 are implemented?**
+   The `EmissionStrategy` enum defines the complete eventual surface area. All 14 unused
+   values currently route to `PythonEmitter` via the deterministic fallback chain in
+   `StrategyRouter`. As Databricks targets expand (DLT SQL, UC functions, SQL tasks,
+   condition_task payloads), new emitters can be registered without modifying existing
+   code. The enum is documentation-as-code: it makes the future roadmap visible in the
+   type system.
+
+3. **Why registry-based function dispatch (not visitor pattern)?**
+   A dict registry is extensible: third-party code can call `register_function("myFunc",
+   _my_emitter)` without subclassing anything. Per-strategy registries
+   (`_SPARK_SQL_FUNCTION_REGISTRY`) are trivial to add. A visitor pattern would require
+   modifying the AST types or the emitter base class each time a function is added.
+
+4. **Why `ResolvedExpression` wrapper (not raw strings)?**
+   Translators need to know whether a value is dynamic (must be embedded in notebook
+   code at runtime) or static (can be used directly as a Python literal). They also need
+   to track which imports (`json`, `wkmigrate_datetime_helpers`) the generated code
+   depends on. A dataclass makes these attributes explicit and propagates them through
+   the translator chain without string-parsing heuristics.
+
+5. **Why fall back to Python for unsupported SQL emission?**
+   `SparkSqlEmitter` cannot express `activity('X').output` in SQL — there is no SQL
+   construct for accessing previous activity output. Rather than raising an error, the
+   `StrategyRouter` falls back to `PythonEmitter` for these nodes. This gives users a
+   working migration path: SQL where possible, Python where necessary, never a failed
+   translation. Exception: `IF_CONDITION_LEFT` and `IF_CONDITION_RIGHT` contexts require
+   the configured strategy to succeed exactly — they are exposed to Databricks'
+   `condition_task` API which has strict format requirements.
+
+### Runtime Helpers
+
+Generated notebooks may call `_wkmigrate_utc_now()`, `_wkmigrate_format_datetime()`, and
+`_wkmigrate_convert_timezone()`. These helpers are inlined into each generated notebook
+(rather than imported from an installed package) so the generated code is self-contained
+and does not require `wkmigrate` to be installed on the Databricks cluster.
+The helper source lives in `runtime/datetime_helpers.py` and is copied verbatim by
+`code_generator.py` when any expression requires it (tracked via
+`ResolvedExpression.required_imports`).
+
+### Function Registry
+
+`FUNCTION_REGISTRY` in `parsers/expression_functions.py` contains 47 emitters organized by
+category:
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| String | 12 | `concat`, `substring`, `replace`, `toLower`, `toUpper`, `trim`, `length`, `indexOf`, `startsWith`, `endsWith`, `contains`, `split` |
+| Math/Numeric | 6 | `add`, `sub`, `mul`, `div`, `mod`, `float` (with numeric coercion for pipeline params) |
+| Logical/Comparison | 9 | `equals`, `not`, `and`, `or`, `if`, `greater`, `greaterOrEquals`, `less`, `lessOrEquals` |
+| Type Conversion | 5 | `int`, `string`, `bool`, `json`, `float` |
+| Collection/Array | 9 | `createArray`, `array`, `first`, `last`, `take`, `skip`, `union`, `intersection`, `empty`, `coalesce` |
+| Date/Time | 6 | `utcNow`, `formatDateTime`, `addDays`, `addHours`, `startOfDay`, `convertTimeZone` |
+
+Each emitter validates arity via `_require_arity()` and returns `UnsupportedValue` on
+error. Unknown functions also return `UnsupportedValue` rather than raising. This is
+consistent with the rest of wkmigrate: translation failures degrade gracefully rather
+than aborting the pipeline.
+
+### Supported Contexts (Active Call Sites)
+
+| Translator | Properties Using `get_literal_or_expression()` | Expression Context |
+|-----------|-----------------------------------------------|--------------------|
+| `set_variable_activity_translator.py` | `variable.value` | `SET_VARIABLE` |
+| `for_each_activity_translator.py` | `items` | `FOREACH_ITEMS` |
+| `if_condition_activity_translator.py` | `expression`, left/right operands | `IF_CONDITION`, `IF_CONDITION_LEFT`, `IF_CONDITION_RIGHT` |
+| `web_activity_translator.py` | `url`, `body`, `headers.*` | `WEB_URL`, `WEB_BODY`, `WEB_HEADER` |
+| `notebook_activity_translator.py` | `baseParameters.*` | `PIPELINE_PARAMETER` |
+
+`CopyActivity` and `LookupActivity` do not yet call this utility — adopting them is
+tracked as future work (Phase 4c of the complex-expression implementation plan).
 
 ---
 

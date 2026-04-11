@@ -22,7 +22,6 @@ from wkmigrate.models.workflows.instructions import SecretInstruction
 from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.utils import parse_mapping, parse_timeout_string
 
-
 _JDBC_SECRETS = ["user_name", "password"]
 _JDBC_OPTIONS = ["dbtable", "numPartitions", "batchsize", "sessionInitStatement"]
 DEFAULT_PORTS: dict[str, int] = {
@@ -293,7 +292,10 @@ def dataset_properties_to_dict(properties: DatasetProperties | dict | None) -> d
     return values
 
 
-def collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
+def collect_data_source_secrets(
+    definition: dict,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+) -> list[SecretInstruction]:
     """
     Builds the list of ``SecretInstruction`` objects required for a dataset definition.
 
@@ -306,6 +308,7 @@ def collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
 
     Args:
         definition: Flat dataset definition dictionary produced by ``merge_dataset_definition``.
+        credentials_scope: Name of the Databricks secret scope. Defaults to ``DEFAULT_CREDENTIALS_SCOPE``.
 
     Returns:
         List of ``SecretInstruction`` objects. The list is empty when the dataset
@@ -318,17 +321,15 @@ def collect_data_source_secrets(definition: dict) -> list[SecretInstruction]:
 
     provider_type = definition.get("provider_type")
     if provider_type is not None:
-        # File dataset: look up by provider
         secret_keys = DATASET_PROVIDER_SECRETS.get(provider_type, [])
         lookup_type = provider_type
     else:
-        # SQL or other dataset: look up by service type
         secret_keys = DATASET_PROVIDER_SECRETS.get(service_type, [])
         lookup_type = service_type
 
     return [
         SecretInstruction(
-            scope=DEFAULT_CREDENTIALS_SCOPE,
+            scope=credentials_scope,
             key=f"{service_name}_{secret}",
             service_name=service_name,
             service_type=lookup_type,

@@ -15,7 +15,9 @@ notebooks, pipelines, and secrets to be created in the target workspace.
 ```python
 def prepare_workflow(
         pipeline: Pipeline,
-        files_to_delta_sinks: bool | None = None) -> PreparedWorkflow
+        files_to_delta_sinks: bool | None = None,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedWorkflow
 ```
 
 Prepares a pipeline internal representation for creation as a Databricks Lakeflow job.
@@ -24,6 +26,7 @@ Prepares a pipeline internal representation for creation as a Databricks Lakeflo
 
 - `pipeline` - Pipeline internal representation to prepare.
 - `files_to_delta_sinks` - Overrides the inferred Files-to-Delta behavior when set.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:
@@ -35,7 +38,9 @@ Prepares a pipeline internal representation for creation as a Databricks Lakeflo
 ```python
 def prepare_activity(
         activity: Activity,
-        default_files_to_delta_sinks: bool | None) -> PreparedActivity
+        default_files_to_delta_sinks: bool | None,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedActivity
 ```
 
 Prepares an activity internal representation for creation as a Databricks Lakeflow job task.
@@ -44,6 +49,7 @@ Prepares an activity internal representation for creation as a Databricks Lakefl
 
 - `activity` - Activity internal representation to prepare.
 - `default_files_to_delta_sinks` - Whether to use the default files-to-delta sinks behavior.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:

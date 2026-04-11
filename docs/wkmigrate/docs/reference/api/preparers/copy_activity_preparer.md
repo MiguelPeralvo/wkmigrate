@@ -14,7 +14,9 @@ definition, notebook artifacts, and secrets to be created in the target workspac
 ```python
 def prepare_copy_activity(
         activity: CopyActivity,
-        default_files_to_delta_sinks: bool | None) -> PreparedActivity
+        default_files_to_delta_sinks: bool | None,
+        credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> PreparedActivity
 ```
 
 Builds tasks and artifacts for a Copy activity.
@@ -23,6 +25,7 @@ Builds tasks and artifacts for a Copy activity.
 
 - `activity` - Activity definition emitted by the translators.
 - `default_files_to_delta_sinks` - Optional override for DLT generation.
+- `credentials_scope` - Name of the Databricks secret scope used for storing credentials.
   
 
 **Returns**:

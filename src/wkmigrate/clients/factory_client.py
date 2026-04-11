@@ -6,6 +6,8 @@ using the provided credentials, and make API calls to the Data Factory resource 
 the Azure Data Factory management client.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 from azure.identity import ClientSecretCredential

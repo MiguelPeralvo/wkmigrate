@@ -8,7 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-from wkmigrate.definition_stores import factory_definition_store, workspace_definition_store
+from wkmigrate.definition_stores import factory_definition_store
+from wkmigrate.definition_stores import workspace_definition_store as workspace_definition_store_module
 
 JSON_PATH = os.path.join(os.path.dirname(__file__), "resources", "json")
 YAML_PATH = os.path.join(os.path.dirname(__file__), "resources", "yaml")
@@ -398,8 +399,20 @@ def mock_workspace_client() -> MockWorkspaceClient:
 
     delegate = MockWorkspaceClient()
 
-    def _fake_login(_: workspace_definition_store.WorkspaceDefinitionStore) -> MockWorkspaceClient:
+    def _fake_login(_: workspace_definition_store_module.WorkspaceDefinitionStore) -> MockWorkspaceClient:
         return delegate
 
-    workspace_definition_store.WorkspaceDefinitionStore._login_workspace_client = _fake_login  # type: ignore[assignment]
+    workspace_definition_store_module.WorkspaceDefinitionStore._login_workspace_client = _fake_login  # type: ignore[assignment]
     return delegate
+
+
+@pytest.fixture
+def workspace_definition_store(
+    mock_workspace_client,
+) -> workspace_definition_store_module.WorkspaceDefinitionStore:  # noqa: ARG001
+    """Return a ``WorkspaceDefinitionStore`` wired to the mock workspace client."""
+    return workspace_definition_store_module.WorkspaceDefinitionStore(
+        authentication_type="pat",
+        host_name="https://adb-123.azuredatabricks.net",
+        pat="TOKEN",
+    )

@@ -9,15 +9,16 @@ import TabItem from '@theme/TabItem';
 
 ## Overview
 
-Definition stores are the entry points that wkmigrate uses to load pipeline definitions from a source system and materialize Lakeflow jobs in Databricks. You can construct 
+Definition stores are the entry points that wkmigrate uses to load pipeline definitions from a source system and materialize Lakeflow jobs in Databricks. You can construct
 these classes directly or use the `build_definition_store` method to flexibly create definition stores of various types.
 
 The following definition stores are supported:
 
-| Definition store           | Source/target         | Description                                                          |
-|----------------------------|-----------------------|----------------------------------------------------------------------|
-| `FactoryDefinitionStore`   | Azure Data Factory    | Loads and translates Data Factory (ADF) pipelines.                   |
-| `WorkspaceDefinitionStore` | Databricks workspace  | Loads, describes, and creates Databricks Lakeflow jobs (workflows).  |
+| Definition store                | Source/target            | Description                                                                                                     |
+|---------------------------------|--------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `FactoryDefinitionStore`        | Azure Data Factory (API) | Loads and translates Data Factory (ADF) pipelines via the ADF management API.                                   |
+| `JsonDefinitionStore`           | Local JSON files         | Loads and translates ADF pipelines from exported JSON files. Does not require a connection to the ADF resource. |
+| `WorkspaceDefinitionStore`      | Databricks workspace     | Loads, describes, and creates Databricks Lakeflow jobs (workflows).                                             |
 
 ## FactoryDefinitionStore
 
@@ -61,13 +62,44 @@ pipeline_ir = factory_store.load(pipeline_name)
 print(pipeline_ir)
 ```
 
+## JsonDefinitionStore
+
+The `JsonDefinitionStore` loads and translates pipeline definitions stored which have been exported as JSON files to a local directory.
+
+### Configuration
+
+Organize JSON files in subdirectories of the top-level source directory. Each subdirectory can contain one or more `.json` files. 
+Files may contain a single JSON object or an array of objects. Missing optional subdirectories (triggers, datasets, linked_services) are skipped.
+
+```
+source_directory/
+├── pipelines/          # Required — pipeline definition JSON files
+├── triggers/           # Optional — trigger definition JSON files
+├── datasets/           # Optional — dataset definition JSON files
+└── linked_services/    # Optional — linked-service definition JSON files
+```
+
+### Loading and translating ADF pipelines
+
+Use the `load` method to read a pipeline from JSON by name and translate the pipeline definition to wkmigrate's internal representation.
+
+```python
+from wkmigrate.definition_stores.json_definition_store import JsonDefinitionStore
+
+json_store = JsonDefinitionStore(
+    source_directory="/path/to/adf-export",
+)
+
+pipeline_ir = json_store.load("my_pipeline")
+```
+
 ## WorkspaceDefinitionStore
 
 The `WorkspaceDefinitionStore` interacts with a Databricks workspace to:
 
 - Load existing job definitions.
 - Create new Databricks jobs from a translated pipeline.
-- Generate local artifacts (notebooks, job JSON, secret definitions) for inspection or GitOps workflows.
+- Generate Databricks asset bundles for manual or automated deployment.
 
 ### Authentication and configuration
 
@@ -173,11 +205,10 @@ job_id = workspace_store.to_pipeline(pipeline_ir)
 print(f"Created Databricks job with ID: {job_id}")
 ```
 
-### Generating translation artifacts
+### Generating a Databricks asset bundle
 
-Use `to_local_files` to generate translation artifacts without calling Databricks APIs to create jobs, pipelines, or notebooks. Calling `to_local_files` creates 
-code and configuration files in the local filesystem. This includes the job definitions, required secrets, and any untranslatable properties in JSON files and 
-any generated notebooks.
+Use `to_asset_bundle` to generate a [bundle](https://docs.databricks.com/aws/en/dev-tools/bundles/) containing job configuration 
+and generated code. The generated files can be reviewed and deployed using the Databricks CLI.
 
 ```python
 from pathlib import Path
@@ -206,19 +237,19 @@ workspace_store = WorkspaceDefinitionStore(
     pat="<DATABRICKS PAT>",
 )
 
-# Write the translation artifacts to a local directory
-output_path = Path("out/wkmigrate_artifacts")
+# Generate the asset bundle in a local directory
+output_path = Path("out/wkmigrate_bundle")
 output_path.mkdir(parents=True, exist_ok=True)
-workspace_store.to_local_files(
-    pipeline_definition=pipeline_model,
-    local_directory=str(output_path),
+workspace_store.to_asset_bundle(
+    pipeline_definition=pipeline_ir,
+    bundle_directory=str(output_path),
 )
-print(f"Translation artifacts written to {output_path}")
+print(f"Asset bundle written to {output_path}")
 ```
 
 ## Creating definition stores with `build_definition_store`
 
-Use the `build_definition_store` method to build a definition store from a string key and an options dictionary. This pattern can be used to 
+Use the `build_definition_store` method to build a definition store from a string key and an options dictionary. This pattern can be used to
 store and load definition store properties in configuration files (e.g. JSON or YAML).
 
 ```python

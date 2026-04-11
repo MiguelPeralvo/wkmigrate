@@ -1,0 +1,21 @@
+{
+  "name": "daily_trigger",
+  "properties": {
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "one_activity_pipeline",
+          "type": "PipelineReference"
+        },
+        "parameters": {}
+      }
+    ],
+    "type": "ScheduleTrigger",
+    "recurrence": {
+      "frequency": "Day",
+      "interval": 1,
+      "startTime": "2024-01-01T00:00:00Z",
+      "timeZone": "UTC"
+    }
+  }
+}
