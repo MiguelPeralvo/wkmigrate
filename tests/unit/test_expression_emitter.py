@@ -136,10 +136,48 @@ def test_get_literal_or_expression_context_free_variables_reference_is_unsupport
     assert "requires TranslationContext" in resolved.message
 
 
-def test_get_literal_or_expression_context_free_activity_reference_is_unsupported() -> None:
+def test_get_literal_or_expression_context_free_activity_reference_resolves() -> None:
+    """Activity references resolve to taskValues.get even without TranslationContext."""
     resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "Lookup" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-14: Parameter and activity resolution without context
+# ---------------------------------------------------------------------------
+
+
+def test_undefined_parameter_emits_widgets_get() -> None:
+    """pipeline().parameters.X resolves to dbutils.widgets.get('X') even without context."""
+    resolved = get_literal_or_expression("@pipeline().parameters.myParam")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.code == "dbutils.widgets.get('myParam')"
+    assert resolved.is_dynamic is True
+
+
+def test_activity_reference_without_context_resolves() -> None:
+    """activity('Name').output.firstRow.col resolves without TranslationContext."""
+    resolved = get_literal_or_expression("@activity('LookupStep').output.firstRow.config_value")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "taskValues.get" in resolved.code
+    assert "LookupStep" in resolved.code
+    assert "config_value" in resolved.code
+
+
+def test_deep_nested_expression_depth_15_resolves() -> None:
+    """Expressions nested 15+ levels deep should resolve without stack overflow."""
+    expr = (
+        "@if(and(greater(int(pipeline().parameters.retryCount), 3), "
+        "not(equals(pipeline().parameters.status, 'complete'))), "
+        "concat(toUpper(trim(substring(replace(toLower(pipeline().parameters.region), 'a', 'b'), 0, 5))), '_suffix'), "
+        "'default')"
+    )
+    resolved = get_literal_or_expression({"type": "Expression", "value": expr})
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.is_dynamic is True
+    assert "dbutils.widgets.get" in resolved.code
 
 
 def test_parse_variable_value_is_thin_wrapper() -> None:

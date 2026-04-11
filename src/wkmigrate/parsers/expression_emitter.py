@@ -172,11 +172,6 @@ class PythonEmitter(EmitterProtocol):
             if lowered == "pipeline":
                 return self._emit_pipeline_property_access(root, properties)
             if lowered == "activity":
-                if self.context is None:
-                    return UnsupportedValue(
-                        value=root.name,
-                        message="Expression references activity() and requires TranslationContext",
-                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[])
 
         root_result = self.emit_node(root)
@@ -194,11 +189,6 @@ class PythonEmitter(EmitterProtocol):
         if isinstance(node.object, PropertyAccess):
             root, properties = _flatten_property_chain(node.object)
             if isinstance(root, FunctionCall) and root.name.lower() == "activity":
-                if self.context is None:
-                    return UnsupportedValue(
-                        value=root.name,
-                        message="Expression references activity() and requires TranslationContext",
-                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[node.index])
 
         object_expression = self.emit_node(node.object)
