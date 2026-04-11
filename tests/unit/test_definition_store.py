@@ -143,6 +143,28 @@ def test_workspace_definition_store_uses_definition_store_interface(
     assert isinstance(store, DefinitionStore)
 
 
+def test_workspace_definition_store_client_secret_uses_azure_sdk_kwargs() -> None:
+    """Azure client-secret login passes azure-prefixed credential kwargs to WorkspaceClient."""
+    with patch("wkmigrate.definition_stores.workspace_definition_store.WorkspaceClient") as mock_wc:
+        mock_wc.return_value = object()
+
+        store = object.__new__(WorkspaceDefinitionStore)
+        store.authentication_type = "azure-client-secret"
+        store.host_name = "https://adb.example.azuredatabricks.net"
+        store.resource_id = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Databricks/workspaces/ws"
+        store.tenant_id = "tenant-id"
+        store.client_id = "client-id"
+        store.client_secret = "client-secret"
+
+        store._login_client_secret()
+
+        _, kwargs = mock_wc.call_args
+        assert kwargs["azure_client_id"] == "client-id"
+        assert kwargs["azure_client_secret"] == "client-secret"
+        assert "client_id" not in kwargs
+        assert "client_secret" not in kwargs
+
+
 def test_factory_definition_store_uses_definition_store_interface(mock_factory_client) -> None:
     """FactoryDefinitionStore should behave as a DefinitionStore when wired with a mock client."""
     assert mock_factory_client is not None
