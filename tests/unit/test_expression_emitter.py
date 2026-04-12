@@ -87,7 +87,7 @@ def test_emit_context_variables_reference() -> None:
 
 def test_emit_activity_output_reference() -> None:
     emitted = _emit_expression("@activity('Lookup').output.firstRow.col")
-    assert emitted == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['col']"
+    assert emitted == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col']"
 
 
 def test_emit_pipeline_system_and_parameter_references() -> None:
@@ -130,19 +130,165 @@ def test_get_literal_or_expression_dynamic_expression_tracks_required_imports() 
     assert resolved.required_imports == frozenset({"json"})
 
 
-def test_get_literal_or_expression_context_free_variables_reference_is_unsupported() -> None:
+def test_get_literal_or_expression_context_free_variables_reference_resolves() -> None:
+    """variables() resolves to best-effort taskValues.get even without context."""
     resolved = get_literal_or_expression("@variables('x')")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_variable_x" in resolved.code
 
 
-def test_get_literal_or_expression_context_free_activity_reference_is_unsupported() -> None:
+def test_get_literal_or_expression_context_free_activity_reference_resolves() -> None:
+    """Activity references resolve to taskValues.get even without TranslationContext."""
     resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")
-    assert isinstance(resolved, UnsupportedValue)
-    assert "requires TranslationContext" in resolved.message
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "Lookup" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-14: Parameter and activity resolution without context
+# ---------------------------------------------------------------------------
+
+
+def test_undefined_parameter_emits_widgets_get() -> None:
+    """pipeline().parameters.X resolves to dbutils.widgets.get('X') even without context."""
+    resolved = get_literal_or_expression("@pipeline().parameters.myParam")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.code == "dbutils.widgets.get('myParam')"
+    assert resolved.is_dynamic is True
+
+
+def test_activity_reference_without_context_resolves() -> None:
+    """activity('Name').output.firstRow.col resolves without TranslationContext."""
+    resolved = get_literal_or_expression("@activity('LookupStep').output.firstRow.config_value")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "taskValues.get" in resolved.code
+    assert "LookupStep" in resolved.code
+    assert "config_value" in resolved.code
+
+
+def test_deep_nested_expression_depth_15_resolves() -> None:
+    """Expressions nested 15+ levels deep should resolve without stack overflow."""
+    expr = (
+        "@if(and(greater(int(pipeline().parameters.retryCount), 3), "
+        "not(equals(pipeline().parameters.status, 'complete'))), "
+        "concat(toUpper(trim(substring(replace(toLower(pipeline().parameters.region), 'a', 'b'), 0, 5))), '_suffix'), "
+        "'default')"
+    )
+    resolved = get_literal_or_expression({"type": "Expression", "value": expr})
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.is_dynamic is True
+    assert "dbutils.widgets.get" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-15: @join support
+# ---------------------------------------------------------------------------
+
+
+def test_emit_join_simple_array() -> None:
+    """@join(createArray('a','b','c'), ',') resolves to Python join."""
+    emitted = _emit_expression("@join(createArray('a', 'b', 'c'), ',')")
+    assert isinstance(emitted, str)
+    assert "join" in emitted
+    assert "'a'" in emitted
+
+
+def test_emit_join_with_dynamic_args() -> None:
+    """@join with pipeline parameter args resolves."""
+    resolved = get_literal_or_expression("@join(createArray(pipeline().parameters.env, 'suffix'), '/')")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "join" in resolved.code
+    assert "dbutils.widgets.get" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-16: variables() error clarity
+# ---------------------------------------------------------------------------
+
+
+def test_variables_undefined_emits_best_effort() -> None:
+    """variables('x') with empty context emits best-effort taskValues.get using naming convention."""
+    resolved = get_literal_or_expression("@variables('x')", TranslationContext())
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_variable_x" in resolved.code
+
+
+def test_variables_in_math_expression_resolves() -> None:
+    """variables() inside math expressions should resolve, not propagate UnsupportedValue."""
+    resolved = get_literal_or_expression("@add(int(variables('counter')), 1)", TranslationContext())
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "taskValues.get" in resolved.code
+
+
+def test_variables_defined_resolves() -> None:
+    """variables('x') with context containing variable resolves to taskValues.get."""
+    ctx = TranslationContext().with_variable("myVar", "set_my_var")
+    resolved = get_literal_or_expression("@variables('myVar')", ctx)
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get" in resolved.code
+    assert "set_my_var" in resolved.code
 
 
 def test_parse_variable_value_is_thin_wrapper() -> None:
     context = TranslationContext()
     parsed = parse_variable_value({"value": "@pipeline().RunId", "type": "Expression"}, context)
     assert parsed == "dbutils.jobs.getContext().tags().get('runId', '')"
+
+
+# ---------------------------------------------------------------------------
+# W-17: activity().output.firstRow preservation
+# ---------------------------------------------------------------------------
+
+
+def test_emit_activity_output_firstrow_preserved() -> None:
+    """firstRow must appear in the accessor chain, not be silently dropped."""
+    emitted = _emit_expression("@activity('Lookup').output.firstRow.config_value")
+    assert isinstance(emitted, str)
+    assert "['firstRow']" in emitted
+    assert "['config_value']" in emitted
+
+
+def test_emit_activity_output_firstrow_only() -> None:
+    """@activity('X').output.firstRow with no further property still includes firstRow."""
+    emitted = _emit_expression("@activity('Lookup').output.firstRow")
+    assert isinstance(emitted, str)
+    assert "['firstRow']" in emitted
+
+
+def test_emit_activity_output_value_preserved() -> None:
+    """@activity('X').output.value preserves the 'value' accessor."""
+    emitted = _emit_expression("@activity('ForEach').output.value")
+    assert isinstance(emitted, str)
+    assert "['value']" in emitted
+
+
+# ---------------------------------------------------------------------------
+# W-18: numeric coercion in comparison operators
+# ---------------------------------------------------------------------------
+
+
+def test_emit_greater_with_pipeline_param_coerces() -> None:
+    """greater(pipeline().parameters.X, 50) must coerce the param to numeric."""
+    emitted = _emit_expression("@greater(pipeline().parameters.threshold, 50)")
+    assert isinstance(emitted, str)
+    assert ">" in emitted
+    assert "dbutils.widgets.get('threshold')" in emitted
+    # The widgets.get call should be wrapped in numeric coercion
+    assert "int(" in emitted or "float(" in emitted
+
+
+def test_emit_less_with_pipeline_param_coerces() -> None:
+    """less(pipeline().parameters.retries, 5) must coerce the param to numeric."""
+    emitted = _emit_expression("@less(pipeline().parameters.retries, 5)")
+    assert isinstance(emitted, str)
+    assert "<" in emitted
+    assert "int(" in emitted or "float(" in emitted
+
+
+def test_emit_greater_with_two_literals_no_redundant_coercion() -> None:
+    """greater(100, 50) with two numeric literals should not add coercion."""
+    emitted = _emit_expression("@greater(100, 50)")
+    assert emitted == "(100 > 50)"

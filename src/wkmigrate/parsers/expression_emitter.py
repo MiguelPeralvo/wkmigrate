@@ -113,23 +113,16 @@ class PythonEmitter(EmitterProtocol):
             )
 
         if lowered == "variables":
-            if self.context is None:
-                return UnsupportedValue(
-                    value=node.name,
-                    message="Expression references variables() and requires TranslationContext",
-                )
             if len(node.args) != 1 or not isinstance(node.args[0], StringLiteral):
                 return UnsupportedValue(
                     value=node.name,
                     message="variables() requires exactly one string-literal argument",
                 )
             variable_name = node.args[0].value
-            task_key = self.context.get_variable_task_key(variable_name)
+            task_key = self.context.get_variable_task_key(variable_name) if self.context is not None else None
             if task_key is None:
-                return UnsupportedValue(
-                    value=node.name,
-                    message=f"Variable '{variable_name}' not set by a previous activity",
-                )
+                # Best-effort: emit a taskValues lookup using the SetVariable naming convention
+                task_key = f"set_variable_{variable_name}"
             return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r})"
 
         if lowered == "item":
@@ -172,11 +165,6 @@ class PythonEmitter(EmitterProtocol):
             if lowered == "pipeline":
                 return self._emit_pipeline_property_access(root, properties)
             if lowered == "activity":
-                if self.context is None:
-                    return UnsupportedValue(
-                        value=root.name,
-                        message="Expression references activity() and requires TranslationContext",
-                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[])
 
         root_result = self.emit_node(root)
@@ -194,11 +182,6 @@ class PythonEmitter(EmitterProtocol):
         if isinstance(node.object, PropertyAccess):
             root, properties = _flatten_property_chain(node.object)
             if isinstance(root, FunctionCall) and root.name.lower() == "activity":
-                if self.context is None:
-                    return UnsupportedValue(
-                        value=root.name,
-                        message="Expression references activity() and requires TranslationContext",
-                    )
                 return self._emit_activity_property_access(root, properties, index_segments=[node.index])
 
         object_expression = self.emit_node(node.object)
@@ -285,7 +268,7 @@ class PythonEmitter(EmitterProtocol):
 
         task_key = root.args[0].value
         base = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
-        remaining_properties = properties[2:]
+        remaining_properties = properties[1:]
         if not remaining_properties and not index_segments:
             return base
 

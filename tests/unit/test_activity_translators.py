@@ -571,14 +571,17 @@ def test_if_condition_missing_expression_returns_unsupported(if_condition_activi
     assert fixture["expected_message"] in result.message
 
 
-def test_if_condition_unsupported_expression_returns_unsupported(if_condition_activity_fixtures: list[dict]) -> None:
-    """Test that unsupported expression type returns UnsupportedValue."""
+def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fixtures: list[dict]) -> None:
+    """Compound expression (previously unsupported) now uses Python fallback."""
     fixture = get_fixture(if_condition_activity_fixtures, "unsupported_expression")
     base_kwargs = get_base_kwargs(fixture["input"])
-    result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
 
-    assert isinstance(result, UnsupportedValue)
-    assert fixture["expected_message"] in result.message
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
 
 
 def test_if_condition_not_equals_expression() -> None:
@@ -632,6 +635,58 @@ def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) ->
 
     assert isinstance(result, IfConditionActivity)
     assert len(result.child_activities) == 0
+
+
+# ---------------------------------------------------------------------------
+# W-13: IfCondition compound predicates
+# ---------------------------------------------------------------------------
+
+
+def test_if_condition_and_compound_predicate() -> None:
+    """IfCondition with @and(equals(...), greater(...)) should NOT return UnsupportedValue."""
+    activity = {
+        "name": "if_and",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@and(equals(1, 1), greater(3, 2))"},
+        "ifTrueActivities": [],
+        "ifFalseActivities": [],
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
+
+
+def test_if_condition_or_compound_predicate() -> None:
+    """IfCondition with @or(...) should produce a fallback condition, not UnsupportedValue."""
+    activity = {
+        "name": "if_or",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@or(equals(1, 0), greater(5, 2))"},
+        "ifTrueActivities": [],
+        "ifFalseActivities": [],
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_activity(activity)
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.right == "True"
+
+
+def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:
+    """IfCondition with simple @equals still uses native EQUAL_TO op (no regression)."""
+    fixture = get_fixture(if_condition_activity_fixtures, "equals_both_branches")
+    result = translate_activity(fixture["input"])
+
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
 
 
 def test_unsupported_type_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
@@ -1190,14 +1245,14 @@ def test_set_variable_resolves_known_variable_reference(set_variable_activity_fi
     assert result.variable_value == fixture["expected"]["variable_value"]
 
 
-def test_set_variable_unknown_variable_reference_returns_unsupported(
+def test_set_variable_unknown_variable_reference_emits_best_effort(
     set_variable_activity_fixtures: list[dict],
 ) -> None:
-    """Test SetVariable with @variables() for unknown variable returns placeholder."""
+    """Test SetVariable with @variables() for unknown variable emits best-effort code."""
     fixture = get_fixture(set_variable_activity_fixtures, "variables_reference_unknown")
-    placeholder = get_placeholder_activity({"name": fixture["input"]["name"], "task_key": fixture["input"]["name"]})
     result = translate_activity(fixture["input"])
-    assert result == placeholder
+    assert isinstance(result, SetVariableActivity)
+    assert "taskValues.get" in result.variable_value
 
 
 def test_context_cache_visit_populates_cache() -> None:
@@ -1595,7 +1650,7 @@ def test_parse_variable_value_activity_output_double_quotes() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": '@activity("LookupTask").output.firstRow', "type": "Expression"}, ctx)
 
-    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')"
+    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
 
 
 def test_parse_variable_value_variables_reference_double_quotes() -> None:
@@ -1614,13 +1669,14 @@ def test_parse_variable_value_variables_reference_found() -> None:
     assert result == "dbutils.jobs.taskValues.get(taskKey='set_my_var', key='myVar')"
 
 
-def test_parse_variable_value_variables_reference_not_found() -> None:
-    """parse_variable_value returns UnsupportedValue when the variable is not in context."""
+def test_parse_variable_value_variables_reference_emits_best_effort() -> None:
+    """parse_variable_value emits best-effort code for undefined variables."""
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@variables('unknown')", "type": "Expression"}, ctx)
 
-    assert isinstance(result, UnsupportedValue)
-    assert "unknown" in result.message
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "unknown" in result
 
 
 def test_set_variable_integer_value(set_variable_activity_fixtures: list[dict]) -> None:
@@ -1680,7 +1736,7 @@ def test_parse_variable_value_nested_output_property() -> None:
     """parse_variable_value resolves nested activity output like firstRow.myColumn."""
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('Lookup').output.firstRow.col1", "type": "Expression"}, ctx)
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['col1']"
+    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col1']"
 
 
 def test_parse_variable_value_static_string() -> None:
@@ -1696,7 +1752,7 @@ def test_parse_variable_value_activity_output() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('LookupTask').output.firstRow", "type": "Expression"}, ctx)
 
-    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')"
+    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
 
 
 def test_parse_variable_value_pipeline_system_var() -> None:
@@ -1870,6 +1926,90 @@ def test_copy_sql_source_without_query_still_works(copy_activity_fixtures: list[
 
     assert isinstance(result, CopyActivity)
     assert result.source_properties.get("sql_reader_query") is None
+
+
+# ---------------------------------------------------------------------------
+# W-11: Structural activity coverage — graceful degradation
+# ---------------------------------------------------------------------------
+
+
+def test_copy_without_dataset_defs_preserves_source_properties() -> None:
+    """Copy with source block but no dataset definitions should produce a partial CopyActivity."""
+    activity = {
+        "name": "copy_no_datasets",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": "@concat('SELECT * FROM ', pipeline().parameters.t)",
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_copy_activity(activity, get_base_kwargs(activity))
+
+    assert isinstance(result, CopyActivity)
+    assert result.source_dataset is None
+    assert result.sink_dataset is None
+    assert result.source_properties is not None
+    assert result.source_properties.get("sql_reader_query") is not None
+
+
+def test_copy_expression_query_resolved_with_context() -> None:
+    """Copy with Expression sql_reader_query and context should resolve the expression to Python code."""
+    activity = {
+        "name": "copy_resolved_query",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": {
+                "type": "Expression",
+                "value": "@concat('SELECT * FROM ', pipeline().parameters.table)",
+            },
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    ctx = TranslationContext()
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = translate_copy_activity(activity, get_base_kwargs(activity), context=ctx)
+
+    assert isinstance(result, CopyActivity)
+    query = result.source_properties.get("sql_reader_query")
+    assert query is not None
+    # Should be resolved Python code, not the raw Expression dict
+    assert not isinstance(query, dict)
+    assert "dbutils.widgets.get" in str(query) or "pipeline" in str(query).lower() or "SELECT" in str(query)
+
+
+def test_copy_fully_empty_still_returns_unsupported() -> None:
+    """Copy with no source, no sink, no datasets should still be UnsupportedValue."""
+    activity = {
+        "name": "copy_empty",
+        "type": "Copy",
+        "depends_on": [],
+    }
+    result = translate_copy_activity(activity, get_base_kwargs(activity))
+
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_copy_partial_translation_emits_warning() -> None:
+    """Partial copy translation should emit NotTranslatableWarning."""
+    activity = {
+        "name": "copy_partial_warn",
+        "type": "Copy",
+        "depends_on": [],
+        "source": {
+            "type": "AzureSqlSource",
+            "sql_reader_query": "SELECT 1",
+        },
+        "sink": {"type": "ParquetSink"},
+    }
+    with pytest.warns(NotTranslatableWarning, match="Partial copy translation"):
+        translate_copy_activity(activity, get_base_kwargs(activity))
 
 
 # ---------------------------------------------------------------------------
