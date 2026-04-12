@@ -35,7 +35,7 @@
       "name": "set_from_lookup",
       "task_key": "set_from_lookup",
       "variable_name": "lookupResult",
-      "variable_value": "json.loads(dbutils.jobs.taskValues.get(taskKey='GetConfig', key='result'))['firstRow']"
+      "variable_value": "dbutils.jobs.taskValues.get(taskKey='GetConfig', key='result')['firstRow']"
     }
   },
   {
@@ -92,7 +92,7 @@
       "name": "set_from_bare_expr",
       "task_key": "set_from_bare_expr",
       "variable_name": "outputVal",
-      "variable_value": "json.loads(dbutils.jobs.taskValues.get(taskKey='FetchData', key='result'))['value']"
+      "variable_value": "dbutils.jobs.taskValues.get(taskKey='FetchData', key='result')['value']"
     }
   },
   {
@@ -167,7 +167,7 @@
       "name": "set_from_lookup_dq",
       "task_key": "set_from_lookup_dq",
       "variable_name": "lookupResult",
-      "variable_value": "json.loads(dbutils.jobs.taskValues.get(taskKey='GetConfig', key='result'))['firstRow']"
+      "variable_value": "dbutils.jobs.taskValues.get(taskKey='GetConfig', key='result')['firstRow']"
     }
   },
   {
@@ -280,7 +280,7 @@
       "name": "set_from_column",
       "task_key": "set_from_column",
       "variable_name": "columnVal",
-      "variable_value": "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupConfig', key='result'))['firstRow']['myColumn']"
+      "variable_value": "dbutils.jobs.taskValues.get(taskKey='LookupConfig', key='result')['firstRow']['myColumn']"
     }
   }
 ]

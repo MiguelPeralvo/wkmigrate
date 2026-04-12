@@ -18,7 +18,7 @@ Supported value shapes:
 * Static string → Python literal (``'hello'``)
 * Numeric/boolean literal → Python literal (``42``, ``True``)
 * Expression dict ``{"type": "Expression", "value": "@..."}`` → resolved expression
-* ``@activity('X').output.Y`` → ``json.loads(dbutils.jobs.taskValues.get(...))['Y']``
+* ``@activity('X').output.Y`` → ``dbutils.jobs.taskValues.get(...)['Y']``
 * ``@pipeline().parameters.X`` → ``dbutils.widgets.get('X')``
 * ``@variables('Y')`` → task value reference via TranslationContext
 

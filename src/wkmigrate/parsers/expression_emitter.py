@@ -282,8 +282,7 @@ class PythonEmitter(EmitterProtocol):
                 return emitted_index
             accessors.append(f"[{emitted_index.code}]")
 
-        self.required_imports.add("json")
-        return f"json.loads({base}){''.join(accessors)}"
+        return f"{base}{''.join(accessors)}"
 
 
 def _flatten_property_chain(node: PropertyAccess) -> tuple[AstNode, list[str]]:

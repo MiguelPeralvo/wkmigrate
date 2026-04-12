@@ -46,8 +46,8 @@
       "activity_type": "IfCondition",
       "description": "Check if status is success",
       "op": "EQUAL_TO",
-      "left": "success",
-      "right": "success",
+      "left": "'success'",
+      "right": "'success'",
       "child_activities_count": 2
     }
   },
@@ -81,8 +81,8 @@
       "task_key": "check_mode",
       "activity_type": "IfCondition",
       "op": "EQUAL_TO",
-      "left": "batch",
-      "right": "batch",
+      "left": "'batch'",
+      "right": "'batch'",
       "child_activities_count": 1
     }
   },
@@ -189,8 +189,8 @@
       "task_key": "conditional_foreach",
       "activity_type": "IfCondition",
       "op": "EQUAL_TO",
-      "left": "single",
-      "right": "batch",
+      "left": "'single'",
+      "right": "'batch'",
       "child_activities_count": 2
     }
   },
@@ -292,8 +292,8 @@
       "task_key": "empty_condition",
       "activity_type": "IfCondition",
       "op": "EQUAL_TO",
-      "left": "a",
-      "right": "b",
+      "left": "'a'",
+      "right": "'b'",
       "child_activities_count": 0
     },
     "expects_warnings": true

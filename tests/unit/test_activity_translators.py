@@ -581,11 +581,13 @@ def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fi
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions no longer wrap with right="True"
+    # right="" signals a truthy predicate (lmv walker skips empty right)
+    assert result.right == ""
 
 
 def test_if_condition_not_equals_expression() -> None:
-    """not(equals()) is translated to the NOT_EQUAL condition op."""
+    """not(equals()) falls through to compound predicate path (emits Python code)."""
     activity = {
         "name": "if_not_equals",
         "type": "IfCondition",
@@ -593,12 +595,13 @@ def test_if_condition_not_equals_expression() -> None:
         "expression": {"type": "Expression", "value": "@not(equals('left', 'right'))"},
         "if_true_activities": [],
     }
-    result = translate_activity(activity)
+    with pytest.warns(NotTranslatableWarning):
+        result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "NOT_EQUAL"
-    assert result.left == "left"
-    assert result.right == "right"
+    assert result.op == "EQUAL_TO"
+    assert result.right == ""
+    assert "not" in result.left.lower() or "!=" in result.left
 
 
 def test_if_condition_dynamic_left_operand_expression() -> None:
@@ -622,7 +625,7 @@ def test_if_condition_dynamic_left_operand_expression() -> None:
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
     assert result.left == "dbutils.widgets.get('X')"
-    assert result.right == "value"
+    assert result.right == "'value'"
 
 
 def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) -> None:
@@ -658,7 +661,8 @@ def test_if_condition_and_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
+    assert result.right == ""
 
 
 def test_if_condition_or_compound_predicate() -> None:
@@ -677,7 +681,8 @@ def test_if_condition_or_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
+    assert result.right == ""
 
 
 def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:
@@ -1650,7 +1655,7 @@ def test_parse_variable_value_activity_output_double_quotes() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": '@activity("LookupTask").output.firstRow', "type": "Expression"}, ctx)
 
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')['firstRow']"
 
 
 def test_parse_variable_value_variables_reference_double_quotes() -> None:
@@ -1736,7 +1741,7 @@ def test_parse_variable_value_nested_output_property() -> None:
     """parse_variable_value resolves nested activity output like firstRow.myColumn."""
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('Lookup').output.firstRow.col1", "type": "Expression"}, ctx)
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col1']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='Lookup', key='result')['firstRow']['col1']"
 
 
 def test_parse_variable_value_static_string() -> None:
@@ -1752,7 +1757,7 @@ def test_parse_variable_value_activity_output() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('LookupTask').output.firstRow", "type": "Expression"}, ctx)
 
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')['firstRow']"
 
 
 def test_parse_variable_value_pipeline_system_var() -> None:
@@ -2335,3 +2340,83 @@ def test_web_activity_method_expression_preserved() -> None:
     assert isinstance(result, WebActivity)
     assert isinstance(result.method, ResolvedExpression)
     assert "dbutils.widgets.get('http_method')" in result.method.code
+
+
+# ---------------------------------------------------------------------------
+# W-20a: _parse_policy robustness
+# ---------------------------------------------------------------------------
+
+
+def test_parse_policy_expression_dict_retry_no_crash() -> None:
+    """Expression-typed retry should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": {"type": "Expression", "value": "@pipeline().parameters.retryCount"}})
+    assert "max_retries" not in result
+
+
+def test_parse_policy_string_expression_retry_no_crash() -> None:
+    """String expression retry should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": "@pipeline().parameters.retryCount"})
+    assert "max_retries" not in result
+
+
+def test_parse_policy_integer_timeout() -> None:
+    """Integer timeout should be accepted directly."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"timeout": 30})
+    assert result["timeout_seconds"] == 30
+
+
+def test_parse_policy_expression_dict_timeout_no_crash() -> None:
+    """Expression-typed timeout should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"timeout": {"type": "Expression", "value": "@pipeline().parameters.timeout"}})
+    assert "timeout_seconds" not in result
+
+
+def test_parse_policy_normal_values_still_work() -> None:
+    """Normal policy values should parse correctly (regression guard)."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": 2, "timeout": "0.00:30:00", "retry_interval_in_seconds": 60})
+    assert result["max_retries"] == 2
+    assert result["timeout_seconds"] == 1800
+    assert result["min_retry_interval_millis"] == 60000
+
+
+# ---------------------------------------------------------------------------
+# W-20c: typeProperties normalization
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_activity_flattens_type_properties() -> None:
+    """typeProperties should be flattened into the activity root."""
+    activity = {
+        "name": "SetVar",
+        "type": "SetVariable",
+        "depends_on": [],
+        "typeProperties": {"variable_name": "x", "value": "hello"},
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "x"
+    assert result.variable_value == "'hello'"
+
+
+def test_normalize_activity_preserves_flat_format() -> None:
+    """Activities already in SDK flat format should work unchanged."""
+    activity = {
+        "name": "SetVar",
+        "type": "SetVariable",
+        "depends_on": [],
+        "variable_name": "x",
+        "value": "hello",
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "x"

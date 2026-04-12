@@ -47,6 +47,22 @@ def prepare_lookup_activity(
     """
     source_definition = merge_dataset_definition(activity.source_dataset, activity.source_properties)
 
+    if "dataset_name" not in source_definition:
+        base_task = get_base_task(activity)
+        task = parse_mapping(
+            {**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/lookup_notebooks/{activity.task_key}"}}
+        )
+        placeholder_content = (
+            "# Databricks notebook source\n"
+            f"# PLACEHOLDER: Lookup activity '{activity.name}' could not be fully translated\n"
+            "# Missing dataset definitions — manual configuration required\n"
+        )
+        notebook = NotebookArtifact(
+            file_path=f"/wkmigrate/lookup_notebooks/{activity.task_key}",
+            content=placeholder_content,
+        )
+        return PreparedActivity(task=task, notebooks=[notebook])
+
     data_source_secrets = collect_data_source_secrets(source_definition, credentials_scope)
     secrets_to_collect = data_source_secrets if data_source_secrets else None
 
