@@ -166,6 +166,7 @@ def visit_activity(
     if cached is not None:
         return cached, context
 
+    activity = _normalize_activity(activity)
     activity_type = activity.get("type") or "Unsupported"
     with not_translatable_context(name, activity_type):
         base_properties = _get_base_properties(activity, is_conditional_task)
@@ -376,6 +377,23 @@ def _get_base_properties(activity: dict, is_conditional_task: bool = False) -> d
     }
 
 
+def _normalize_activity(activity: dict) -> dict:
+    """Flatten ``typeProperties`` into the activity root, matching SDK format.
+
+    The Azure REST API wraps activity-specific properties inside a
+    ``typeProperties`` key, while the SDK client returns them flattened at the
+    activity level. Translators expect the flattened form. This normalizer
+    ensures both shapes are handled.
+    """
+    if "typeProperties" not in activity:
+        return activity
+    normalized = {k: v for k, v in activity.items() if k != "typeProperties"}
+    type_props = activity["typeProperties"]
+    if isinstance(type_props, dict):
+        normalized.update(type_props)
+    return normalized
+
+
 def _parse_policy(policy: dict | None) -> dict:
     """
     Parses a data factory pipeline activity policy into a dictionary of policy settings.
@@ -412,16 +430,24 @@ def _parse_policy(policy: dict | None) -> dict:
     parsed_policy = {}
     if "timeout" in policy and policy.get("timeout"):
         timeout_value = policy.get("timeout")
-        if timeout_value is not None:
+        if isinstance(timeout_value, (int, float)):
+            parsed_policy["timeout_seconds"] = int(timeout_value)
+        elif isinstance(timeout_value, str):
             parsed_policy["timeout_seconds"] = parse_timeout_string(timeout_value)
 
     if "retry" in policy:
         retry_value = policy.get("retry")
-        if retry_value is not None:
+        if isinstance(retry_value, (int, float)):
+            parsed_policy["max_retries"] = int(retry_value)
+        elif isinstance(retry_value, str) and retry_value.strip().lstrip("-").isdigit():
             parsed_policy["max_retries"] = int(retry_value)
 
     if "retry_interval_in_seconds" in policy:
-        parsed_policy["min_retry_interval_millis"] = 1000 * int(policy.get("retry_interval_in_seconds", 0))
+        interval_value = policy.get("retry_interval_in_seconds", 0)
+        if isinstance(interval_value, (int, float)):
+            parsed_policy["min_retry_interval_millis"] = 1000 * int(interval_value)
+        elif isinstance(interval_value, str) and interval_value.strip().lstrip("-").isdigit():
+            parsed_policy["min_retry_interval_millis"] = 1000 * int(interval_value)
 
     return parsed_policy
 

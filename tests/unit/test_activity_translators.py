@@ -2335,3 +2335,83 @@ def test_web_activity_method_expression_preserved() -> None:
     assert isinstance(result, WebActivity)
     assert isinstance(result.method, ResolvedExpression)
     assert "dbutils.widgets.get('http_method')" in result.method.code
+
+
+# ---------------------------------------------------------------------------
+# W-20a: _parse_policy robustness
+# ---------------------------------------------------------------------------
+
+
+def test_parse_policy_expression_dict_retry_no_crash() -> None:
+    """Expression-typed retry should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": {"type": "Expression", "value": "@pipeline().parameters.retryCount"}})
+    assert "max_retries" not in result
+
+
+def test_parse_policy_string_expression_retry_no_crash() -> None:
+    """String expression retry should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": "@pipeline().parameters.retryCount"})
+    assert "max_retries" not in result
+
+
+def test_parse_policy_integer_timeout() -> None:
+    """Integer timeout should be accepted directly."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"timeout": 30})
+    assert result["timeout_seconds"] == 30
+
+
+def test_parse_policy_expression_dict_timeout_no_crash() -> None:
+    """Expression-typed timeout should not crash _parse_policy."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"timeout": {"type": "Expression", "value": "@pipeline().parameters.timeout"}})
+    assert "timeout_seconds" not in result
+
+
+def test_parse_policy_normal_values_still_work() -> None:
+    """Normal policy values should parse correctly (regression guard)."""
+    from wkmigrate.translators.activity_translators.activity_translator import _parse_policy
+
+    result = _parse_policy({"retry": 2, "timeout": "0.00:30:00", "retry_interval_in_seconds": 60})
+    assert result["max_retries"] == 2
+    assert result["timeout_seconds"] == 1800
+    assert result["min_retry_interval_millis"] == 60000
+
+
+# ---------------------------------------------------------------------------
+# W-20c: typeProperties normalization
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_activity_flattens_type_properties() -> None:
+    """typeProperties should be flattened into the activity root."""
+    activity = {
+        "name": "SetVar",
+        "type": "SetVariable",
+        "depends_on": [],
+        "typeProperties": {"variable_name": "x", "value": "hello"},
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "x"
+    assert result.variable_value == "'hello'"
+
+
+def test_normalize_activity_preserves_flat_format() -> None:
+    """Activities already in SDK flat format should work unchanged."""
+    activity = {
+        "name": "SetVar",
+        "type": "SetVariable",
+        "depends_on": [],
+        "variable_name": "x",
+        "value": "hello",
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "x"
