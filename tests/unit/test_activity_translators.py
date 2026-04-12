@@ -1654,7 +1654,7 @@ def test_parse_variable_value_activity_output_double_quotes() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": '@activity("LookupTask").output.firstRow', "type": "Expression"}, ctx)
 
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')['firstRow']"
 
 
 def test_parse_variable_value_variables_reference_double_quotes() -> None:
@@ -1740,7 +1740,7 @@ def test_parse_variable_value_nested_output_property() -> None:
     """parse_variable_value resolves nested activity output like firstRow.myColumn."""
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('Lookup').output.firstRow.col1", "type": "Expression"}, ctx)
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col1']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='Lookup', key='result')['firstRow']['col1']"
 
 
 def test_parse_variable_value_static_string() -> None:
@@ -1756,7 +1756,7 @@ def test_parse_variable_value_activity_output() -> None:
     ctx = TranslationContext()
     result = parse_variable_value({"value": "@activity('LookupTask').output.firstRow", "type": "Expression"}, ctx)
 
-    assert result == "json.loads(dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result'))['firstRow']"
+    assert result == "dbutils.jobs.taskValues.get(taskKey='LookupTask', key='result')['firstRow']"
 
 
 def test_parse_variable_value_pipeline_system_var() -> None:

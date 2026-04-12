@@ -135,7 +135,8 @@ def test_set_variable_concat_with_lookup_output_translates_with_dependency(
         t for t in result.tasks if isinstance(t, SetVariableActivity) and t.variable_name == "lookup_result_message"
     )
     assert "LookupStep" in task.variable_value
-    assert "json.loads" in task.variable_value
+    assert "json.loads" not in task.variable_value
+    assert "taskValues.get" in task.variable_value
     assert task.depends_on is not None
     assert any(dep.task_key == "LookupStep" for dep in task.depends_on if dep is not None)
 

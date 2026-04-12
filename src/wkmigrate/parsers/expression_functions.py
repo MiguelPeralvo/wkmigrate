@@ -139,7 +139,7 @@ def _emit_div(args: list[str]) -> str | UnsupportedValue:
         return error
     left = _coerce_numeric_operand(args[0])
     right = _coerce_numeric_operand(args[1])
-    return f"int({left} / {right})"
+    return f"({left} // {right})"
 
 
 def _emit_cast(cast_name: str, py_cast: str) -> FunctionEmitter:

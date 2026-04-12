@@ -27,8 +27,8 @@ def test_emit_math_functions() -> None:
     assert _emit_expression("add(1, 2)") == "(1 + 2)"
     assert _emit_expression("sub(5, 3)") == "(5 - 3)"
     assert _emit_expression("mul(2, 4)") == "(2 * 4)"
-    assert _emit_expression("div(10, 2)") == "int(10 / 2)"
-    assert _emit_expression("div(-7, 2)") == "int(-7 / 2)"
+    assert _emit_expression("div(10, 2)") == "(10 // 2)"
+    assert _emit_expression("div(-7, 2)") == "(-7 // 2)"
     assert _emit_expression("mod(10, 3)") == "(10 % 3)"
 
 
@@ -87,7 +87,7 @@ def test_emit_context_variables_reference() -> None:
 
 def test_emit_activity_output_reference() -> None:
     emitted = _emit_expression("@activity('Lookup').output.firstRow.col")
-    assert emitted == "json.loads(dbutils.jobs.taskValues.get(taskKey='Lookup', key='result'))['firstRow']['col']"
+    assert emitted == "dbutils.jobs.taskValues.get(taskKey='Lookup', key='result')['firstRow']['col']"
 
 
 def test_emit_pipeline_system_and_parameter_references() -> None:
@@ -292,3 +292,48 @@ def test_emit_greater_with_two_literals_no_redundant_coercion() -> None:
     """greater(100, 50) with two numeric literals should not add coercion."""
     emitted = _emit_expression("@greater(100, 50)")
     assert emitted == "(100 > 50)"
+
+
+# ---------------------------------------------------------------------------
+# W-23: activity output must NOT wrap in json.loads
+# ---------------------------------------------------------------------------
+
+
+def test_activity_output_no_json_loads() -> None:
+    """activity('X').output should NOT wrap in json.loads — taskValues stores objects natively."""
+    resolved = get_literal_or_expression("@activity('Lookup').output.firstRow.col")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "json.loads" not in resolved.code
+    assert "taskValues.get" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-24: greaterOrEquals/lessOrEquals must coerce pipeline params to numeric
+# ---------------------------------------------------------------------------
+
+
+def test_greater_or_equals_coerces_parameter() -> None:
+    """greaterOrEquals(pipeline().parameters.count, 10) must coerce param to numeric."""
+    resolved = get_literal_or_expression("@greaterOrEquals(pipeline().parameters.count, 10)")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "int(" in resolved.code or "float(" in resolved.code
+
+
+def test_less_or_equals_coerces_parameter() -> None:
+    """lessOrEquals(pipeline().parameters.limit, 100) must coerce param to numeric."""
+    resolved = get_literal_or_expression("@lessOrEquals(pipeline().parameters.limit, 100)")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "int(" in resolved.code or "float(" in resolved.code
+
+
+# ---------------------------------------------------------------------------
+# W-25: div() must emit integer division (//) not float division (/)
+# ---------------------------------------------------------------------------
+
+
+def test_div_emits_integer_division() -> None:
+    """@div(10, 3) must use // (integer division), not / (float division)."""
+    resolved = get_literal_or_expression("@div(10, 3)")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "//" in resolved.code
+    assert resolved.code.count("/") >= 2  # // has two slashes

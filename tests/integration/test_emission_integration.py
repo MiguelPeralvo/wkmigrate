@@ -188,13 +188,13 @@ def test_expression_resolution_tracks_imports(
     complex_expression_additional_cases_pipeline: PipelineResource,
 ) -> None:
     """Expressions that use json.loads or datetime helpers report required imports."""
-    # concat with activity output requires json import
+    # activity output no longer requires json import (taskValues stores objects natively)
     resolved = get_literal_or_expression(
         {"type": "Expression", "value": "@concat('prefix-', activity('LookupStep').output.firstRow.name)"},
         context=None,
     )
     if hasattr(resolved, "required_imports"):
-        assert "json" in resolved.required_imports
+        assert "json" not in resolved.required_imports
 
     # utcNow requires datetime helpers
     resolved = get_literal_or_expression(
