@@ -56,11 +56,11 @@ from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
 
 _CONDITION_FUNCTION_TO_OP: dict[str, str] = {
-    "equals": "==",
-    "greater": ">",
-    "greaterorequals": ">=",
-    "less": "<",
-    "lessorequals": "<=",
+    "equals": "EQUAL_TO",
+    "greater": "GREATER_THAN",
+    "greaterorequals": "GREATER_THAN_OR_EQUAL",
+    "less": "LESS_THAN",
+    "lessorequals": "LESS_THAN_OR_EQUAL",
 }
 
 
@@ -215,7 +215,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
             right = _emit_condition_operand(parsed.args[0].args[1], context)
             if isinstance(right, UnsupportedValue):
                 return right
-            return {"op": "!=", "left": left, "right": right}
+            return {"op": "NOT_EQUAL", "left": left, "right": right}
         return UnsupportedValue(
             value=condition,
             message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
@@ -246,7 +246,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
         ),
         stacklevel=3,
     )
-    return {"op": "==", "left": f"bool({emitted})", "right": "True"}
+    return {"op": "EQUAL_TO", "left": f"bool({emitted})", "right": "True"}
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:

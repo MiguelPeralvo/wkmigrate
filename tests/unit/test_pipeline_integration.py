@@ -79,7 +79,7 @@ def test_conditional_pipeline_if_condition(complex_pipeline_fixtures: list[dict]
     if_condition = next(t for t in result.tasks if isinstance(t, IfConditionActivity))
 
     assert if_condition is not None
-    assert if_condition.op == ">"
+    assert if_condition.op == "GREATER_THAN"
 
     # Count total tasks including flattened children
     assert len(result.tasks) == fixture["expected"]["task_count"]
