@@ -10,12 +10,13 @@ import warnings
 from wkmigrate.translators.activity_translators.activity_translator import translate_activities_with_context
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.not_translatable import NotTranslatableWarning
+from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.translators.pipeline_translators.parameter_translator import translate_parameters
 from wkmigrate.translators.trigger_translators.schedule_trigger_translator import translate_schedule_trigger
 from wkmigrate.utils import append_system_tags
 
 
-def translate_pipeline(pipeline: dict) -> Pipeline:
+def translate_pipeline(pipeline: dict, emission_config: EmissionConfig | None = None) -> Pipeline:
     """
     Translates an ADF pipeline dictionary into a ``Pipeline``.
 
@@ -38,7 +39,9 @@ def translate_pipeline(pipeline: dict) -> Pipeline:
                 ),
                 stacklevel=2,
             )
-        translated_tasks, _ctx = translate_activities_with_context(pipeline.get("activities"))
+        translated_tasks, _ctx = translate_activities_with_context(
+            pipeline.get("activities"), emission_config=emission_config
+        )
         pipeline_ir = Pipeline(
             name=pipeline.get("name", "UNNAMED_WORKFLOW"),
             parameters=translate_parameters(pipeline.get("parameters")),

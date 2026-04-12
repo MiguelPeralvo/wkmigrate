@@ -13,7 +13,7 @@ from importlib import import_module
 from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.models.ir.pipeline import RunJobActivity
 from wkmigrate.models.workflows.artifacts import PreparedActivity
-from wkmigrate.preparers.utils import get_base_task
+from wkmigrate.preparers.utils import get_base_task, unwrap_value
 from wkmigrate.utils import parse_mapping
 
 
@@ -25,6 +25,10 @@ def prepare_run_job_activity(
     """
     Builds the task payload for a Run Job activity.
 
+    ``existing_job_id`` and ``job_parameters`` are unwrapped through ``unwrap_value()``
+    so dynamic expressions (stored as ``ResolvedExpression`` in the IR) are embedded
+    as their Python-code string form. Meta-KPI AD-3 is satisfied.
+
     Args:
         activity: Activity definition emitted by the translators
         default_files_to_delta_sinks: Optional override for DLT generation of inner activities.
@@ -34,7 +38,12 @@ def prepare_run_job_activity(
         Prepared activity containing the Run Job task configuration.
     """
     if activity.existing_job_id:
-        run_job_task = parse_mapping({"job_id": activity.existing_job_id, "job_parameters": activity.job_parameters})
+        run_job_task = parse_mapping(
+            {
+                "job_id": unwrap_value(activity.existing_job_id),
+                "job_parameters": unwrap_value(activity.job_parameters),
+            }
+        )
         task = parse_mapping({**get_base_task(activity), "run_job_task": run_job_task})
         return PreparedActivity(task=task)
 

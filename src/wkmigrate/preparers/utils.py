@@ -4,7 +4,44 @@ from __future__ import annotations
 from typing import Any
 from databricks.sdk.service.compute import Library, MavenLibrary, PythonPyPiLibrary, RCranLibrary
 from wkmigrate.models.ir.pipeline import Activity
+from wkmigrate.parsers.expression_parsers import ResolvedExpression
 from wkmigrate.utils import parse_mapping
+
+
+def unwrap_value(value: Any) -> Any:
+    """Unwrap a ``ResolvedExpression`` to its Python code string.
+
+    Preparers embed IR field values into Databricks task dicts or notebook code.
+    Properties adopted via the shared ``get_literal_or_expression()`` utility may
+    produce either a plain Python value (literal) or a ``ResolvedExpression`` wrapper
+    (dynamic expression). This helper unwraps the latter so the embed site gets a
+    plain string ready to drop into generated code.
+
+    Rules:
+
+    * ``None`` passes through.
+    * ``ResolvedExpression`` returns its ``.code`` attribute (the emitted Python or
+      SQL expression string).
+    * List values are recursively unwrapped element-by-element.
+    * Dict values are recursively unwrapped value-by-value (keys are never wrapped).
+    * Any other value is returned as-is.
+
+    This is the single point of ``ResolvedExpression`` → plain-value conversion for
+    preparers. Adding a new preparer adoption = call ``unwrap_value()`` where the
+    preparer embeds the value into a task dict.
+
+    Meta-KPI: AD-3 (preparer raw-embedding count) is satisfied when every preparer
+    that reads an adopted property routes it through this helper.
+    """
+    if value is None:
+        return None
+    if isinstance(value, ResolvedExpression):
+        return value.code
+    if isinstance(value, list):
+        return [unwrap_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: unwrap_value(v) for k, v in value.items()}
+    return value
 
 
 def get_base_task(activity: Activity) -> dict[str, Any]:

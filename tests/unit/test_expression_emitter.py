@@ -100,6 +100,7 @@ def test_emit_unknown_function_returns_unsupported() -> None:
     assert isinstance(emitted, UnsupportedValue)
     assert "Unsupported function" in emitted.message
 
+
 def test_get_literal_or_expression_static_literal() -> None:
     resolved = get_literal_or_expression("hello")
     assert not isinstance(resolved, UnsupportedValue)
