@@ -11,6 +11,7 @@ from wkmigrate.parsers.format_converter import convert_adf_datetime_format_to_sp
 
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
 _PIPELINE_PARAMETER_EXPRESSION_PREFIX = "dbutils.widgets.get("
+_TASKVALUES_EXPRESSION_PREFIX = "dbutils.jobs.taskValues.get("
 
 
 def _require_arity(
@@ -53,7 +54,8 @@ def _emit_unary_string_call(name: str, method: str) -> FunctionEmitter:
     def _emit(args: list[str]) -> str | UnsupportedValue:
         if error := _require_arity(name, args, 1, 1):
             return error
-        return f"str({args[0]}).{method}()"
+        arg = args[0]
+        return f"(None if ({arg}) is None else str({arg}).{method}())"
 
     return _emit
 
@@ -104,9 +106,9 @@ def _emit_binary_operator(name: str, operator: str) -> FunctionEmitter:
 
 
 def _coerce_numeric_operand(arg: str) -> str:
-    """Coerce pipeline parameter widget expressions to numeric values in math contexts."""
+    """Coerce string-returning expressions to numeric values in math contexts."""
 
-    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX):
+    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX) or arg.startswith(_TASKVALUES_EXPRESSION_PREFIX):
         return f"(lambda __wkm_p: int(__wkm_p) if __wkm_p.lstrip('-').isdigit() else float(__wkm_p))(str({arg}))"
     return arg
 

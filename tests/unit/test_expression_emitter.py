@@ -19,7 +19,7 @@ def _emit_expression(expression: str, context: TranslationContext | None = None)
 def test_emit_string_functions() -> None:
     assert _emit_expression("concat('a', 'b')") == "str('a') + str('b')"
     assert _emit_expression("replace('abc', 'a', 'z')") == "str('abc').replace('a', 'z')"
-    assert _emit_expression("toLower('ABC')") == "str('ABC').lower()"
+    assert _emit_expression("toLower('ABC')") == "(None if ('ABC') is None else str('ABC').lower())"
     assert _emit_expression("substring('abcdef', 1, 3)") == "str('abcdef')[1:1 + 3]"
 
 
@@ -381,3 +381,38 @@ def test_emit_base64_functions() -> None:
 
 def test_emit_nth_index_of() -> None:
     assert _emit_expression("nthIndexOf('a-b-c', '-', 2)") == "_wkmigrate_nth_index_of('a-b-c', '-', 2)"
+
+
+# ---------------------------------------------------------------------------
+# W-28: taskValues numeric coercion + null-safe string ops
+# ---------------------------------------------------------------------------
+
+
+def test_variables_in_numeric_context_are_coerced() -> None:
+    """variables() references must be coerced in add/sub/greater/etc."""
+    ctx = TranslationContext().with_variable("count", "set_var_count")
+    emitted = _emit_expression("add(variables('count'), 1)", context=ctx)
+    assert "lambda __wkm_p" in emitted
+
+
+def test_activity_output_in_numeric_context_is_coerced() -> None:
+    """activity() output refs must be coerced in numeric contexts."""
+    emitted = _emit_expression("greater(activity('Lookup').output.firstRow.count, 50)")
+    assert "lambda __wkm_p" in emitted
+
+
+def test_unary_string_ops_preserve_none() -> None:
+    """trim/toLower/toUpper must not convert None to 'None' string."""
+    emitted = _emit_expression("trim(null)")
+    assert "None" in emitted
+    assert "is None" in emitted
+
+    emitted2 = _emit_expression("toLower(null)")
+    assert "is None" in emitted2
+
+
+def test_coalesce_with_trim_preserves_null_fallthrough() -> None:
+    """coalesce(trim(null_expr), 'fallback') must fall through when inner is None."""
+    emitted = _emit_expression("coalesce(trim(null), 'fallback')")
+    assert "is None" in emitted
+    assert "'fallback'" in emitted
