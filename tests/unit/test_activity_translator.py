@@ -177,7 +177,7 @@ def test_translate_activities_parses_results(activity_definition, expected_resul
                 name="IfConditionActivity",
                 task_key="IfConditionActivity",
                 description="Test if-else condition activity",
-                op="EQUAL_TO",
+                op="==",
                 left="true",
                 right="true",
                 child_activities=[],

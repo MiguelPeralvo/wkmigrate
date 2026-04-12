@@ -49,8 +49,20 @@ def prepare_copy_activity(
     source_definition = merge_dataset_definition(activity.source_dataset, activity.source_properties)
     sink_definition = merge_dataset_definition(activity.sink_dataset, activity.sink_properties)
     column_mapping = [asdict(mapping) for mapping in (activity.column_mapping or [])]
-    if not column_mapping:
-        raise ValueError("No column mapping provided for copy data task")
+
+    if "dataset_name" not in source_definition or "dataset_name" not in sink_definition:
+        base_task = get_base_task(activity)
+        task = parse_mapping({**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/copy_notebooks/{activity.task_key}"}})
+        placeholder_content = (
+            "# Databricks notebook source\n"
+            f"# PLACEHOLDER: Copy activity '{activity.name}' could not be fully translated\n"
+            "# Missing dataset definitions — manual configuration required\n"
+        )
+        notebook = NotebookArtifact(
+            file_path=f"/wkmigrate/copy_notebooks/{activity.task_key}",
+            content=placeholder_content,
+        )
+        return PreparedActivity(task=task, notebooks=[notebook])
 
     data_source_secrets = collect_data_source_secrets(source_definition, credentials_scope)
     data_sink_secrets = collect_data_source_secrets(sink_definition, credentials_scope)

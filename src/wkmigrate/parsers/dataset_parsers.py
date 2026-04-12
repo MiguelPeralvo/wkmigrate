@@ -239,10 +239,10 @@ def merge_dataset_definition(dataset: Dataset | dict | None, properties: Dataset
     Returns:
         Flat dictionary combining all dataset and property fields.
     """
-    if dataset is None or properties is None:
-        raise ValueError("Dataset definition or properties missing")
-    dataset_dict = dataset_to_dict(dataset)
-    properties_dict = dataset_properties_to_dict(properties)
+    if dataset is None and properties is None:
+        return {}
+    dataset_dict = dataset_to_dict(dataset) if dataset is not None else {}
+    properties_dict = dataset_properties_to_dict(properties) if properties is not None else {}
     return {**dataset_dict, **properties_dict}
 
 

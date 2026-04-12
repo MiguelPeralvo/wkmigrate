@@ -56,11 +56,11 @@ from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
 
 _CONDITION_FUNCTION_TO_OP: dict[str, str] = {
-    "equals": "EQUAL_TO",
-    "greater": "GREATER_THAN",
-    "greaterorequals": "GREATER_THAN_OR_EQUAL",
-    "less": "LESS_THAN",
-    "lessorequals": "LESS_THAN_OR_EQUAL",
+    "equals": "==",
+    "greater": ">",
+    "greaterorequals": ">=",
+    "less": "<",
+    "lessorequals": "<=",
 }
 
 
@@ -215,7 +215,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
             right = _emit_condition_operand(parsed.args[0].args[1], context)
             if isinstance(right, UnsupportedValue):
                 return right
-            return {"op": "NOT_EQUAL", "left": left, "right": right}
+            return {"op": "!=", "left": left, "right": right}
         return UnsupportedValue(
             value=condition,
             message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
@@ -246,7 +246,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
         ),
         stacklevel=3,
     )
-    return {"op": "EQUAL_TO", "left": str(emitted), "right": "True"}
+    return {"op": "==", "left": f"bool({emitted})", "right": "True"}
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:
@@ -264,10 +264,10 @@ def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> st
 
 def _validate_condition_expression(expression: dict) -> UnsupportedValue | None:
     """Validates that parsed condition expression contains required fields."""
-    if not expression.get("op"):
+    if expression.get("op") is None:
         return UnsupportedValue(value=expression, message="Missing field 'op' in if condition expression")
-    if not expression.get("left"):
+    if expression.get("left") is None:
         return UnsupportedValue(value=expression, message="Missing field 'left' in if condition expression")
-    if not expression.get("right"):
+    if expression.get("right") is None:
         return UnsupportedValue(value=expression, message="Missing field 'right' in if condition expression")
     return None

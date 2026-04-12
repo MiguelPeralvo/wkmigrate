@@ -580,12 +580,12 @@ def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fi
         result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "EQUAL_TO"
+    assert result.op == "=="
     assert result.right == "True"
 
 
 def test_if_condition_not_equals_expression() -> None:
-    """not(equals()) is translated to the NOT_EQUAL condition op."""
+    """not(equals()) is translated to the != condition op."""
     activity = {
         "name": "if_not_equals",
         "type": "IfCondition",
@@ -596,7 +596,7 @@ def test_if_condition_not_equals_expression() -> None:
     result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "NOT_EQUAL"
+    assert result.op == "!="
     assert result.left == "left"
     assert result.right == "right"
 
@@ -620,7 +620,7 @@ def test_if_condition_dynamic_left_operand_expression() -> None:
     result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "EQUAL_TO"
+    assert result.op == "=="
     assert result.left == "dbutils.widgets.get('X')"
     assert result.right == "value"
 
@@ -657,7 +657,7 @@ def test_if_condition_and_compound_predicate() -> None:
         result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "EQUAL_TO"
+    assert result.op == "=="
     assert result.right == "True"
 
 
@@ -676,17 +676,17 @@ def test_if_condition_or_compound_predicate() -> None:
         result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "EQUAL_TO"
+    assert result.op == "=="
     assert result.right == "True"
 
 
 def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:
-    """IfCondition with simple @equals still uses native EQUAL_TO op (no regression)."""
+    """IfCondition with simple @equals still uses native == op (no regression)."""
     fixture = get_fixture(if_condition_activity_fixtures, "equals_both_branches")
     result = translate_activity(fixture["input"])
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "EQUAL_TO"
+    assert result.op == "=="
 
 
 def test_unsupported_type_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
