@@ -337,3 +337,47 @@ def test_div_emits_integer_division() -> None:
     assert not isinstance(resolved, UnsupportedValue)
     assert "//" in resolved.code
     assert resolved.code.count("/") >= 2  # // has two slashes
+
+
+# ---------------------------------------------------------------------------
+# W-27: Missing DateTime & Utility Functions
+# ---------------------------------------------------------------------------
+
+
+def test_emit_datetime_extraction_functions() -> None:
+    assert _emit_expression("dayOfWeek(utcNow())") == "_wkmigrate_day_of_week(_wkmigrate_utc_now())"
+    assert _emit_expression("dayOfMonth(utcNow())") == "_wkmigrate_day_of_month(_wkmigrate_utc_now())"
+    assert _emit_expression("dayOfYear(utcNow())") == "_wkmigrate_day_of_year(_wkmigrate_utc_now())"
+
+
+def test_emit_ticks() -> None:
+    assert _emit_expression("ticks(utcNow())") == "_wkmigrate_ticks(_wkmigrate_utc_now())"
+
+
+def test_emit_add_minutes_and_seconds() -> None:
+    assert _emit_expression("addMinutes(utcNow(), 30)") == "_wkmigrate_add_minutes(_wkmigrate_utc_now(), 30)"
+    assert _emit_expression("addSeconds(utcNow(), 60)") == "_wkmigrate_add_seconds(_wkmigrate_utc_now(), 60)"
+
+
+def test_emit_existing_datetime_functions() -> None:
+    assert _emit_expression("utcNow()") == "_wkmigrate_utc_now()"
+    assert _emit_expression("addDays(utcNow(), 1)") == "_wkmigrate_add_days(_wkmigrate_utc_now(), 1)"
+    assert _emit_expression("addHours(utcNow(), 2)") == "_wkmigrate_add_hours(_wkmigrate_utc_now(), 2)"
+    assert _emit_expression("startOfDay(utcNow())") == "_wkmigrate_start_of_day(_wkmigrate_utc_now())"
+
+
+def test_emit_guid() -> None:
+    assert _emit_expression("guid()") == "_wkmigrate_guid()"
+
+
+def test_emit_rand() -> None:
+    assert _emit_expression("rand(1, 100)") == "_wkmigrate_rand(1, 100)"
+
+
+def test_emit_base64_functions() -> None:
+    assert _emit_expression("base64('hello')") == "_wkmigrate_base64('hello')"
+    assert _emit_expression("base64ToString('aGVsbG8=')") == "_wkmigrate_base64_to_string('aGVsbG8=')"
+
+
+def test_emit_nth_index_of() -> None:
+    assert _emit_expression("nthIndexOf('a-b-c', '-', 2)") == "_wkmigrate_nth_index_of('a-b-c', '-', 2)"
