@@ -231,8 +231,10 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
             return right
         return {"op": op_name, "left": left, "right": right}
 
-    # Fallback: emit the entire expression as Python code and compare to "True".
+    # Fallback: emit the entire expression as Python code for truthy evaluation.
     # This handles @and(...), @or(...), @if(...), and any non-comparison expression.
+    # We set right="" so downstream consumers (e.g. lmv walker) skip the pair
+    # rather than producing a semantically wrong "== True" comparison.
     emitted = emit(parsed, context)
     if isinstance(emitted, UnsupportedValue):
         return UnsupportedValue(
@@ -246,7 +248,7 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
         ),
         stacklevel=3,
     )
-    return {"op": "EQUAL_TO", "left": f"bool({emitted})", "right": "True"}
+    return {"op": "EQUAL_TO", "left": emitted, "right": ""}
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:

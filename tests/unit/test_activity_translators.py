@@ -581,7 +581,9 @@ def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fi
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions no longer wrap with right="True"
+    # right="" signals a truthy predicate (lmv walker skips empty right)
+    assert result.right == ""
 
 
 def test_if_condition_not_equals_expression() -> None:
@@ -658,7 +660,8 @@ def test_if_condition_and_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
+    assert result.right == ""
 
 
 def test_if_condition_or_compound_predicate() -> None:
@@ -677,7 +680,8 @@ def test_if_condition_or_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == "True"
+    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
+    assert result.right == ""
 
 
 def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:

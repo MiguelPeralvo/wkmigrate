@@ -49,7 +49,9 @@ def prepare_lookup_activity(
 
     if "dataset_name" not in source_definition:
         base_task = get_base_task(activity)
-        task = parse_mapping({**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/lookup_notebooks/{activity.task_key}"}})
+        task = parse_mapping(
+            {**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/lookup_notebooks/{activity.task_key}"}}
+        )
         placeholder_content = (
             "# Databricks notebook source\n"
             f"# PLACEHOLDER: Lookup activity '{activity.name}' could not be fully translated\n"

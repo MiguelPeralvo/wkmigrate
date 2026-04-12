@@ -52,7 +52,9 @@ def prepare_copy_activity(
 
     if "dataset_name" not in source_definition or "dataset_name" not in sink_definition:
         base_task = get_base_task(activity)
-        task = parse_mapping({**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/copy_notebooks/{activity.task_key}"}})
+        task = parse_mapping(
+            {**base_task, "notebook_task": {"notebook_path": f"/wkmigrate/copy_notebooks/{activity.task_key}"}}
+        )
         placeholder_content = (
             "# Databricks notebook source\n"
             f"# PLACEHOLDER: Copy activity '{activity.name}' could not be fully translated\n"
