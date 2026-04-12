@@ -42,7 +42,6 @@ with ``condition_task`` dependency edges.
 from __future__ import annotations
 from importlib import import_module
 
-import ast
 import warnings
 
 from wkmigrate.models.ir.translation_context import TranslationContext
@@ -202,25 +201,6 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
         )
 
     lowered_name = parsed.name.lower()
-    if lowered_name == "not":
-        if (
-            len(parsed.args) == 1
-            and isinstance(parsed.args[0], FunctionCall)
-            and parsed.args[0].name.lower() == "equals"
-            and len(parsed.args[0].args) == 2
-        ):
-            left = _emit_condition_operand(parsed.args[0].args[0], context)
-            if isinstance(left, UnsupportedValue):
-                return left
-            right = _emit_condition_operand(parsed.args[0].args[1], context)
-            if isinstance(right, UnsupportedValue):
-                return right
-            return {"op": "NOT_EQUAL", "left": left, "right": right}
-        return UnsupportedValue(
-            value=condition,
-            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
-        )
-
     op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
     if op_name is not None and len(parsed.args) == 2:
         left = _emit_condition_operand(parsed.args[0], context)
@@ -252,16 +232,12 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:
-    """Emit condition operand while preserving legacy literal formatting."""
+    """Emit condition operand as Python code."""
 
     emitted = emit(operand, context)
     if isinstance(emitted, UnsupportedValue):
         return emitted
-    try:
-        literal = ast.literal_eval(emitted)
-    except (SyntaxError, ValueError):
-        return emitted
-    return str(literal)
+    return emitted
 
 
 def _validate_condition_expression(expression: dict) -> UnsupportedValue | None:

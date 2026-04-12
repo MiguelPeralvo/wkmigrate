@@ -587,7 +587,7 @@ def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fi
 
 
 def test_if_condition_not_equals_expression() -> None:
-    """not(equals()) is translated to the NOT_EQUAL condition op."""
+    """not(equals()) falls through to compound predicate path (emits Python code)."""
     activity = {
         "name": "if_not_equals",
         "type": "IfCondition",
@@ -595,12 +595,13 @@ def test_if_condition_not_equals_expression() -> None:
         "expression": {"type": "Expression", "value": "@not(equals('left', 'right'))"},
         "if_true_activities": [],
     }
-    result = translate_activity(activity)
+    with pytest.warns(NotTranslatableWarning):
+        result = translate_activity(activity)
 
     assert isinstance(result, IfConditionActivity)
-    assert result.op == "NOT_EQUAL"
-    assert result.left == "left"
-    assert result.right == "right"
+    assert result.op == "EQUAL_TO"
+    assert result.right == ""
+    assert "not" in result.left.lower() or "!=" in result.left
 
 
 def test_if_condition_dynamic_left_operand_expression() -> None:
@@ -624,7 +625,7 @@ def test_if_condition_dynamic_left_operand_expression() -> None:
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
     assert result.left == "dbutils.widgets.get('X')"
-    assert result.right == "value"
+    assert result.right == "'value'"
 
 
 def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) -> None:
