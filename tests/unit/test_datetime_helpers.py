@@ -65,6 +65,67 @@ def test_convert_time_zone_invalid_timezone_raises_value_error() -> None:
     assert "Invalid source timezone" in str(exc.value)
 
 
+def test_convert_time_zone_windows_romance_standard_time() -> None:
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    result = convert_time_zone(dt, "UTC", "Romance Standard Time")
+    assert result.hour == 16  # CEST = UTC+2 in April
+
+
+def test_convert_time_zone_windows_eastern_standard_time() -> None:
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    result = convert_time_zone(dt, "UTC", "Eastern Standard Time")
+    assert result.hour == 10  # EDT = UTC-4 in April
+
+
+def test_convert_time_zone_windows_pacific_standard_time() -> None:
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    result = convert_time_zone(dt, "UTC", "Pacific Standard Time")
+    assert result.hour == 7  # PDT = UTC-7 in April
+
+
+def test_convert_time_zone_windows_as_source_tz() -> None:
+    """Windows timezone names should also work as source_tz."""
+    dt = datetime(2026, 4, 13, 16, 30, 0)  # naive, treated as Romance
+    result = convert_time_zone(dt, "Romance Standard Time", "UTC")
+    assert result.hour == 14  # CEST = UTC+2, so 16:30 CEST = 14:30 UTC
+
+
+def test_convert_time_zone_iana_still_works_after_w25() -> None:
+    """Regression: IANA names must continue working after W-25 fix."""
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    result = convert_time_zone(dt, "UTC", "Europe/Madrid")
+    assert result.hour == 16
+
+
+def test_convert_time_zone_unknown_still_raises_after_w25() -> None:
+    """Regression: unknown timezone names must still raise ValueError."""
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValueError):
+        convert_time_zone(dt, "UTC", "Nonexistent Time")
+
+
+def test_format_datetime_iso_string_input() -> None:
+    result = format_datetime("2026-04-13T14:30:00", "yyyy/MM/dd")
+    assert result == "2026/04/13"
+
+
+def test_format_datetime_iso_string_with_z_suffix() -> None:
+    result = format_datetime("2026-04-13T14:30:00Z", "yyyy-MM-dd HH:mm:ss")
+    assert result == "2026-04-13 14:30:00"
+
+
+def test_format_datetime_date_only_string() -> None:
+    result = format_datetime("2026-04-13", "yyyy/MM/dd")
+    assert result == "2026/04/13"
+
+
+def test_format_datetime_datetime_object_still_works_after_w27() -> None:
+    """Regression: datetime objects must continue working after W-27 fix."""
+    dt = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    result = format_datetime(dt, "yyyy-MM-dd")
+    assert result == "2026-04-13"
+
+
 def test_format_datetime_literal_text_and_zero_milliseconds() -> None:
     dt = datetime(2026, 3, 25, 14, 30, 45, 0, tzinfo=timezone.utc)
     assert format_datetime(dt, "literal_text") == "literal_text"
