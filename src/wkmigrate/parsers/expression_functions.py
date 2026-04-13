@@ -246,9 +246,19 @@ def _emit_start_of_day(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_convert_time_zone(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("convertTimeZone", args, 3, 3):
+    if error := _require_arity("convertTimeZone", args, 3, 4):
         return error
-    return f"_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]})"
+    if len(args) == 3:
+        return f"_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]})"
+    return f"_wkmigrate_format_datetime(_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]}), {args[3]})"
+
+
+def _emit_convert_from_utc(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("convertFromUtc", args, 2, 3):
+        return error
+    if len(args) == 2:
+        return f"_wkmigrate_convert_time_zone({args[0]}, 'UTC', {args[1]})"
+    return f"_wkmigrate_format_datetime(_wkmigrate_convert_time_zone({args[0]}, 'UTC', {args[1]}), {args[2]})"
 
 
 FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
@@ -300,6 +310,7 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "addhours": _emit_add_hours,
     "startofday": _emit_start_of_day,
     "converttimezone": _emit_convert_time_zone,
+    "convertfromutc": _emit_convert_from_utc,
 }
 
 # ---------------------------------------------------------------------------
@@ -504,9 +515,21 @@ def _emit_sql_start_of_day(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_sql_convert_time_zone(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("convertTimeZone", args, 3, 3):
+    if error := _require_arity("convertTimeZone", args, 3, 4):
         return error
-    return f"from_utc_timestamp(to_utc_timestamp({args[0]}, {args[1]}), {args[2]})"
+    base = f"from_utc_timestamp(to_utc_timestamp({args[0]}, {args[1]}), {args[2]})"
+    if len(args) == 3:
+        return base
+    return _emit_sql_datetime_with_format(base, args[3])
+
+
+def _emit_sql_convert_from_utc(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("convertFromUtc", args, 2, 3):
+        return error
+    base = f"from_utc_timestamp({args[0]}, {args[1]})"
+    if len(args) == 2:
+        return base
+    return _emit_sql_datetime_with_format(base, args[2])
 
 
 def _emit_sql_datetime_with_format(timestamp_expression: str, format_expression: str) -> str | UnsupportedValue:
@@ -579,6 +602,7 @@ _SPARK_SQL_FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "addhours": _emit_sql_add_hours,
     "startofday": _emit_sql_start_of_day,
     "converttimezone": _emit_sql_convert_time_zone,
+    "convertfromutc": _emit_sql_convert_from_utc,
 }
 
 # ---------------------------------------------------------------------------
