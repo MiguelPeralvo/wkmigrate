@@ -1,0 +1,1091 @@
+{
+	"name": "lakeh_a_pl_arquetipo_internal",
+	"properties": {
+		"description": "Pipeline que implementa la ejecución de la lógica del arquetipo",
+		"activities": [
+			{
+				"name": "Read Configuration",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": false,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "lakeh_a_ds_conf_json",
+						"type": "DatasetReference",
+						"parameters": {
+							"digitalCase": {
+								"value": "@pipeline().parameters.digitalCaseCode",
+								"type": "Expression"
+							},
+							"fileName": {
+								"value": "@pipeline().parameters.configFile",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Init output",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Init output tmp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Read Configuration').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "continue",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Non Skip Condition",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Trace Condition",
+									"dependencyConditions": [
+										"Completed"
+									]
+								},
+								{
+									"activity": "Debug Condition",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(variables('continue'), variables('nonSkipCondition'))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Switch fail",
+										"type": "Switch",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"on": {
+												"value": "@toUpper(coalesce(item()?.type,'default'))",
+												"type": "Expression"
+											},
+											"cases": [
+												{
+													"value": "SEND_MAIL_KO",
+													"activities": [
+														{
+															"name": "Set variable KO",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "emailKO",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "FINAL_NB_KO",
+													"activities": [
+														{
+															"name": "Set variable notebook KO",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "notebookKO",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												}
+											]
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Switch",
+										"type": "Switch",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"on": {
+												"value": "@toUpper(coalesce(item()?.type,'default'))",
+												"type": "Expression"
+											},
+											"cases": [
+												{
+													"value": "INCLUDE",
+													"activities": [
+														{
+															"name": "lakeh_a_pl_arquetipo_nested_par_internal",
+															"type": "ExecutePipeline",
+															"dependsOn": [],
+															"policy": {
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"pipeline": {
+																	"referenceName": "lakeh_a_pl_arquetipo_nested_par_internal",
+																	"type": "PipelineReference"
+																},
+																"waitOnCompletion": true,
+																"parameters": {
+																	"applicationName": {
+																		"value": "@pipeline().parameters.applicationName",
+																		"type": "Expression"
+																	},
+																	"digitalCaseCode": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	},
+																	"enable": {
+																		"value": "@pipeline().parameters.enable",
+																		"type": "Expression"
+																	},
+																	"items": {
+																		"value": "@if(contains(string(item().files), pipeline().parameters.configFile), '[error-bucle]', \n    if(startswith(string(item().files), '['),\n        string(item().files),\n        concat('[', string(item().files), ']')\n    )\n)",
+																		"type": "Expression"
+																	},
+																	"params": {
+																		"value": "@pipeline().parameters.params",
+																		"type": "Expression"
+																	},
+																	"parentUid": {
+																		"value": "@pipeline().parameters.parentUid",
+																		"type": "Expression"
+																	},
+																	"referenceDate": {
+																		"value": "@pipeline().parameters.referenceDate",
+																		"type": "Expression"
+																	},
+																	"testing": {
+																		"value": "@pipeline().parameters.testing",
+																		"type": "Expression"
+																	},
+																	"uniqueKey": {
+																		"value": "@pipeline().parameters.uniqueKey",
+																		"type": "Expression"
+																	},
+																	"uuid": {
+																		"value": "@pipeline().parameters.uuid",
+																		"type": "Expression"
+																	},
+																	"previousOutputs": {
+																		"value": "@variables('executionOutputs')",
+																		"type": "Expression"
+																	},
+																	"auxParam": {
+																		"value": "@string(coalesce(item()?.aux_params, '{}'))",
+																		"type": "Expression"
+																	}
+																}
+															}
+														},
+														{
+															"name": "Set error 2",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_a_pl_arquetipo_nested_par_internal",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_a_pl_arquetipo_nested_par_internal').error.message)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Set error code 2",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_a_pl_arquetipo_nested_par_internal",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_a_pl_arquetipo_nested_par_internal').error.errorCode)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set fail 2",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_a_pl_arquetipo_nested_par_internal",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": false
+															}
+														},
+														{
+															"name": "set outputs tmp include",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_a_pl_arquetipo_nested_par_internal",
+																	"dependencyConditions": [
+																		"Succeeded"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputsTmp",
+																"value": {
+																	"value": "@string(\n  union(\n    json(\n      if(startswith(activity('lakeh_a_pl_arquetipo_nested_par_internal').output.pipelineReturnValue.result,'{'),\n         activity('lakeh_a_pl_arquetipo_nested_par_internal').output.pipelineReturnValue.result,\n         '{}')),\n    json(variables('executionOutputs'))\n  )\n)\n",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs include",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "set outputs tmp include",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputs",
+																"value": {
+																	"value": "@variables('executionOutputsTmp')",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "SEND_MAIL_OK",
+													"activities": [
+														{
+															"name": "Set variable1",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "emailOK",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "SEND_MAIL_KO",
+													"activities": [
+														{
+															"name": "Set variable2",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "emailKO",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "FINAL_NB_OK",
+													"activities": [
+														{
+															"name": "Set variable notebook OK",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "notebookOK",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "FINAL_NB_KO",
+													"activities": [
+														{
+															"name": "Set variable notebook KO 2",
+															"type": "SetVariable",
+															"dependsOn": [],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "notebookKO",
+																"value": {
+																	"value": "@string(item())",
+																	"type": "Expression"
+																}
+															}
+														}
+													]
+												}
+											],
+											"defaultActivities": [
+												{
+													"name": "lakeh_a_pl_operational_log_info",
+													"type": "ExecutePipeline",
+													"dependsOn": [],
+													"policy": {
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"pipeline": {
+															"referenceName": "lakeh_a_pl_operational_log_info",
+															"type": "PipelineReference"
+														},
+														"waitOnCompletion": true,
+														"parameters": {
+															"applicationName": {
+																"value": "@pipeline().parameters.applicationName",
+																"type": "Expression"
+															},
+															"message": {
+																"value": "@concat('json: ',pipeline().parameters.configFile, ', name: ', item().name)",
+																"type": "Expression"
+															},
+															"parentUid": {
+																"value": "@pipeline().parameters.parentUid",
+																"type": "Expression"
+															},
+															"pipelineName": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"referenceDate": {
+																"value": "@pipeline().parameters.referenceDate",
+																"type": "Expression"
+															},
+															"uuid": {
+																"value": "@pipeline().parameters.uuid",
+																"type": "Expression"
+															}
+														}
+													}
+												},
+												{
+													"name": "lakeh_a_pl_update_control",
+													"type": "ExecutePipeline",
+													"dependsOn": [],
+													"policy": {
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"pipeline": {
+															"referenceName": "lakeh_a_pl_update_control",
+															"type": "PipelineReference"
+														},
+														"waitOnCompletion": true,
+														"parameters": {
+															"digitalCaseCode": {
+																"value": "@pipeline().parameters.digitalCaseCode",
+																"type": "Expression"
+															},
+															"enable": {
+																"value": "@pipeline().parameters.enable",
+																"type": "Expression"
+															},
+															"msg": {
+																"value": "@concat('json: ',pipeline().parameters.configFile, ', name: ', item().name)",
+																"type": "Expression"
+															},
+															"step": {
+																"value": "@item().step",
+																"type": "Expression"
+															},
+															"uniqueKey": {
+																"value": "@pipeline().parameters.uniqueKey",
+																"type": "Expression"
+															}
+														}
+													}
+												},
+												{
+													"name": "internal switch",
+													"type": "ExecutePipeline",
+													"dependsOn": [
+														{
+															"activity": "lakeh_a_pl_operational_log_info",
+															"dependencyConditions": [
+																"Completed"
+															]
+														},
+														{
+															"activity": "lakeh_a_pl_update_control",
+															"dependencyConditions": [
+																"Completed"
+															]
+														}
+													],
+													"policy": {
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"pipeline": {
+															"referenceName": "lakeh_a_pl_arquetipo_switch_internal",
+															"type": "PipelineReference"
+														},
+														"waitOnCompletion": true,
+														"parameters": {
+															"applicationName": {
+																"value": "@pipeline().parameters.applicationName",
+																"type": "Expression"
+															},
+															"digitalCaseCode": {
+																"value": "@pipeline().parameters.digitalCaseCode",
+																"type": "Expression"
+															},
+															"enable": {
+																"value": "@pipeline().parameters.enable",
+																"type": "Expression"
+															},
+															"items": {
+																"value": "@if(contains(string(item()), '\"activities\"'),\n  string(item().activities),\n  concat('[', string(item()), ']')\n)\n\n",
+																"type": "Expression"
+															},
+															"params": {
+																"value": "@pipeline().parameters.params",
+																"type": "Expression"
+															},
+															"parentUid": {
+																"value": "@pipeline().parameters.parentUid",
+																"type": "Expression"
+															},
+															"referenceDate": {
+																"value": "@pipeline().parameters.referenceDate",
+																"type": "Expression"
+															},
+															"testing": {
+																"value": "@pipeline().parameters.testing",
+																"type": "Expression"
+															},
+															"uniqueKey": {
+																"value": "@pipeline().parameters.uniqueKey",
+																"type": "Expression"
+															},
+															"uuid": {
+																"value": "@pipeline().parameters.uuid",
+																"type": "Expression"
+															},
+															"previousOutputs": {
+																"value": "@variables('executionOutputs')",
+																"type": "Expression"
+															}
+														}
+													}
+												},
+												{
+													"name": "Set error",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "internal switch",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "error",
+														"value": {
+															"value": "@concat('Error:',activity('internal switch').error.message)",
+															"type": "Expression"
+														}
+													}
+												},
+												{
+													"name": "Set error code",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "internal switch",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "errorCode",
+														"value": {
+															"value": "@concat('Error:',activity('internal switch').error.errorCode)",
+															"type": "Expression"
+														}
+													}
+												},
+												{
+													"name": "set fail",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "internal switch",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "continue",
+														"value": false
+													}
+												},
+												{
+													"name": "set outputs tmp",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "internal switch",
+															"dependencyConditions": [
+																"Succeeded"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "executionOutputsTmp",
+														"value": {
+															"value": "@string(\n  union(\n    json(\n      if(startswith(activity('internal switch').output.pipelineReturnValue.result,'{'),\n\t     concat(\n\t\t   '{\"',\n\t\t   coalesce(item()?.name, 'no_name'),\n\t\t   '\": ',\n           activity('internal switch').output.pipelineReturnValue.result,\n\t\t   '}'),\n         '{}')),\n    json(\n\t  variables('executionOutputs')\n\t  )\n  )\n)",
+															"type": "Expression"
+														}
+													}
+												},
+												{
+													"name": "set outputs",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "set outputs tmp",
+															"dependencyConditions": [
+																"Completed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "executionOutputs",
+														"value": {
+															"value": "@variables('executionOutputsTmp')",
+															"type": "Expression"
+														}
+													}
+												}
+											]
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Non Skip Condition",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "nonSkipCondition",
+								"value": {
+									"value": "@if( equals(string(coalesce(item()?.condition, 'notFound')), 'notFound'), true,\n  if(\n    contains(\n\t  variables('executionOutputs'),\n\t  concat('\"', coalesce(item()?.condition?.name, 'name_notFound'), '\"') \n\t ),\n\t if(\n\t   contains(\n\t     string(json(variables('executionOutputs'))[item().condition.name]),\n\t\t concat('\"', coalesce(item()?.condition?.internal_name, item().condition.name), '\"')\n\t   ),\n\t   if(\n\t     contains(string(json(variables('executionOutputs'))\n\t\t                 [item().condition.name]\n\t\t\t\t\t\t [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t                ),\n\t\t          concat('\"', coalesce(item()?.condition?.key, 'keyNotFound'), '\"')\n\t\t ),\n\t\t contains(string(json(variables('executionOutputs'))\n\t\t                     [item().condition.name]\n\t\t                     [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t\t\t\t\t\t [item().condition.key]),\n\t\t          item().condition.value),\n\t   false),\n\t false),  \n  false))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Trace Condition",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "txtDebug",
+								"value": {
+									"value": "@if( equals(string(coalesce(item()?.condition, 'notFound')), 'notFound'), \n     concat('No condition in the task:', coalesce(item()?.name, 'no_name')),\n     concat('executionOutputs: ', variables('executionOutputs'), ', condition found: name:',\n       coalesce(item()?.condition?.name, 'name_notFound'),\n       ', internal_name:',\n       coalesce(item()?.condition?.internal_name, item().condition.name),\n       ', key:',\n       coalesce(item()?.condition?.key, 'keyNotFound'),\n       ', value:',\n       coalesce(item()?.condition?.value, 'valueNotFound')\n     )\n)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Debug Condition",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "dummy",
+								"value": {
+									"value": "@if( equals(string(coalesce(item()?.condition, 'notFound')), 'notFound'), 'true no condition',\n  if(\n    contains(\n\t  variables('executionOutputs'),\n\t  concat('\"', coalesce(item()?.condition?.name, 'name_notFound'), '\"') \n\t ),\n\t if(\n\t   contains(\n\t     string(json(variables('executionOutputs'))[item().condition.name]),\n\t\t concat('\"', coalesce(item()?.condition?.internal_name, item().condition.name), '\"')\n\t   ),\n\t   if(\n\t     contains(string(json(variables('executionOutputs'))\n\t\t                 [item().condition.name]\n\t\t\t\t\t\t [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t                ),\n\t\t          concat('\"', coalesce(item()?.condition?.key, 'keyNotFound'), '\"')\n\t\t ),\n\t\t string(json(variables('executionOutputs'))\n\t\t                     [item().condition.name]\n\t\t                     [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t\t\t\t\t\t [item().condition.key]),\n\t   'false: no key'),\n\t'false: no internal name'),  \n  'false: no name'))",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Return error",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "ForEach1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@variables('continue')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "lakeh_a_pl_arquetipo_sendmail_KO",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@variables('error')",
+									"type": "Expression"
+								},
+								"errorCode": {
+									"value": "@variables('errorCode')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "lakeh_a_pl_arquetipo_sendmail_KO",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "lakeh_a_pl_arquetipo_sendmail_internal",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"applicationName": {
+										"value": "@pipeline().parameters.applicationName",
+										"type": "Expression"
+									},
+									"config": {
+										"value": "@variables('emailKO')",
+										"type": "Expression"
+									},
+									"configNotebook": {
+										"value": "@variables('notebookKO')",
+										"type": "Expression"
+									},
+									"digitalCaseCode": {
+										"value": "@pipeline().parameters.digitalCaseCode",
+										"type": "Expression"
+									},
+									"error": {
+										"value": "@concat('Error code: ', variables('errorCode'), '. Message: ',variables('error'))",
+										"type": "Expression"
+									},
+									"fileName": {
+										"value": "@pipeline().parameters.configFile",
+										"type": "Expression"
+									},
+									"params": {
+										"value": "@pipeline().parameters.params",
+										"type": "Expression"
+									},
+									"parentUid": {
+										"value": "@pipeline().parameters.parentUid",
+										"type": "Expression"
+									},
+									"referenceDate": {
+										"value": "@pipeline().parameters.referenceDate",
+										"type": "Expression"
+									},
+									"uid": {
+										"value": "@pipeline().parameters.uuid",
+										"type": "Expression"
+									},
+									"uniqueKey": {
+										"value": "@pipeline().parameters.uniqueKey",
+										"type": "Expression"
+									},
+									"uuid": {
+										"value": "@pipeline().parameters.uuid",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "lakeh_a_pl_arquetipo_sendmail_OK",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "lakeh_a_pl_arquetipo_sendmail_internal",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"applicationName": {
+										"value": "@pipeline().parameters.applicationName",
+										"type": "Expression"
+									},
+									"config": {
+										"value": "@variables('emailOK')",
+										"type": "Expression"
+									},
+									"configNotebook": {
+										"value": "@variables('notebookOK')",
+										"type": "Expression"
+									},
+									"digitalCaseCode": {
+										"value": "@pipeline().parameters.digitalCaseCode",
+										"type": "Expression"
+									},
+									"error": " ",
+									"fileName": {
+										"value": "@pipeline().parameters.configFile",
+										"type": "Expression"
+									},
+									"params": {
+										"value": "@pipeline().parameters.params",
+										"type": "Expression"
+									},
+									"parentUid": {
+										"value": "@pipeline().parameters.parentUid",
+										"type": "Expression"
+									},
+									"referenceDate": {
+										"value": "@pipeline().parameters.referenceDate",
+										"type": "Expression"
+									},
+									"uid": {
+										"value": "@pipeline().parameters.uuid",
+										"type": "Expression"
+									},
+									"uniqueKey": {
+										"value": "@pipeline().parameters.uniqueKey",
+										"type": "Expression"
+									},
+									"uuid": {
+										"value": "@pipeline().parameters.uuid",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Init output",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Configuration",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "executionOutputs",
+					"value": {
+						"value": "@concat('{\"pipeline_parameters\":',\n  pipeline().parameters.params,\n  '}'\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Init output tmp",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Read Configuration",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "executionOutputsTmp",
+					"value": "{}"
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "string"
+			},
+			"parentUid": {
+				"type": "string"
+			},
+			"referenceDate": {
+				"type": "string"
+			},
+			"uuid": {
+				"type": "string"
+			},
+			"digitalCaseCode": {
+				"type": "string"
+			},
+			"uniqueKey": {
+				"type": "string"
+			},
+			"enable": {
+				"type": "string"
+			},
+			"configFile": {
+				"type": "string"
+			},
+			"testing": {
+				"type": "bool"
+			},
+			"params": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"continue": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"error": {
+				"type": "String"
+			},
+			"errorCode": {
+				"type": "String"
+			},
+			"testPassed": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"testError": {
+				"type": "String"
+			},
+			"emailOK": {
+				"type": "String",
+				"defaultValue": " "
+			},
+			"emailKO": {
+				"type": "String",
+				"defaultValue": " "
+			},
+			"notebookOK": {
+				"type": "String",
+				"defaultValue": " "
+			},
+			"notebookKO": {
+				"type": "String",
+				"defaultValue": " "
+			},
+			"executionOutputs": {
+				"type": "String"
+			},
+			"executionOutputsTmp": {
+				"type": "String"
+			},
+			"nonSkipCondition": {
+				"type": "Boolean"
+			},
+			"txtDebug": {
+				"type": "String"
+			},
+			"dummy": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "lakeh_commons/lakeh_arquetipo/arquetipo"
+		},
+		"annotations": []
+	}
+}

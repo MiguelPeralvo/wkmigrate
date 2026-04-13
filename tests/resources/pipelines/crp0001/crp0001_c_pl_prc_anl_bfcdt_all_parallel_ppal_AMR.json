@@ -1,0 +1,1030 @@
+{
+	"name": "crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR",
+	"properties": {
+		"activities": [
+			{
+				"name": "persistencia",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "copiado tablon",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_prc_anl_persist_global",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"execution": "[\"qui\",\"trad\",\"refe\",\"gbc\",\"mytg\",\"peru\",\"overv\",\"cmg\",\"busc\"]"
+					}
+				}
+			},
+			{
+				"name": "control",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Fecha Inicio",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Control ejecucion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Control ejecucion').output.runOutput",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail1",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('No está activa en la tabla de control la ejecucion de ',pipeline().Pipeline)",
+									"type": "Expression"
+								},
+								"errorCode": "999"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FM_FCL",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "crp0001_pl_prc_anl_fcl_fm_ajustes_BFC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(equals(pipeline().parameters.typeExec,'historic'),\nequals(pipeline().parameters.typeExec,'custom') )",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "crp0001_pl_prc_anl_fcl_fm_BFC",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_fcl_fm_BFC",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "send_email_fcl",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "fcfm_real_VC",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_log_sendMail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"uid": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"subject_mail": "[EdD] Ejecución FC/FM finalizada",
+									"body_mail": {
+										"value": "@concat('Fecha y hora: ',variables('fecha_inicio'),'\\\\nLa ejecución de FC/FM ha acabado. Se puede refrescar el conjunto de datos de PowerBI.')",
+										"type": "Expression"
+									},
+									"destinatario_mail": "crp0001#crp0001Groupcmd"
+								}
+							}
+						},
+						{
+							"name": "fcfm_real_VC",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "crp0001_pl_prc_anl_fcl_fm_BFC",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_anl_informe_fcfm_real_desde_bfc",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"customMonth": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"customYear": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "fcfm_real_VC historic_custom",
+							"type": "ExecutePipeline",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_anl_informe_fcfm_real_desde_bfc",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"customMonth": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"customYear": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "crp0001_pl_prc_anl_fcl_fm_ajustes_BFC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "formulas",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_prc_anl_fm_ajustes_bfc",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						},
+						"year": {
+							"value": "@pipeline().parameters.customYear",
+							"type": "Expression"
+						},
+						"month": {
+							"value": "@pipeline().parameters.customMonth",
+							"type": "Expression"
+						},
+						"num_exec": {
+							"value": "@sub(pipeline().parameters.exec_copy,4)",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "datatsources",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "If Send Mail Inicio BFC",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_prc_edw_bfcdt_process_data_AMR",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"customMonth": {
+							"value": "@pipeline().parameters.customMonth",
+							"type": "Expression"
+						},
+						"customYear": {
+							"value": "@pipeline().parameters.customYear",
+							"type": "Expression"
+						},
+						"exec_bal": {
+							"value": "@pipeline().parameters.exec_bal",
+							"type": "Expression"
+						},
+						"exec_cr": {
+							"value": "@pipeline().parameters.exec_cr",
+							"type": "Expression"
+						},
+						"exec_data": {
+							"value": "@pipeline().parameters.exec_data",
+							"type": "Expression"
+						},
+						"exec_total": {
+							"value": "@pipeline().parameters.exec_total",
+							"type": "Expression"
+						},
+						"flagFCL": {
+							"value": "@pipeline().parameters.flagFCL",
+							"type": "Expression"
+						},
+						"module": {
+							"value": "@pipeline().parameters.module",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "copiado tablon",
+				"type": "DatabricksNotebook",
+				"dependsOn": [
+					{
+						"activity": "formulas",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/bfc/crp0001_c_nb_prc_edw_l_bfc_formulas_tbl",
+					"baseParameters": {
+						"flagFCL": {
+							"value": "@pipeline().parameters.flagFCL",
+							"type": "Expression"
+						},
+						"month": {
+							"value": "@pipeline().parameters.customMonth",
+							"type": "Expression"
+						},
+						"sourceArray": {
+							"value": "@activity('formulas').output.runOutput",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						},
+						"year": {
+							"value": "@pipeline().parameters.customYear",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "5",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "formulas",
+				"type": "DatabricksNotebook",
+				"dependsOn": [
+					{
+						"activity": "datatsources",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/bfc/crp0001_c_nb_prc_edw_l_bfc_formulas_AMR",
+					"baseParameters": {
+						"month": {
+							"value": "@pipeline().parameters.customMonth",
+							"type": "Expression"
+						},
+						"sourceArray": {
+							"value": "@activity('datatsources').output.pipelineReturnValue.str_array",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						},
+						"year": {
+							"value": "@pipeline().parameters.customYear",
+							"type": "Expression"
+						},
+						"flagFCL": {
+							"value": "@pipeline().parameters.flagFCL",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": {
+							"value": "@pipeline().parameters.exec_copy",
+							"type": "Expression"
+						},
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "formulas Financiero",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "datatsources",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_anl_anl_formulas_ma",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"tabledestination": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_financiero"
+					}
+				}
+			},
+			{
+				"name": "Fecha Inicio",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "fecha_inicio",
+					"value": {
+						"value": "@convertFromUtc(utcnow(),'Romance Standard Time','dd/MM/yyyy HH:mm')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "If Send Mail VC",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Fec_cerrado",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(\n    and(\n        equals(string(activity('Fec_cerrado').output.runOutput),'1')\n        ,\n        not(or(equals(pipeline().parameters.typeExec,'historic'),\n            equals(pipeline().parameters.typeExec,'custom') ) )\n        ), \n    equals(pipeline().DataFactory,'datahub01pdfcrp0001')\n)    ",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "send_email_VC",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Notebook_vx_tb_bfc_vc",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_log_sendMail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"uid": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"subject_mail": "[EdD] Vista Cliente - Carga BFC",
+									"body_mail": {
+										"value": "@concat('Se ha realizado una carga en Repsol Data CFO con la última información disponible de BFC del mes de ', string(activity('Busqueda fechaCierre').output.runOutPut),'.')",
+										"type": "Expression"
+									},
+									"destinatario_mail": "crp0001#crp0001Groupbfc"
+								}
+							}
+						},
+						{
+							"name": "Busqueda fechaCierre",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/bfc/crp0001_c_nb_busqueda_fechaCierre",
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						},
+						{
+							"name": "Notebook_vx_tb_bfc_vc",
+							"type": "DatabricksNotebook",
+							"dependsOn": [
+								{
+									"activity": "Busqueda fechaCierre",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/crp0001_c_nb_edw_etl_bfc_vc",
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": "@pipeline().globalParameters.clusterVersion",
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If Send Mail Fin BFC",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "persistencia",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(or(equals(pipeline().parameters.typeExec,'historic'),\n    equals(pipeline().parameters.typeExec,'custom') ) )",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "send_mail_fin_BFC",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_log_sendMail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"uid": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"subject_mail": "[EdD] Ejecución BFC finalizada",
+									"body_mail": "la ejecución de BFC ha acabado. Se puede refrescar el conjunto de datos de PowerBI.",
+									"destinatario_mail": "crp0001#crp0001Groupcmd"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "persistencia colecciones",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "persistencia",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_prc_anl_persist_global",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"ParamColecBFC_month": {
+							"value": "@pipeline().parameters.customMonth",
+							"type": "Expression"
+						},
+						"ParamColecBFC_typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						},
+						"ParamColecBFC_year": {
+							"value": "@pipeline().parameters.customYear",
+							"type": "Expression"
+						},
+						"execution": "[\"colec_bfc\"]"
+					}
+				}
+			},
+			{
+				"name": "crp0001_pl_gen_gen_wait_bfc",
+				"description": "Proceso que sirve de trigger al orquestados de Aria para lanzar procesos de Casos de Uso que dependen da cada actualización de datos de BFC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "copiado tablon",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_gen_gen_wait_bfc",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "insert_lastyr_gbc",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "formulas_gbc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_anl_anl_lastyr",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"factTable": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_cdp_ind_gbc",
+						"tableName": "datahub01%env%aucdatagold.finance.crp0001_tb_aux_x_trad_lastyr"
+					}
+				}
+			},
+			{
+				"name": "formulas_gbc",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "datatsources",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_anl_anl_formulas",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"tabledestination": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_cdp_ind_gbc"
+					}
+				}
+			},
+			{
+				"name": "crp0001_pl_prc_anl_eyp_wait_bfc",
+				"description": "Proceso que sirve de trigger al orquestados de Aria para lanzar procesos de E&P que dependen da cada actualización de datos de BFC",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "copiado tablon",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "crp0001_c_pl_gen_gen_wait_bfc",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "If Send Mail Inicio BFC",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "control",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(or(equals(pipeline().parameters.typeExec,'historic'),\n    equals(pipeline().parameters.typeExec,'custom') ) )",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "send_mail_inicio_BFC",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_anl_log_sendMail",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"uid": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"subject_mail": "[EdD] Ejecución BFC iniciada",
+									"body_mail": "El procesado de datos de BFC se ha inciado.",
+									"destinatario_mail": "crp0001#crp0001Groupcmd"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Control ejecucion",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/crp0001_c_nb_control_ejecucion",
+					"baseParameters": {
+						"pipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "Fec_cerrado",
+				"type": "DatabricksNotebook",
+				"dependsOn": [
+					{
+						"activity": "persistencia",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/bfc/crp0001_c_nb_fec_cerrado",
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "string",
+				"defaultValue": "crp0001"
+			},
+			"customMonth": {
+				"type": "string",
+				"defaultValue": "07"
+			},
+			"customYear": {
+				"type": "string",
+				"defaultValue": "2024"
+			},
+			"deleteFactTable": {
+				"type": "string",
+				"defaultValue": "true"
+			},
+			"exec_bal": {
+				"type": "int",
+				"defaultValue": 5
+			},
+			"exec_copy": {
+				"type": "int",
+				"defaultValue": 10
+			},
+			"exec_cr": {
+				"type": "int",
+				"defaultValue": 4
+			},
+			"exec_data": {
+				"type": "int",
+				"defaultValue": 5
+			},
+			"exec_total": {
+				"type": "int",
+				"defaultValue": 4
+			},
+			"flagFCL": {
+				"type": "string",
+				"defaultValue": "false"
+			},
+			"module": {
+				"type": "array",
+				"defaultValue": [
+					"all"
+				]
+			},
+			"tabledestination": {
+				"type": "string",
+				"defaultValue": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_bfc"
+			},
+			"typeExec": {
+				"type": "string",
+				"defaultValue": "current"
+			}
+		},
+		"variables": {
+			"cosa1": {
+				"type": "String"
+			},
+			"cosa2": {
+				"type": "String"
+			},
+			"fecha_inicio": {
+				"type": "String"
+			},
+			"str_array": {
+				"type": "String"
+			},
+			"var_copy": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "crp0001/bfc/AMR"
+		},
+		"annotations": []
+	}
+}

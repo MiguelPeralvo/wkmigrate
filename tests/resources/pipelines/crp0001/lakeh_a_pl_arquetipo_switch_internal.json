@@ -1,0 +1,1858 @@
+{
+	"name": "lakeh_a_pl_arquetipo_switch_internal",
+	"properties": {
+		"description": "Pipeline que implementa la ejecución de la lógica del arquetipo",
+		"activities": [
+			{
+				"name": "Ejecucion Paralela",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Init output",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Init output tmp",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@json(pipeline().parameters.items)",
+						"type": "Expression"
+					},
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "tests",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "If Condition1",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(\n    and(\n        or(\n            or(\n                equals(item().type, 'NOTEBOOK'), \n                equals(item().type, 'SIMPLE')),\n            equals(item().type, 'DELTA')),\n        pipeline().parameters.testing),\n    variables('continue'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "lakeh_notebook_testing",
+										"type": "DatabricksNotebook",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"notebookPath": "/Shared/DAB-PAN0001/files/src/lakeh_lakehouse_commons/lakeh_arquetipo/lakeh_a_nb_arquetipo_testing",
+											"baseParameters": {
+												"applicationName": {
+													"value": "@pipeline().parameters.applicationName",
+													"type": "Expression"
+												},
+												"excludeFields": {
+													"value": "@string(item().test.exclude_fields)",
+													"type": "Expression"
+												},
+												"name": {
+													"value": "@item().name",
+													"type": "Expression"
+												},
+												"parentUid": {
+													"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+													"type": "Expression"
+												},
+												"target": {
+													"value": "@string(coalesce(item()?.test?.target, '{}'))",
+													"type": "Expression"
+												},
+												"targetCheck": {
+													"value": "@string(coalesce(item()?.test?.target_check, '{}'))",
+													"type": "Expression"
+												},
+												"uuid": {
+													"value": "@pipeline().parameters.uuid",
+													"type": "Expression"
+												},
+												"targets": {
+													"value": "@string(coalesce(item()?.test?.targets, '[]'))",
+													"type": "Expression"
+												},
+												"targetChecks": {
+													"value": "@string(coalesce(item()?.test?.target_checks, '[]'))",
+													"type": "Expression"
+												}
+											},
+											"libraries": [
+												{
+													"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+												}
+											]
+										},
+										"linkedServiceName": {
+											"referenceName": "lakeh_ls_databricks",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"clusterVersion": {
+													"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+													"type": "Expression"
+												},
+												"numWorkers": {
+													"value": "@item().num_workers",
+													"type": "Expression"
+												},
+												"digitalCase": {
+													"value": "@pipeline().parameters.digitalCaseCode",
+													"type": "Expression"
+												}
+											}
+										}
+									},
+									{
+										"name": "Set error testing",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "lakeh_notebook_testing",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "testError",
+											"value": {
+												"value": "@concat('Error:',activity('lakeh_notebook_testing').error.message)",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "set fail test",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "lakeh_notebook_testing",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "testPassed",
+											"value": false
+										}
+									},
+									{
+										"name": "Grant Permissions 2",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "lakeh_notebook_testing",
+												"dependencyConditions": [
+													"Completed"
+												]
+											}
+										],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"url": {
+													"value": "@activity('lakeh_notebook_testing').output.runPageUrl",
+													"type": "Expression"
+												},
+												"credential": "ddgnocode"
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "If Condition1",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Non Skip Condition",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Trace Condition",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(variables('continue'), variables('nonSkipCondition'))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Switch",
+										"type": "Switch",
+										"dependsOn": [
+											{
+												"activity": "lakeh_a_pl_operational_log_info",
+												"dependencyConditions": [
+													"Completed"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"on": {
+												"value": "@toUpper(item().type)",
+												"type": "Expression"
+											},
+											"cases": [
+												{
+													"value": "SIMPLE",
+													"activities": [
+														{
+															"name": "lakeh_notebook",
+															"type": "DatabricksNotebook",
+															"dependsOn": [],
+															"policy": {
+																"timeout": "1.00:00:00",
+																"retry": 2,
+																"retryIntervalInSeconds": 60,
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"notebookPath": "/Shared/DAB-PAN0001/files/src/lakeh_lakehouse_commons/lakeh_arquetipo/lakeh_a_nb_arquetipo_dl",
+																"baseParameters": {
+																	"applicationName": {
+																		"value": "@pipeline().parameters.applicationName",
+																		"type": "Expression"
+																	},
+																	"auxParams": {
+																		"value": "@string(union(json(string(coalesce(item()?.aux_params, '{}'))), json(coalesce(pipeline().parameters.includeParams, '{}'))))",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	},
+																	"dropFields": {
+																		"value": "@string(coalesce(item()?.drop_fields, '[]'))",
+																		"type": "Expression"
+																	},
+																	"name": {
+																		"value": "@item().name",
+																		"type": "Expression"
+																	},
+																	"optimizeDelta": {
+																		"value": "@item().optimize_delta",
+																		"type": "Expression"
+																	},
+																	"params": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), \nstring(coalesce(pipeline().parameters.params, ' ')),\nstring(coalesce(item().test?.params, ' ')))",
+																		"type": "Expression"
+																	},
+																	"parentUid": {
+																		"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+																		"type": "Expression"
+																	},
+																	"sources": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().sources), string(item().test.sources))",
+																		"type": "Expression"
+																	},
+																	"sparkProperties": {
+																		"value": "@string(coalesce(item()?.spark_properties, '{}'))",
+																		"type": "Expression"
+																	},
+																	"sql": {
+																		"value": "@coalesce(item()?.sql, '')",
+																		"type": "Expression"
+																	},
+																	"sqlFile": {
+																		"value": "@coalesce(item()?.sql_file, '')",
+																		"type": "Expression"
+																	},
+																	"target": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().target), string(item().test.target))",
+																		"type": "Expression"
+																	},
+																	"uuid": {
+																		"value": "@pipeline().parameters.uuid",
+																		"type": "Expression"
+																	}
+																},
+																"libraries": [
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+																	}
+																]
+															},
+															"linkedServiceName": {
+																"referenceName": "lakeh_ls_databricks",
+																"type": "LinkedServiceReference",
+																"parameters": {
+																	"clusterVersion": {
+																		"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+																		"type": "Expression"
+																	},
+																	"numWorkers": {
+																		"value": "@item().num_workers",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	}
+																}
+															}
+														},
+														{
+															"name": "Set error",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_notebook').error.message)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Set error code",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_notebook').error.errorCode)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set fail",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": {
+																	"value": "@bool(false)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs tmp",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook",
+																	"dependencyConditions": [
+																		"Succeeded"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputsTmp",
+																"value": {
+																	"value": "@concat(\n  if(\n    equals(variables('executionOutputs'), '{}'),\n    '{',\n    concat(\n      substring(variables('executionOutputs'), 0, sub(length(variables('executionOutputs')), 1)),\n      ', '\n    )\n  ),\n  '\"',\n  item().name,\n  '\": ',\n  string(activity('lakeh_notebook').output.runOutput),\n  '}'\n)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "set outputs tmp",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputs",
+																"value": {
+																	"value": "@variables('executionOutputsTmp')",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Grant Permissions 3",
+															"type": "ExecutePipeline",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"pipeline": {
+																	"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+																	"type": "PipelineReference"
+																},
+																"waitOnCompletion": true,
+																"parameters": {
+																	"url": {
+																		"value": "@activity('lakeh_notebook').output.runPageUrl",
+																		"type": "Expression"
+																	},
+																	"credential": "ddgnocode"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "DELTA",
+													"activities": [
+														{
+															"name": "lakeh_notebook_delta",
+															"type": "DatabricksNotebook",
+															"dependsOn": [],
+															"policy": {
+																"timeout": "1.00:00:00",
+																"retry": 2,
+																"retryIntervalInSeconds": 60,
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"notebookPath": "/Shared/DAB-PAN0001/files/src/lakeh_lakehouse_commons/lakeh_arquetipo/lakeh_a_nb_arquetipo_delta_dl",
+																"baseParameters": {
+																	"applicationName": {
+																		"value": "@pipeline().parameters.applicationName",
+																		"type": "Expression"
+																	},
+																	"autoMerge": {
+																		"value": "@string(coalesce(item()?.auto_merge, 'false'))",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	},
+																	"dropFields": {
+																		"value": "@string(coalesce(item()?.drop_fields, '[]'))",
+																		"type": "Expression"
+																	},
+																	"keyFields": {
+																		"value": "@string(item().key_fields)",
+																		"type": "Expression"
+																	},
+																	"name": {
+																		"value": "@item().name",
+																		"type": "Expression"
+																	},
+																	"opField": {
+																		"value": "@item().op_field",
+																		"type": "Expression"
+																	},
+																	"ops": {
+																		"value": "@string(item().ops)",
+																		"type": "Expression"
+																	},
+																	"optimizeDelta": {
+																		"value": "@item().optimize_delta",
+																		"type": "Expression"
+																	},
+																	"orderField": {
+																		"value": "@item().order_field",
+																		"type": "Expression"
+																	},
+																	"params": {
+																		"value": "@string(coalesce(pipeline().parameters.params, ' '))",
+																		"type": "Expression"
+																	},
+																	"parentUid": {
+																		"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+																		"type": "Expression"
+																	},
+																	"sources": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().sources), string(item().test.sources))",
+																		"type": "Expression"
+																	},
+																	"sparkProperties": {
+																		"value": "@string(coalesce(item()?.spark_properties, '{}'))",
+																		"type": "Expression"
+																	},
+																	"target": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().target), string(item().test.target))",
+																		"type": "Expression"
+																	},
+																	"uuid": {
+																		"value": "@pipeline().parameters.uuid",
+																		"type": "Expression"
+																	}
+																},
+																"libraries": [
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+																	}
+																]
+															},
+															"linkedServiceName": {
+																"referenceName": "lakeh_ls_databricks",
+																"type": "LinkedServiceReference",
+																"parameters": {
+																	"clusterVersion": {
+																		"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+																		"type": "Expression"
+																	},
+																	"numWorkers": {
+																		"value": "@item().num_workers",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	}
+																}
+															}
+														},
+														{
+															"name": "Set error delta",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook_delta",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_notebook_delta').error.message)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Set error code delta",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook_delta",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_notebook_delta').error.errorCode)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set fail delta",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook_delta",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": {
+																	"value": "@bool(false)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs tmp delta",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook_delta",
+																	"dependencyConditions": [
+																		"Succeeded"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputsTmp",
+																"value": {
+																	"value": "@concat(\n  if(\n    equals(variables('executionOutputs'), '{}'),\n    '{',\n    concat(\n      substring(variables('executionOutputs'), 0, sub(length(variables('executionOutputs')), 1)),\n      ', '\n    )\n  ),\n  '\"',\n  item().name,\n  '\": ',\n  string(activity('lakeh_notebook_delta').output.runOutput),\n  '}'\n)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs delta",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "set outputs tmp delta",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputs",
+																"value": {
+																	"value": "@variables('executionOutputsTmp')",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Grant Permissions 4",
+															"type": "ExecutePipeline",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_notebook_delta",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"pipeline": {
+																	"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+																	"type": "PipelineReference"
+																},
+																"waitOnCompletion": true,
+																"parameters": {
+																	"url": {
+																		"value": "@activity('lakeh_notebook_delta').output.runPageUrl",
+																		"type": "Expression"
+																	},
+																	"credential": "ddgnocode"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "NOTEBOOK",
+													"activities": [
+														{
+															"name": "lakeh_custom_notebook",
+															"type": "DatabricksNotebook",
+															"dependsOn": [],
+															"policy": {
+																"timeout": "1.00:00:00",
+																"retry": 2,
+																"retryIntervalInSeconds": 60,
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"notebookPath": {
+																	"value": "@trim(item().notebook_path)",
+																	"type": "Expression"
+																},
+																"baseParameters": {
+																	"applicationName": {
+																		"value": "@pipeline().parameters.applicationName",
+																		"type": "Expression"
+																	},
+																	"auxParams": {
+																		"value": "@string(union(json(string(coalesce(item()?.aux_params, '{}'))), json(coalesce(pipeline().parameters.includeParams, '{}'))))",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	},
+																	"name": {
+																		"value": "@item().name",
+																		"type": "Expression"
+																	},
+																	"params": {
+																		"value": "@string(coalesce(pipeline().parameters.params, ' '))",
+																		"type": "Expression"
+																	},
+																	"parentUid": {
+																		"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+																		"type": "Expression"
+																	},
+																	"referenceDate": {
+																		"value": "@coalesce(pipeline().parameters.referenceDate,'')",
+																		"type": "Expression"
+																	},
+																	"sources": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().sources), string(item().test.sources))",
+																		"type": "Expression"
+																	},
+																	"sparkProperties": {
+																		"value": "@string(coalesce(item()?.spark_properties, '{}'))",
+																		"type": "Expression"
+																	},
+																	"target": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), \n    string(coalesce(item()?.target, '{}')),\n    string(coalesce(item()?.test?.target, '{}')))\n",
+																		"type": "Expression"
+																	},
+																	"uniqueKey": {
+																		"value": "@pipeline().parameters.uniqueKey",
+																		"type": "Expression"
+																	},
+																	"uuid": {
+																		"value": "@pipeline().parameters.uuid",
+																		"type": "Expression"
+																	},
+																	"optimizeDelta": {
+																		"value": "@item().optimize_delta",
+																		"type": "Expression"
+																	},
+																	"targets": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), \n    string(coalesce(item()?.targets, '[]')),\n    string(coalesce(item()?.test?.targets, '[]')))",
+																		"type": "Expression"
+																	}
+																},
+																"libraries": [
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+																	},
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+																	}
+																]
+															},
+															"linkedServiceName": {
+																"referenceName": "lakeh_ls_databricks",
+																"type": "LinkedServiceReference",
+																"parameters": {
+																	"clusterVersion": {
+																		"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+																		"type": "Expression"
+																	},
+																	"numWorkers": {
+																		"value": "@item().num_workers",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	}
+																}
+															}
+														},
+														{
+															"name": "Set error Notebook",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_custom_notebook').error.message)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Set error code notebook",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_custom_notebook').error.errorCode)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set fail Notebook",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_notebook",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": {
+																	"value": "@bool(false)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs tmp notebook",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_notebook",
+																	"dependencyConditions": [
+																		"Succeeded"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputsTmp",
+																"value": {
+																	"value": "@concat(\n  if(\n    equals(variables('executionOutputs'), '{}'),\n    '{',\n    concat(\n      substring(variables('executionOutputs'), 0, sub(length(variables('executionOutputs')), 1)),\n      ', '\n    )\n  ),\n  '\"',\n  item().name,\n  '\": ',\n  string(activity('lakeh_custom_notebook').output.runOutput),\n  '}'\n)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs notebook",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "set outputs tmp notebook",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputs",
+																"value": {
+																	"value": "@variables('executionOutputsTmp')",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Grant Permissions 5",
+															"type": "ExecutePipeline",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_notebook",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"pipeline": {
+																	"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+																	"type": "PipelineReference"
+																},
+																"waitOnCompletion": true,
+																"parameters": {
+																	"url": {
+																		"value": "@activity('lakeh_custom_notebook').output.runPageUrl",
+																		"type": "Expression"
+																	},
+																	"credential": "ddgnocode"
+																}
+															}
+														}
+													]
+												},
+												{
+													"value": "ABORT",
+													"activities": [
+														{
+															"name": "Set error abort",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "Fail1",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": "ERROR: Actividad ABORT"
+															}
+														},
+														{
+															"name": "Set error code abort",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "Fail1",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": "-1"
+															}
+														},
+														{
+															"name": "set fail abort",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "Fail1",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": {
+																	"value": "@bool(false)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Fail1",
+															"type": "Fail",
+															"dependsOn": [],
+															"userProperties": [],
+															"typeProperties": {
+																"message": "ERROR forzado por actividad ABORT",
+																"errorCode": "-1"
+															}
+														}
+													]
+												},
+												{
+													"value": "NO_DATA_NB",
+													"activities": [
+														{
+															"name": "lakeh_custom_no_data_nb",
+															"type": "DatabricksNotebook",
+															"dependsOn": [],
+															"policy": {
+																"timeout": "1.00:00:00",
+																"retry": 2,
+																"retryIntervalInSeconds": 60,
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"notebookPath": {
+																	"value": "@trim(item().notebook_path)",
+																	"type": "Expression"
+																},
+																"baseParameters": {
+																	"applicationName": {
+																		"value": "@pipeline().parameters.applicationName",
+																		"type": "Expression"
+																	},
+																	"auxParams": {
+																		"value": "@string(union(json(string(coalesce(item()?.aux_params, '{}'))), json(coalesce(pipeline().parameters.includeParams, '{}'))))",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	},
+																	"name": {
+																		"value": "@item().name",
+																		"type": "Expression"
+																	},
+																	"params": {
+																		"value": "@string(coalesce(pipeline().parameters.params, ' '))",
+																		"type": "Expression"
+																	},
+																	"parentUid": {
+																		"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+																		"type": "Expression"
+																	},
+																	"referenceDate": {
+																		"value": "@coalesce(pipeline().parameters.referenceDate,'')",
+																		"type": "Expression"
+																	},
+																	"sources": {
+																		"value": "@if(equals(pipeline().parameters.testing, false), string(item().sources), string(item().test.sources))",
+																		"type": "Expression"
+																	},
+																	"sparkProperties": {
+																		"value": "@string(coalesce(item()?.spark_properties, '{}'))",
+																		"type": "Expression"
+																	},
+																	"uniqueKey": {
+																		"value": "@pipeline().parameters.uniqueKey",
+																		"type": "Expression"
+																	},
+																	"uuid": {
+																		"value": "@pipeline().parameters.uuid",
+																		"type": "Expression"
+																	},
+																	"optimizeDelta": {
+																		"value": "@item().optimize_delta",
+																		"type": "Expression"
+																	}
+																},
+																"libraries": [
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+																	},
+																	{
+																		"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+																	}
+																]
+															},
+															"linkedServiceName": {
+																"referenceName": "lakeh_ls_databricks",
+																"type": "LinkedServiceReference",
+																"parameters": {
+																	"clusterVersion": {
+																		"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+																		"type": "Expression"
+																	},
+																	"numWorkers": {
+																		"value": "@item().num_workers",
+																		"type": "Expression"
+																	},
+																	"digitalCase": {
+																		"value": "@pipeline().parameters.digitalCaseCode",
+																		"type": "Expression"
+																	}
+																}
+															}
+														},
+														{
+															"name": "Set error no_data_nb",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_no_data_nb",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "error",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_custom_no_data_nb').error.message)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Set error code no_data_nb",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_no_data_nb",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "errorCode",
+																"value": {
+																	"value": "@concat('Error:',activity('lakeh_custom_no_data_nb').error.errorCode)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set fail no_data_nb",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_no_data_nb",
+																	"dependencyConditions": [
+																		"Failed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "continue",
+																"value": {
+																	"value": "@bool(false)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs tmp no_data_nb",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_no_data_nb",
+																	"dependencyConditions": [
+																		"Succeeded"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputsTmp",
+																"value": {
+																	"value": "@concat(\n  if(\n    equals(variables('executionOutputs'), '{}'),\n    '{',\n    concat(\n      substring(variables('executionOutputs'), 0, sub(length(variables('executionOutputs')), 1)),\n      ', '\n    )\n  ),\n  '\"',\n  item().name,\n  '\": ',\n  string(activity('lakeh_custom_no_data_nb').output.runOutput),\n  '}'\n)",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "set outputs no_data_nb",
+															"type": "SetVariable",
+															"dependsOn": [
+																{
+																	"activity": "set outputs tmp no_data_nb",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureOutput": false,
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"variableName": "executionOutputs",
+																"value": {
+																	"value": "@variables('executionOutputsTmp')",
+																	"type": "Expression"
+																}
+															}
+														},
+														{
+															"name": "Grant Permissions no_data_nb",
+															"type": "ExecutePipeline",
+															"dependsOn": [
+																{
+																	"activity": "lakeh_custom_no_data_nb",
+																	"dependencyConditions": [
+																		"Completed"
+																	]
+																}
+															],
+															"policy": {
+																"secureInput": false
+															},
+															"userProperties": [],
+															"typeProperties": {
+																"pipeline": {
+																	"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+																	"type": "PipelineReference"
+																},
+																"waitOnCompletion": true,
+																"parameters": {
+																	"url": {
+																		"value": "@activity('lakeh_custom_no_data_nb').output.runPageUrl",
+																		"type": "Expression"
+																	}
+																}
+															}
+														}
+													]
+												}
+											],
+											"defaultActivities": [
+												{
+													"name": "launch_switch2",
+													"type": "ExecutePipeline",
+													"dependsOn": [],
+													"policy": {
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"pipeline": {
+															"referenceName": "lakeh_a_pl_arquetipo_switch2_internal",
+															"type": "PipelineReference"
+														},
+														"waitOnCompletion": true,
+														"parameters": {
+															"applicationName": {
+																"value": "@pipeline().parameters.applicationName",
+																"type": "Expression"
+															},
+															"digitalCaseCode": {
+																"value": "@pipeline().parameters.digitalCaseCode",
+																"type": "Expression"
+															},
+															"enable": {
+																"value": "@pipeline().parameters.enable",
+																"type": "Expression"
+															},
+															"items": {
+																"value": "@string(item())",
+																"type": "Expression"
+															},
+															"params": {
+																"value": "@pipeline().parameters.params",
+																"type": "Expression"
+															},
+															"parentUid": {
+																"value": "@pipeline().parameters.parentUid",
+																"type": "Expression"
+															},
+															"referenceDate": {
+																"value": "@pipeline().parameters.referenceDate",
+																"type": "Expression"
+															},
+															"testing": {
+																"value": "@pipeline().parameters.testing",
+																"type": "Expression"
+															},
+															"uniqueKey": {
+																"value": "@pipeline().parameters.uniqueKey",
+																"type": "Expression"
+															},
+															"uuid": {
+																"value": "@pipeline().parameters.uuid",
+																"type": "Expression"
+															}
+														}
+													}
+												},
+												{
+													"name": "Set error switch",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "launch_switch2",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "error",
+														"value": {
+															"value": "@concat('Error:',activity('launch_switch2').error.message)",
+															"type": "Expression"
+														}
+													}
+												},
+												{
+													"name": "Set error code switch",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "launch_switch2",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "errorCode",
+														"value": {
+															"value": "@concat('Error:',activity('launch_switch2').error.errorCode)",
+															"type": "Expression"
+														}
+													}
+												},
+												{
+													"name": "set fail switch",
+													"type": "SetVariable",
+													"dependsOn": [
+														{
+															"activity": "launch_switch2",
+															"dependencyConditions": [
+																"Failed"
+															]
+														}
+													],
+													"policy": {
+														"secureOutput": false,
+														"secureInput": false
+													},
+													"userProperties": [],
+													"typeProperties": {
+														"variableName": "continue",
+														"value": {
+															"value": "@bool(false)",
+															"type": "Expression"
+														}
+													}
+												}
+											]
+										}
+									},
+									{
+										"name": "lakeh_a_pl_operational_log_info",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "lakeh_a_pl_operational_log_info",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"applicationName": {
+													"value": "@pipeline().parameters.applicationName",
+													"type": "Expression"
+												},
+												"message": {
+													"value": "@concat('Name: ', coalesce(item()?.name, 'no_name'),\n', Type: ', coalesce(item()?.type, 'no_type'))",
+													"type": "Expression"
+												},
+												"parentUid": {
+													"value": "@pipeline().parameters.parentUid",
+													"type": "Expression"
+												},
+												"pipelineName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"referenceDate": {
+													"value": "@pipeline().parameters.referenceDate",
+													"type": "Expression"
+												},
+												"uuid": {
+													"value": "@pipeline().parameters.uuid",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "Non Skip Condition",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "init_tests",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "nonSkipCondition",
+								"value": {
+									"value": "@if( equals(string(coalesce(item()?.condition, 'notFound')), 'notFound'), true,\n  if(\n    contains(\n\t  string(pipeline().parameters.previousOutputs),\n\t  concat('\"', coalesce(item()?.condition?.name, 'name_notFound'), '\"') \n\t ),\n\t if(\n\t   contains(\n\t     string(json(pipeline().parameters.previousOutputs)[item().condition.name]),\n\t\t concat('\"', coalesce(item()?.condition?.internal_name, item().condition.name), '\"')\n\t   ),\n\t   if(\n\t     contains(string(json(pipeline().parameters.previousOutputs)\n\t\t                 [item().condition.name]\n\t\t\t\t\t\t [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t                ),\n\t\t          concat('\"', coalesce(item()?.condition?.key, 'keyNotFound'), '\"')\n\t\t ),\n\t\t contains(string(json(pipeline().parameters.previousOutputs)\n\t\t                     [item().condition.name]\n\t\t                     [coalesce(item()?.condition?.internal_name, item().condition.name)]\n\t\t\t\t\t\t\t [item().condition.key]),\n\t\t          item().condition.value),\n\t   false),\n\t false),  \n  false))",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Trace Condition",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "init_tests",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "txtDebug",
+								"value": {
+									"value": "@if( equals(string(coalesce(item()?.condition, 'notFound')), 'notFound'), \n     concat('No condition in the task:', coalesce(item()?.name, 'no_name')),\n     concat('executionOutputs: ', pipeline().parameters.previousOutputs, ', condition found: name:',\n       coalesce(item()?.condition?.name, 'name_notFound'),\n       ', internal_name:',\n       coalesce(item()?.condition?.internal_name, item().condition.name),\n       ', key:',\n       coalesce(item()?.condition?.key, 'keyNotFound'),\n       ', value:',\n       coalesce(item()?.condition?.value, 'valueNotFound')\n     )\n)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "init_tests",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@and(\n    and(\n        or(\n            or(\n                equals(item().type, 'NOTEBOOK'), \n                equals(item().type, 'SIMPLE')),\n            equals(item().type, 'DELTA')),\n        pipeline().parameters.testing),\n    not(equals(coalesce(item()?.test?.targets_init, '[]'), '[]')))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "lakeh_notebook_init_testing",
+										"type": "DatabricksNotebook",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"notebookPath": "/Shared/DAB-PAN0001/files/src/lakeh_lakehouse_commons/lakeh_arquetipo/lakeh_a_nb_arquetipo_init_testing",
+											"baseParameters": {
+												"applicationName": {
+													"value": "@pipeline().parameters.applicationName",
+													"type": "Expression"
+												},
+												"excludeFields": {
+													"value": "@string(item().test.exclude_fields)",
+													"type": "Expression"
+												},
+												"name": {
+													"value": "@item().name",
+													"type": "Expression"
+												},
+												"parentUid": {
+													"value": "@coalesce(pipeline().parameters.parentUid,'N/A')",
+													"type": "Expression"
+												},
+												"target": {
+													"value": "@string(coalesce(item()?.test?.target, '{}'))",
+													"type": "Expression"
+												},
+												"uuid": {
+													"value": "@pipeline().parameters.uuid",
+													"type": "Expression"
+												},
+												"targets": {
+													"value": "@string(coalesce(item()?.test?.targets, '[]'))",
+													"type": "Expression"
+												},
+												"targetsInit": {
+													"value": "@string(coalesce(item()?.test?.targets_init, '[]'))",
+													"type": "Expression"
+												}
+											},
+											"libraries": [
+												{
+													"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+												}
+											]
+										},
+										"linkedServiceName": {
+											"referenceName": "lakeh_ls_databricks",
+											"type": "LinkedServiceReference",
+											"parameters": {
+												"clusterVersion": {
+													"value": "@if(equals(item()?.photon,true),pipeline().globalParameters.clusterVersionEnablePhoton,pipeline().globalParameters.clusterVersion)",
+													"type": "Expression"
+												},
+												"numWorkers": "2",
+												"digitalCase": {
+													"value": "@pipeline().parameters.digitalCaseCode",
+													"type": "Expression"
+												}
+											}
+										}
+									},
+									{
+										"name": "Grant Permissions",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "lakeh_notebook_init_testing",
+												"dependencyConditions": [
+													"Completed"
+												]
+											}
+										],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "lakeh_a_pl_arquetipo_grant_permission",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"url": {
+													"value": "@activity('lakeh_notebook_init_testing').output.runPageUrl",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Return error",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Ejecucion Paralela",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(variables('continue'), variables('testPassed'))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@if (variables('continue'), variables('testError'), variables('error'))",
+									"type": "Expression"
+								},
+								"errorCode": {
+									"value": "@variables('errorCode')",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set output",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "pipelineReturnValue",
+								"value": [
+									{
+										"key": "result",
+										"value": {
+											"type": "Expression",
+											"content": "@variables('executionOutputs')"
+										}
+									}
+								],
+								"setSystemVariable": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Init output",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "executionOutputs",
+					"value": {
+						"value": "{}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Init output tmp",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "executionOutputsTmp",
+					"value": "{}"
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "string"
+			},
+			"digitalCaseCode": {
+				"type": "string"
+			},
+			"enable": {
+				"type": "string"
+			},
+			"items": {
+				"type": "string"
+			},
+			"params": {
+				"type": "string"
+			},
+			"parentUid": {
+				"type": "string"
+			},
+			"referenceDate": {
+				"type": "string"
+			},
+			"testing": {
+				"type": "bool"
+			},
+			"uniqueKey": {
+				"type": "string"
+			},
+			"uuid": {
+				"type": "string"
+			},
+			"previousOutputs": {
+				"type": "string"
+			},
+			"includeParams": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"continue": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"error": {
+				"type": "String"
+			},
+			"errorCode": {
+				"type": "String"
+			},
+			"testError": {
+				"type": "String"
+			},
+			"testPassed": {
+				"type": "Boolean",
+				"defaultValue": true
+			},
+			"executionOutputs": {
+				"type": "String"
+			},
+			"executionOutputsTmp": {
+				"type": "String"
+			},
+			"nonSkipCondition": {
+				"type": "Boolean"
+			},
+			"txtDebug": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "lakeh_commons/lakeh_arquetipo/arquetipo"
+		},
+		"annotations": []
+	}
+}

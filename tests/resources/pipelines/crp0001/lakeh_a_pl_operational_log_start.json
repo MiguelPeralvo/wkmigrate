@@ -1,0 +1,94 @@
+{
+	"name": "lakeh_a_pl_operational_log_start",
+	"properties": {
+		"description": "Log que nos ayuda saber cuando comienza el pipeline de un caso digital",
+		"activities": [
+			{
+				"name": "lakeh_a_pl_operational_log_start",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "lakeh_a_pl_operational_log",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": false,
+					"parameters": {
+						"applicationName": {
+							"value": "@pipeline().parameters.applicationName",
+							"type": "Expression"
+						},
+						"dataDate": {
+							"value": "@coalesce(pipeline().parameters.referenceDate,\n    formatDateTime(utcnow(),'yyyy/MM/dd'))",
+							"type": "Expression"
+						},
+						"logType": "START",
+						"message": {
+							"value": "@pipeline().parameters.message",
+							"type": "Expression"
+						},
+						"modulo": "lakeh_a_pl_operational_log_start",
+						"nivel": "INFO",
+						"parentUid": {
+							"value": "@pipeline().parameters.parentUid",
+							"type": "Expression"
+						},
+						"pipelineName": {
+							"value": "@pipeline().parameters.pipelineName",
+							"type": "Expression"
+						},
+						"region": {
+							"value": "GLB",
+							"type": "Expression"
+						},
+						"uid": {
+							"value": "@variables('uid')",
+							"type": "Expression"
+						},
+						"uuid": {
+							"value": "@pipeline().parameters.uuid",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "String",
+				"defaultValue": "@pipeline().parameters.applicationName"
+			},
+			"message": {
+				"type": "string",
+				"defaultValue": "Inicio de Proceso"
+			},
+			"parentUid": {
+				"type": "string"
+			},
+			"pipelineName": {
+				"type": "string",
+				"defaultValue": "@pipeline().Pipeline"
+			},
+			"referenceDate": {
+				"type": "string"
+			},
+			"uuid": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"uid": {
+				"type": "String",
+				"defaultValue": "@concat('lakeh#$', pipeline().parameters.applicationName,'$', pipeline().parameters.pipelineName, '#', utcnow('yyyy/MM/dd') , '#', pipeline().TriggeredByPipelineRunId)"
+			}
+		},
+		"folder": {
+			"name": "lakeh_commons/lakeh_operational_log"
+		},
+		"annotations": []
+	}
+}

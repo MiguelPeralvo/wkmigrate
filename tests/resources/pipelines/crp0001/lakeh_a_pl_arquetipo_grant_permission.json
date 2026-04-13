@@ -1,0 +1,219 @@
+{
+	"name": "lakeh_a_pl_arquetipo_grant_permission",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Run ID",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "run_id",
+					"value": {
+						"value": "@split(pipeline().parameters.url, '/run/')[1]",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Job ID",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "job_id",
+					"value": {
+						"value": "@split(split(pipeline().parameters.url, '#job/')[1], '/run/')[0]",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Cluster ID",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set Run ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"url": {
+						"value": "@concat(pipeline().globalParameters.DatabricksUCUrl,'/api/2.1/jobs/runs/get?run_id=', variables('run_id'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d",
+						"credential": {
+							"referenceName": "datahub01dflakehcred",
+							"type": "CredentialReference"
+						},
+						"type": "UserAssignedManagedIdentity"
+					}
+				}
+			},
+			{
+				"name": "Job Permission",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set Job ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "PATCH",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"url": {
+						"value": "@concat(pipeline().globalParameters.DatabricksUCUrl,'/api/2.0/permissions/jobs/', variables('job_id'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "{\n  \"access_control_list\": [\n    {\n      \"group_name\": \"@{pipeline().globalParameters.GroupLogs}\",\n      \"permission_level\": \"CAN_VIEW\"\n    }\n  ]\n}",
+						"type": "Expression"
+					},
+					"authentication": {
+						"resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d",
+						"credential": {
+							"referenceName": "datahub01dflakehcred",
+							"type": "CredentialReference"
+						},
+						"type": "UserAssignedManagedIdentity"
+					}
+				}
+			},
+			{
+				"name": "Cluster Permissions",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Set Cluster ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "PATCH",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"url": {
+						"value": "@concat(pipeline().globalParameters.DatabricksUCUrl,'/api/2.0/permissions/clusters/', variables('cluster_id'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "{\n  \"access_control_list\": [\n    {\n      \"group_name\": \"@{pipeline().globalParameters.GroupLogs}\",\n      \"permission_level\": \"CAN_ATTACH_TO\"\n    }\n  ]\n}",
+						"type": "Expression"
+					},
+					"authentication": {
+						"resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d",
+						"credential": {
+							"referenceName": "datahub01dflakehcred",
+							"type": "CredentialReference"
+						},
+						"type": "UserAssignedManagedIdentity"
+					}
+				}
+			},
+			{
+				"name": "Set Cluster ID",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Cluster ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "cluster_id",
+					"value": {
+						"value": "@activity('Get Cluster ID').output.tasks[0].cluster_instance.cluster_id",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"url": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"run_id": {
+				"type": "String"
+			},
+			"cluster_id": {
+				"type": "String"
+			},
+			"job_id": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "lakeh_commons/lakeh_arquetipo/arquetipo"
+		},
+		"annotations": []
+	}
+}

@@ -1,0 +1,944 @@
+{
+	"name": "crp0001_c_pl_prc_anl_cmd_all_paral_ppal",
+	"properties": {
+		"activities": [
+			{
+				"name": "cmd_notebook_BW1",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "@pipeline().parameters.datasource",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_BW2",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "@pipeline().parameters.datasource2",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_elec",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdielec",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_eyp",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_datos_paises_net_production",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_heraut_1",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdiher1_edd",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_heraut_2",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdiher2_edd",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_mytg",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdigp",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_peru",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdiper",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_notebook_qui",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd",
+					"baseParameters": {
+						"datasource": {
+							"value": "edd_cocmdiqui",
+							"type": "Expression"
+						},
+						"deleteFactTable": {
+							"value": "@if(equals(pipeline().parameters.typeExec, 'historic'),'false',\npipeline().parameters.deleteFactTable)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "cmd_copy",
+				"type": "DatabricksNotebook",
+				"dependsOn": [
+					{
+						"activity": "cmd_notebook_BW1",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_BW2",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_elec",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_heraut_1",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_heraut_2",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_mytg",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_peru",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_qui",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "cmd_notebook_eyp",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_e_t_l_cmd_copy",
+					"baseParameters": {
+						"pathorigenBW1": {
+							"value": "@concat(\n  'estrategdato_ap_cmd', '##', \n  if(contains(activity('cmd_notebook_BW1').output,'runError'),'',activity('cmd_notebook_BW1').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenBW2": {
+							"value": "@concat(\n  'estrategdato_ap_cmd2', '##', \n  if(contains(activity('cmd_notebook_BW2').output,'runError'),'',activity('cmd_notebook_BW2').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenelec": {
+							"value": "@concat(\n  'edd_cocmdielec', '##', \n  if(contains(activity('cmd_notebook_elec').output,'runError'),'',activity('cmd_notebook_elec').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigeneyp": {
+							"value": "@concat(\n  'edd_datos_paises_net_production', '##', \n  if(contains(activity('cmd_notebook_eyp').output,'runError'),'',activity('cmd_notebook_eyp').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenheraut1": {
+							"value": "@concat(\n  'edd_cocmdiher1_edd', '##', \n  if(contains(activity('cmd_notebook_heraut_1').output,'runError'),'',activity('cmd_notebook_heraut_1').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenheraut2": {
+							"value": "@concat(\n  'edd_cocmdiher2_edd', '##', \n  if(contains(activity('cmd_notebook_heraut_2').output,'runError'),'',activity('cmd_notebook_heraut_2').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenmytg": {
+							"value": "@concat(\n  'edd_cocmdigp', '##', \n  if(contains(activity('cmd_notebook_mytg').output,'runError'),'',activity('cmd_notebook_mytg').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenper": {
+							"value": "@concat(\n  'edd_cocmdiper', '##', \n  if(contains(activity('cmd_notebook_peru').output,'runError'),'',activity('cmd_notebook_peru').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"pathorigenqui": {
+							"value": "@concat(\n  'edd_cocmdiqui', '##', \n  if(contains(activity('cmd_notebook_qui').output,'runError'),'',activity('cmd_notebook_qui').output.runOutput)\n)",
+							"type": "Expression"
+						},
+						"tabledestination": {
+							"value": "@pipeline().parameters.tabledestination",
+							"type": "Expression"
+						},
+						"typeExec": {
+							"value": "@pipeline().parameters.typeExec",
+							"type": "Expression"
+						}
+					},
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			},
+			{
+				"name": "send_email",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "formulas",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "lakeh_a_pl_operational_sendMail",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "Segunda Ejecucion",
+				"description": "Solo se ejecutará con la segunda ejecución diaria. Para eso verifica que exista dato del día o que sean más de las 8:15.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "HoraInicio",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "formulas",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "ExisteDatoDelDia",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n   equals(activity('ExisteDatoDelDia').output.runOutput, 1),\n  greaterOrEquals(variables('HoraInicio'), '08:15')\n)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "cmd_new_fields",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_l_cmd_new_fields",
+								"baseParameters": {
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									},
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						},
+						{
+							"name": "persistencia",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "cmd_new_fields",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_persist_global",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"execution": "[\"cmg\",\"gbc\",\"busc\"]"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "HoraInicio",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "HoraInicio",
+					"value": {
+						"value": "@convertFromUtc(utcnow(),'Romance Standard Time','HH:mm')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "formulas",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "cmd_copy",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('cmd_copy').output.runOutput, 1)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "formulas_bbdd",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_l_cmd_formulas",
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									},
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "formulas_df",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_prc_edw_l_cmd_formulas_df",
+								"baseParameters": {
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									},
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ExisteDatoDelDia",
+				"type": "DatabricksNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebookPath": "/Workspace/Shared/DAB-CRP0001/files/src/crp0001/manual/cmd/crp0001_c_nb_lkp_ExisteDatoDelDia",
+					"libraries": [
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+						},
+						{
+							"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+						}
+					]
+				},
+				"linkedServiceName": {
+					"referenceName": "CRP0001_ls_databricks",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"clusterVersion": {
+							"value": "@pipeline().globalParameters.clusterVersion",
+							"type": "Expression"
+						},
+						"numWorkers": "1",
+						"digitalCase": "CRP0001"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "string",
+				"defaultValue": "crp0001"
+			},
+			"datasource": {
+				"type": "string",
+				"defaultValue": "estrategdato_ap_cmd"
+			},
+			"datasource2": {
+				"type": "string",
+				"defaultValue": "estrategdato_ap_cmd2"
+			},
+			"deleteFactTable": {
+				"type": "string",
+				"defaultValue": "true"
+			},
+			"tabledestination": {
+				"type": "string",
+				"defaultValue": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_cdp_cmd"
+			},
+			"typeExec": {
+				"type": "string",
+				"defaultValue": "current"
+			}
+		},
+		"variables": {
+			"HoraInicio": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "crp0001/cmd"
+		},
+		"annotations": []
+	}
+}
