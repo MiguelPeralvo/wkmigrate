@@ -61,6 +61,10 @@ from wkmigrate.translators.activity_translators.set_variable_activity_translator
 from wkmigrate.translators.activity_translators.spark_jar_activity_translator import translate_spark_jar_activity
 from wkmigrate.translators.activity_translators.switch_activity_translator import translate_switch_activity
 from wkmigrate.translators.activity_translators.until_activity_translator import translate_until_activity
+from wkmigrate.translators.activity_translators.append_variable_activity_translator import (
+    translate_append_variable_activity,
+)
+from wkmigrate.translators.activity_translators.fail_activity_translator import translate_fail_activity
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
@@ -172,6 +176,27 @@ def visit_activity(
         return cached, context
 
     activity = _normalize_activity(activity)
+
+    # G-18: Skip inactive activities that are marked as succeeded
+    state = activity.get("state")
+    if state == "Inactive":
+        on_inactive = activity.get("onInactiveMarkAs") or activity.get("on_inactive_mark_as")
+        if on_inactive == "Succeeded":
+            activity_type = activity.get("type") or "Unsupported"
+            with not_translatable_context(name, activity_type):
+                warnings.warn(
+                    NotTranslatableWarning(
+                        name or "unknown",
+                        "Activity is Inactive (onInactiveMarkAs=Succeeded); replaced with placeholder",
+                    ),
+                    stacklevel=2,
+                )
+                base_properties = _get_base_properties(activity, is_conditional_task)
+                translated = get_placeholder_activity(base_properties)
+            if name:
+                context = context.with_activity(name, translated)
+            return translated, context
+
     activity_type = activity.get("type") or "Unsupported"
     with not_translatable_context(name, activity_type):
         base_properties = _get_base_properties(activity, is_conditional_task)
@@ -260,6 +285,13 @@ def _dispatch_activity(
             return translate_switch_activity(activity, base_kwargs, context, emission_config=emission_config)
         case "Until":
             return translate_until_activity(activity, base_kwargs, context, emission_config=emission_config)
+        case "AppendVariable":
+            return translate_append_variable_activity(activity, base_kwargs, context, emission_config=emission_config)
+        case "Fail":
+            return (
+                translate_fail_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
         case _:
             translator = context.registry.get(activity_type)
             if translator is not None:

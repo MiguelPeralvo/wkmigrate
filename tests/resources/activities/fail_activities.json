@@ -1,0 +1,35 @@
+[
+  {
+    "id": "expression_message",
+    "description": "Fail activity with expression message",
+    "input": {
+      "name": "Error - Unsupported type",
+      "type": "Fail",
+      "depends_on": [],
+      "message": {
+        "value": "@concat('Unsupported type: ', pipeline().parameters.activityType)",
+        "type": "Expression"
+      },
+      "errorCode": "UNSUPPORTED_TYPE"
+    },
+    "expected": {
+      "name": "Error - Unsupported type",
+      "task_key": "Error - Unsupported type"
+    }
+  },
+  {
+    "id": "static_message",
+    "description": "Fail activity with static message",
+    "input": {
+      "name": "Pipeline failed",
+      "type": "Fail",
+      "depends_on": [],
+      "message": "Pipeline failed",
+      "errorCode": "FAIL"
+    },
+    "expected": {
+      "name": "Pipeline failed",
+      "task_key": "Pipeline failed"
+    }
+  }
+]

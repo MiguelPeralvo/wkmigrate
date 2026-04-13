@@ -1,0 +1,49 @@
+[
+  {
+    "id": "static_string",
+    "description": "AppendVariable with a static string value",
+    "input": {
+      "name": "Append item",
+      "type": "AppendVariable",
+      "depends_on": [],
+      "variable_name": "array_copy",
+      "value": "test_value"
+    },
+    "expected": {
+      "name": "Append item",
+      "task_key": "Append item",
+      "variable_name": "array_copy"
+    }
+  },
+  {
+    "id": "expression_value",
+    "description": "AppendVariable with an expression value",
+    "input": {
+      "name": "Append expr",
+      "type": "AppendVariable",
+      "depends_on": [],
+      "variable_name": "array_copy",
+      "value": {
+        "value": "@pipeline().parameters.itemValue",
+        "type": "Expression"
+      }
+    },
+    "expected": {
+      "name": "Append expr",
+      "task_key": "Append expr",
+      "variable_name": "array_copy"
+    }
+  },
+  {
+    "id": "missing_variable_name",
+    "description": "AppendVariable with missing variable_name",
+    "input": {
+      "name": "Bad append",
+      "type": "AppendVariable",
+      "depends_on": [],
+      "value": "test_value"
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing"
+  }
+]

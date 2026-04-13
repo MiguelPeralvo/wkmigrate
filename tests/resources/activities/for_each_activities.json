@@ -260,5 +260,42 @@
     },
     "expected_unsupported": true,
     "expected_message": "Unsupported array expression"
+  },
+  {
+    "id": "is_sequential_override",
+    "description": "ForEach with isSequential=true should force concurrency=1 despite batch_count=20",
+    "input": {
+      "name": "sequential_loop",
+      "type": "ForEach",
+      "description": "Sequential loop",
+      "depends_on": [],
+      "is_sequential": true,
+      "batch_count": 20,
+      "items": {
+        "type": "Expression",
+        "value": "@createArray('a', 'b', 'c')"
+      },
+      "activities": [
+        {
+          "name": "inner_task",
+          "type": "DatabricksNotebook",
+          "description": "Inner task",
+          "depends_on": [],
+          "notebook_path": "/Workspace/notebooks/inner",
+          "base_parameters": {
+            "item": {
+              "value": "@item()",
+              "type": "Expression"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "sequential_loop",
+      "task_key": "sequential_loop",
+      "activity_type": "ForEach",
+      "concurrency": 1
+    }
   }
 ]

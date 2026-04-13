@@ -70,6 +70,10 @@ from wkmigrate.translators.activity_translators.switch_activity_translator impor
 from wkmigrate.translators.activity_translators.until_activity_translator import (
     translate_until_activity,
 )
+from wkmigrate.translators.activity_translators.append_variable_activity_translator import (
+    translate_append_variable_activity,
+)
+from wkmigrate.translators.activity_translators.fail_activity_translator import translate_fail_activity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.parsers.expression_parsers import ResolvedExpression, parse_variable_value
 from wkmigrate.parsers.expression_ast import StringLiteral
@@ -2594,4 +2598,176 @@ def test_until_dispatch() -> None:
     }
     result = translate_activity(activity)
     # Until returns a placeholder notebook, not UnsupportedValue
+    assert isinstance(result, DatabricksNotebookActivity)
+
+
+# ---------------------------------------------------------------------------
+# CRP-4: Leaf translators + behavior fixes
+# ---------------------------------------------------------------------------
+
+
+# --- G-18: Inactive state handling ---
+
+
+def test_inactive_activity_succeeded_returns_placeholder() -> None:
+    """Inactive activity with onInactiveMarkAs=Succeeded returns placeholder."""
+    activity = {
+        "name": "Inactive Task",
+        "type": "DatabricksNotebook",
+        "state": "Inactive",
+        "onInactiveMarkAs": "Succeeded",
+        "depends_on": [],
+        "notebook_path": "/Workspace/notebooks/real",
+    }
+    with pytest.warns(NotTranslatableWarning):
+        result, _ctx = visit_activity(activity, False, default_context())
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+
+
+def test_inactive_activity_snake_case_keys() -> None:
+    """Inactive activity with snake_case keys also returns placeholder."""
+    activity = {
+        "name": "Inactive Task SC",
+        "type": "DatabricksNotebook",
+        "state": "Inactive",
+        "on_inactive_mark_as": "Succeeded",
+        "depends_on": [],
+        "notebook_path": "/Workspace/notebooks/real",
+    }
+    with pytest.warns(NotTranslatableWarning):
+        result, _ctx = visit_activity(activity, False, default_context())
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+
+
+def test_active_activity_dispatches_normally() -> None:
+    """Activity with state=Active (or absent) dispatches normally."""
+    activity = {
+        "name": "Active Task",
+        "type": "DatabricksNotebook",
+        "depends_on": [],
+        "notebook_path": "/Workspace/notebooks/real",
+    }
+    result, _ctx = visit_activity(activity, False, default_context())
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.notebook_path == "/Workspace/notebooks/real"
+
+
+# --- G-17: ForEach isSequential ---
+
+
+def test_foreach_is_sequential_overrides_batch_count(for_each_activity_fixtures: list[dict]) -> None:
+    """ForEach with isSequential=true forces concurrency=1 regardless of batch_count."""
+    fixture = get_fixture(for_each_activity_fixtures, "is_sequential_override")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_for_each_activity(activity, base_kwargs)
+    assert isinstance(result, ForEachActivity)
+    assert result.concurrency == 1
+
+
+def test_foreach_is_sequential_false_preserves_batch_count(for_each_activity_fixtures: list[dict]) -> None:
+    """ForEach with isSequential=false uses batch_count as concurrency."""
+    fixture = get_fixture(for_each_activity_fixtures, "single_inner_notebook")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_for_each_activity(activity, base_kwargs)
+    assert isinstance(result, ForEachActivity)
+    assert result.concurrency == 4
+
+
+# --- G-16: SetVariable setSystemVariable ---
+
+
+def test_set_system_variable(set_variable_activity_fixtures: list[dict]) -> None:
+    """SetVariable with setSystemVariable=true produces SetVariableActivity."""
+    fixture = get_fixture(set_variable_activity_fixtures, "set_system_variable")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_set_variable_activity(activity, base_kwargs)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "pipelineReturnValue"
+
+
+def test_set_system_variable_empty_value(set_variable_activity_fixtures: list[dict]) -> None:
+    """SetVariable with setSystemVariable=true but empty value returns UnsupportedValue."""
+    fixture = get_fixture(set_variable_activity_fixtures, "set_system_variable_empty_value")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_set_variable_activity(activity, base_kwargs)
+    assert isinstance(result, UnsupportedValue)
+
+
+# --- G-11: AppendVariable translator ---
+
+
+def test_append_variable_basic(append_variable_activity_fixtures: list[dict]) -> None:
+    """AppendVariable with static value produces SetVariableActivity with append code."""
+    fixture = get_fixture(append_variable_activity_fixtures, "static_string")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_append_variable_activity(activity, base_kwargs)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "array_copy"
+    assert "append" in result.variable_value.lower() or "+" in result.variable_value
+
+
+def test_append_variable_expression_value(append_variable_activity_fixtures: list[dict]) -> None:
+    """AppendVariable with expression value resolves without UnsupportedValue."""
+    fixture = get_fixture(append_variable_activity_fixtures, "expression_value")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_append_variable_activity(activity, base_kwargs)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "array_copy"
+
+
+def test_append_variable_missing_variable_name(append_variable_activity_fixtures: list[dict]) -> None:
+    """AppendVariable with missing variable_name returns UnsupportedValue."""
+    fixture = get_fixture(append_variable_activity_fixtures, "missing_variable_name")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_append_variable_activity(activity, base_kwargs)
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_append_variable_dispatch() -> None:
+    """AppendVariable routes through translate_activity dispatcher."""
+    activity = {
+        "name": "Append test",
+        "type": "AppendVariable",
+        "depends_on": [],
+        "variable_name": "my_array",
+        "value": "item",
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "my_array"
+
+
+# --- G-14: Fail translator ---
+
+
+def test_fail_activity_returns_placeholder(fail_activity_fixtures: list[dict]) -> None:
+    """Fail activity returns placeholder and emits NotTranslatableWarning."""
+    fixture = get_fixture(fail_activity_fixtures, "expression_message")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    with pytest.warns(NotTranslatableWarning):
+        result = translate_fail_activity(activity, base_kwargs)
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+
+
+def test_fail_activity_dispatch() -> None:
+    """Fail routes through translate_activity dispatcher."""
+    activity = {
+        "name": "Pipeline Error",
+        "type": "Fail",
+        "depends_on": [],
+        "message": "Something went wrong",
+        "errorCode": "ERR_001",
+    }
+    result = translate_activity(activity)
     assert isinstance(result, DatabricksNotebookActivity)
