@@ -39,8 +39,10 @@ def _emit_concat(args: list[str]) -> str | UnsupportedValue:
 
 
 def _emit_substring(args: list[str]) -> str | UnsupportedValue:
-    if error := _require_arity("substring", args, 3, 3):
+    if error := _require_arity("substring", args, 2, 3):
         return error
+    if len(args) == 2:
+        return f"str({args[0]})[{args[1]}:]"
     return f"str({args[0]})[{args[1]}:{args[1]} + {args[2]}]"
 
 
@@ -329,6 +331,24 @@ def _emit_nth_index_of(args: list[str]) -> str | UnsupportedValue:
     return f"_wkmigrate_nth_index_of({args[0]}, {args[1]}, {args[2]})"
 
 
+def _emit_uri_component(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("uriComponent", args, 1, 1):
+        return error
+    return f"urllib.parse.quote(str({args[0]}), safe='')"
+
+
+def _emit_uri_component_to_string(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("uriComponentToString", args, 1, 1):
+        return error
+    return f"urllib.parse.unquote(str({args[0]}))"
+
+
+def _emit_char(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("char", args, 1, 1):
+        return error
+    return f"chr(int({args[0]}))"
+
+
 FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "concat": _emit_concat,
     "substring": _emit_substring,
@@ -390,6 +410,9 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "base64": _emit_base64,
     "base64tostring": _emit_base64_to_string,
     "nthindexof": _emit_nth_index_of,
+    "uricomponent": _emit_uri_component,
+    "uricomponenttostring": _emit_uri_component_to_string,
+    "char": _emit_char,
 }
 
 # ---------------------------------------------------------------------------

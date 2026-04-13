@@ -29,7 +29,13 @@ _PIPELINE_VARS: dict[str, str] = {
     "DataFactory": "spark.conf.get('pipeline.globalParam.DataFactory', '')",
     "TriggeredByPipelineRunId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
 }
-_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {"firstRow", "value", "runOutput", "pipelineReturnValue"}
+_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {
+    "firstRow",
+    "value",
+    "runOutput",
+    "pipelineReturnValue",
+    "runPageUrl",
+}
 _DATETIME_HELPER_FUNCTIONS: set[str] = {
     "utcnow",
     "formatdatetime",
@@ -280,13 +286,6 @@ class PythonEmitter(EmitterProtocol):
             return UnsupportedValue(
                 value=".".join(properties),
                 message="Unsupported activity reference; expected @activity('X').output.<type>",
-            )
-
-        output_type = properties[1]
-        if output_type not in _SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES:
-            return UnsupportedValue(
-                value=".".join(properties),
-                message=f"Unsupported activity output reference type '@activity('{task_key}').output.{output_type}'",
             )
 
         base = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
