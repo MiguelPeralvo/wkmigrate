@@ -520,9 +520,17 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     """
     Parses an individual dependency from a dictionary.
 
+    Dependencies fall into two categories based on their structure:
+
+    1. **Parent dependencies** -- have an ``outcome`` field (injected by IfCondition
+       translator). These are returned directly with the given outcome.
+    2. **Sibling dependencies** -- have ``dependency_conditions`` (from ADF JSON).
+       These use the standard ``SUCCEEDED`` condition regardless of context.
+
     Args:
         dependency: Dependency definition as a ``dict``.
-        is_conditional_task: Whether the task is a conditional task.
+        is_conditional_task: Retained for call-site compatibility; no longer used
+            for branching (the ``outcome`` field presence determines the path).
 
     Returns:
         Dependency object describing the upstream relationship.
@@ -531,13 +539,16 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     if len(conditions) > 1:
         return UnsupportedValue(value=dependency, message="Dependencies with multiple conditions are not supported.")
 
-    if is_conditional_task:
-        supported_conditions = ["TRUE", "FALSE"]
-        outcome = dependency.get("outcome")
-    else:
-        supported_conditions = ["SUCCEEDED"]
-        outcome = None
+    outcome = dependency.get("outcome")
+    if outcome is not None:
+        # Parent dependency injected by IfCondition/ForEach translator (has outcome field)
+        task_key = dependency.get("activity")
+        if not task_key:
+            return UnsupportedValue(value=dependency, message="Missing value 'activity' for task dependency")
+        return Dependency(task_key=task_key, outcome=outcome)
 
+    # Sibling dependency from ADF JSON (dependency_conditions)
+    supported_conditions = ["SUCCEEDED"]
     if any(condition.upper() not in supported_conditions for condition in conditions):
         return UnsupportedValue(
             value=dependency, message="Dependencies with conditions other than 'Succeeded' are not supported."
@@ -547,4 +558,4 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     if not task_key:
         return UnsupportedValue(value=dependency, message="Missing value 'activity' for task dependency")
 
-    return Dependency(task_key=task_key, outcome=outcome)
+    return Dependency(task_key=task_key, outcome=None)

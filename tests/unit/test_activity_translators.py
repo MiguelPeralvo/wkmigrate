@@ -2818,3 +2818,51 @@ def test_inactive_activity_no_mark_as_defaults_to_succeeded() -> None:
         result, _ctx = visit_activity(activity, False, default_context())
     assert isinstance(result, DatabricksNotebookActivity)
     assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+
+
+# ---------------------------------------------------------------------------
+# CRP-9: IfCondition child with sibling Succeeded dependency (W-26 end-to-end)
+# ---------------------------------------------------------------------------
+
+
+def test_if_condition_child_with_sibling_succeeded_dependency():
+    """CRP-9: Children inside IfCondition branches with sibling Succeeded deps must resolve."""
+    from wkmigrate.models.ir.pipeline import Dependency
+
+    activity = {
+        "name": "parent_if",
+        "type": "IfCondition",
+        "depends_on": [],
+        "expression": {"type": "Expression", "value": "@equals('a', 'b')"},
+        "if_true_activities": [
+            {
+                "name": "step_1",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/step1",
+                "depends_on": [],
+            },
+            {
+                "name": "step_2",
+                "type": "DatabricksNotebook",
+                "notebook_path": "/Workspace/step2",
+                "depends_on": [
+                    {"activity": "step_1", "dependency_conditions": ["Succeeded"]},
+                ],
+            },
+        ],
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, IfConditionActivity)
+    step_2 = next(c for c in result.child_activities if c.name == "step_2")
+    # step_2 should have 2 deps: sibling (step_1) + injected parent (parent_if)
+    assert step_2.depends_on is not None
+    assert len(step_2.depends_on) == 2
+    assert all(isinstance(d, Dependency) for d in step_2.depends_on)
+    dep_keys = {d.task_key for d in step_2.depends_on}
+    assert "step_1" in dep_keys
+    assert "parent_if" in dep_keys
+    # Sibling dep: outcome=None; parent dep: outcome="true"
+    sibling_dep = next(d for d in step_2.depends_on if d.task_key == "step_1")
+    parent_dep = next(d for d in step_2.depends_on if d.task_key == "parent_if")
+    assert sibling_dep.outcome is None
+    assert parent_dep.outcome == "true"
