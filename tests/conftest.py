@@ -130,6 +130,24 @@ def web_activity_fixtures() -> list[dict]:
 
 
 @pytest.fixture
+def execute_pipeline_activity_fixtures() -> list[dict]:
+    """Load ExecutePipeline activity test fixtures."""
+    return load_fixtures("execute_pipeline_activities.json")
+
+
+@pytest.fixture
+def switch_activity_fixtures() -> list[dict]:
+    """Load Switch activity test fixtures."""
+    return load_fixtures("switch_activities.json")
+
+
+@pytest.fixture
+def until_activity_fixtures() -> list[dict]:
+    """Load Until activity test fixtures."""
+    return load_fixtures("until_activities.json")
+
+
+@pytest.fixture
 def complex_pipeline_fixtures() -> list[dict]:
     """Load complex pipeline test fixtures."""
     return load_fixtures("pipelines.json")

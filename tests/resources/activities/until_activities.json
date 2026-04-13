@@ -1,0 +1,44 @@
+[
+  {
+    "id": "basic",
+    "description": "Basic Until with retry condition",
+    "input": {
+      "name": "retry_loop",
+      "type": "Until",
+      "description": "Retry until condition met",
+      "depends_on": [],
+      "expression": {
+        "value": "@greaterOrEquals(variables('retries'), 3)",
+        "type": "Expression"
+      },
+      "timeout": "0.04:00:00",
+      "activities": [
+        {
+          "name": "increment_retry",
+          "type": "SetVariable",
+          "depends_on": [],
+          "variable_name": "retries",
+          "variable_value": {
+            "value": "@string(add(int(variables('retries')), 1))",
+            "type": "Expression"
+          }
+        }
+      ]
+    },
+    "expected": {
+      "name": "retry_loop",
+      "task_key": "retry_loop"
+    }
+  },
+  {
+    "id": "missing_expression",
+    "description": "Until with missing expression",
+    "input": {
+      "name": "bad_until",
+      "type": "Until",
+      "activities": []
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing"
+  }
+]
