@@ -8,13 +8,11 @@ from __future__ import annotations
 
 import json
 import pathlib
-import warnings
 
 import pytest
 
 from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
-    ForEachActivity,
     IfConditionActivity,
     Pipeline,
     RunJobActivity,
@@ -57,12 +55,14 @@ def _emit_expression(expression: str) -> str | UnsupportedValue:
 
 
 def _translate_fixture(name: str) -> Pipeline:
-    """Load a fixture, normalize ARM format, and translate to Pipeline IR."""
+    """Load a fixture, normalize ARM format, and translate to Pipeline IR.
+
+    translate_pipeline() captures NotTranslatableWarning internally into
+    Pipeline.not_translatable, so no external warning suppression is needed.
+    """
     raw = _load_pipeline(name)
     normalized = normalize_arm_pipeline(recursive_camel_to_snake(raw))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return translate_pipeline(normalized)
+    return translate_pipeline(normalized)
 
 
 # ============================================================
@@ -260,64 +260,93 @@ class TestPipelineTranslation:
         result = _translate_fixture("lakeh_a_pl_arquetipo_internal.json")
         assert isinstance(result, Pipeline)
         assert result.name == "lakeh_a_pl_arquetipo_internal"
-        assert len(result.tasks) > 0
-        has_foreach = any(isinstance(t, ForEachActivity) for t in result.tasks)
-        has_if_condition = any(isinstance(t, IfConditionActivity) for t in result.tasks)
-        assert has_foreach or has_if_condition
+        assert len(result.tasks) == 8
+        # G-13: Switch translates to IfConditionActivity
+        assert any(isinstance(t, IfConditionActivity) for t in result.tasks)
+        # SetVariable activities present (from ForEach inner activities)
+        assert any(isinstance(t, SetVariableActivity) for t in result.tasks)
 
     def test_bfc_parallel(self):
         """G-2, G-3, G-7, G-9, G-15, G-18: globalParams, runOutput, DataFactory, convertFromUtc, ExecutePipeline, inactive."""
         result = _translate_fixture("crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR.json")
         assert isinstance(result, Pipeline)
         assert result.name == "crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR"
-        assert len(result.tasks) > 0
-        # ExecutePipeline maps to RunJobActivity
-        assert any(isinstance(t, RunJobActivity) for t in result.tasks)
+        assert len(result.tasks) == 28
+        # G-15: ExecutePipeline maps to RunJobActivity
+        run_jobs = [t for t in result.tasks if isinstance(t, RunJobActivity)]
+        assert len(run_jobs) >= 9
+        # G-18: Inactive activity captured in not_translatable
+        inactive_entries = [nt for nt in result.not_translatable if "Inactive" in nt.get("message", "")]
+        assert len(inactive_entries) >= 1
+        # G-13: IfCondition from conditional branches
+        assert any(isinstance(t, IfConditionActivity) for t in result.tasks)
 
     def test_edw_bfcdt_process_data(self):
         """G-2, G-11, G-16: globalParams, AppendVariable, setSystemVariable."""
         result = _translate_fixture("crp0001_c_pl_prc_edw_bfcdt_process_data_AMR.json")
         assert isinstance(result, Pipeline)
         assert result.name == "crp0001_c_pl_prc_edw_bfcdt_process_data_AMR"
-        assert len(result.tasks) > 0
-        assert any(isinstance(t, SetVariableActivity) for t in result.tasks)
+        assert len(result.tasks) == 26
+        # G-11/G-16: AppendVariable and setSystemVariable both map to SetVariableActivity
+        set_vars = [t for t in result.tasks if isinstance(t, SetVariableActivity)]
+        assert len(set_vars) >= 1
+        # G-15: ExecutePipeline maps to RunJobActivity
+        assert any(isinstance(t, RunJobActivity) for t in result.tasks)
 
     def test_cmd_all_paral_ppal(self):
         """G-2, G-3, G-6, G-9, G-15: globalParams, runOutput, bare output, convertFromUtc, ExecutePipeline."""
         result = _translate_fixture("crp0001_c_pl_prc_anl_cmd_all_paral_ppal.json")
         assert isinstance(result, Pipeline)
         assert result.name == "crp0001_c_pl_prc_anl_cmd_all_paral_ppal"
-        assert len(result.tasks) > 0
+        assert len(result.tasks) == 19
+        # G-15: ExecutePipeline → RunJobActivity
+        assert any(isinstance(t, RunJobActivity) for t in result.tasks)
+        # Multiple notebook activities for CMD processing
+        notebooks = [t for t in result.tasks if isinstance(t, DatabricksNotebookActivity)]
+        assert len(notebooks) >= 10
 
     def test_fcl_fm_industrial(self):
         """G-2, G-12, G-15: globalParams, Until, ExecutePipeline."""
         result = _translate_fixture("crp0001_c_pl_prc_anl_fcl_fm_industrial.json")
         assert isinstance(result, Pipeline)
         assert result.name == "crp0001_c_pl_prc_anl_fcl_fm_industrial"
-        assert len(result.tasks) > 0
+        assert len(result.tasks) == 9
+        # G-15: ExecutePipeline → RunJobActivity
+        run_jobs = [t for t in result.tasks if isinstance(t, RunJobActivity)]
+        assert len(run_jobs) >= 2
+        # G-12: Until loop body produces SetVariableActivity (retry counter)
+        set_vars = [t for t in result.tasks if isinstance(t, SetVariableActivity)]
+        assert len(set_vars) >= 3
 
     def test_grant_permission(self):
         """G-2, G-4: globalParams, nested split with index, pipelineReturnValue."""
         result = _translate_fixture("lakeh_a_pl_arquetipo_grant_permission.json")
         assert isinstance(result, Pipeline)
         assert result.name == "lakeh_a_pl_arquetipo_grant_permission"
-        assert len(result.tasks) > 0
+        assert len(result.tasks) == 6
+        # G-4: pipelineReturnValue via SetVariable
+        set_vars = [t for t in result.tasks if isinstance(t, SetVariableActivity)]
+        assert len(set_vars) >= 2
+        # Notebook activities for permission granting
+        assert any(isinstance(t, DatabricksNotebookActivity) for t in result.tasks)
 
     def test_operational_log_start(self):
         """G-2, G-8, G-15: globalParams, TriggeredByPipelineRunId, ExecutePipeline."""
         result = _translate_fixture("lakeh_a_pl_operational_log_start.json")
         assert isinstance(result, Pipeline)
         assert result.name == "lakeh_a_pl_operational_log_start"
-        assert len(result.tasks) > 0
-        assert any(isinstance(t, RunJobActivity) for t in result.tasks)
+        # Single ExecutePipeline → single RunJobActivity
+        assert len(result.tasks) == 1
+        assert isinstance(result.tasks[0], RunJobActivity)
 
     def test_switch_internal(self):
         """G-1, G-13, G-14: optional chaining, Switch, Fail."""
         result = _translate_fixture("lakeh_a_pl_arquetipo_switch_internal.json")
         assert isinstance(result, Pipeline)
         assert result.name == "lakeh_a_pl_arquetipo_switch_internal"
-        assert len(result.tasks) > 0
-        # Switch maps to IfConditionActivity; Fail maps to DatabricksNotebookActivity placeholder
-        has_if_condition = any(isinstance(t, IfConditionActivity) for t in result.tasks)
-        has_notebook = any(isinstance(t, DatabricksNotebookActivity) for t in result.tasks)
-        assert has_if_condition or has_notebook
+        assert len(result.tasks) == 6
+        # G-13: Switch translates to IfConditionActivity
+        assert any(isinstance(t, IfConditionActivity) for t in result.tasks)
+        # G-14: Fail translates to DatabricksNotebookActivity placeholder
+        notebooks = [t for t in result.tasks if isinstance(t, DatabricksNotebookActivity)]
+        assert len(notebooks) >= 1
