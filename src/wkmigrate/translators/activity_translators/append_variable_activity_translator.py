@@ -45,11 +45,13 @@ def translate_append_variable_activity(
         context = activity_translator.default_context()
 
     variable_name = activity.get("variable_name")
+    if variable_name is None:
+        variable_name = activity.get("variableName")
     if not variable_name:
         return (
             UnsupportedValue(
                 value=activity,
-                message="Missing 'variable_name' in AppendVariable activity",
+                message="Missing 'variable_name'/'variableName' in AppendVariable activity",
             ),
             context,
         )
@@ -79,8 +81,14 @@ def translate_append_variable_activity(
     if task_key is None:
         task_key = f"set_variable_{variable_name}"
 
-    # Generate append code: read current array → append via concatenation → write back
-    append_code = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r}) + [{parsed_value}]"
+    # Generate append code: read current array (may be stored as JSON string) → append
+    # Uses a helper lambda that handles both list and string-stored arrays, with a
+    # default of [] for the first append when no prior variable task exists.
+    append_code = (
+        f"(lambda v: v if isinstance(v, list) else __import__('json').loads(v))"
+        f"(dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r}, default='[]'))"
+        f" + [{parsed_value}]"
+    )
 
     context = context.with_variable(variable_name, base_kwargs["task_key"])
     return (

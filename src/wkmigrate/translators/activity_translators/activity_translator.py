@@ -180,7 +180,7 @@ def visit_activity(
     # G-18: Skip inactive activities that are marked as succeeded
     state = activity.get("state")
     if state == "Inactive":
-        on_inactive = activity.get("onInactiveMarkAs") or activity.get("on_inactive_mark_as")
+        on_inactive = activity.get("onInactiveMarkAs") or activity.get("on_inactive_mark_as") or "Succeeded"
         if on_inactive == "Succeeded":
             activity_type = activity.get("type") or "Unsupported"
             with not_translatable_context(name, activity_type):

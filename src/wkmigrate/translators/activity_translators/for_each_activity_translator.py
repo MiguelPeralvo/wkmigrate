@@ -107,7 +107,10 @@ def translate_for_each_activity(
     if is_sequential is True:
         concurrency = 1
     else:
-        concurrency = _resolve_batch_count(activity.get("batch_count"), context, emission_config)
+        raw_batch_count = activity.get("batchCount")
+        if raw_batch_count is None:
+            raw_batch_count = activity.get("batch_count")
+        concurrency = _resolve_batch_count(raw_batch_count, context, emission_config)
     result = ForEachActivity(
         **base_kwargs,
         items_string=items_string,

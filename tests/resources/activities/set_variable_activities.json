@@ -299,7 +299,8 @@
     "expected": {
       "name": "mkstring",
       "task_key": "mkstring",
-      "variable_name": "pipelineReturnValue"
+      "variable_name": "pipelineReturnValue",
+      "variable_value": "{'str_array': 'result_value'}"
     }
   },
   {

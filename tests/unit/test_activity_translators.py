@@ -2688,6 +2688,7 @@ def test_set_system_variable(set_variable_activity_fixtures: list[dict]) -> None
     result, _ctx = translate_set_variable_activity(activity, base_kwargs)
     assert isinstance(result, SetVariableActivity)
     assert result.variable_name == "pipelineReturnValue"
+    assert result.variable_value == fixture["expected"]["variable_value"]
 
 
 def test_set_system_variable_empty_value(set_variable_activity_fixtures: list[dict]) -> None:
@@ -2710,7 +2711,8 @@ def test_append_variable_basic(append_variable_activity_fixtures: list[dict]) ->
     result, _ctx = translate_append_variable_activity(activity, base_kwargs)
     assert isinstance(result, SetVariableActivity)
     assert result.variable_name == "array_copy"
-    assert "append" in result.variable_value.lower() or "+" in result.variable_value
+    assert "+" in result.variable_value
+    assert "json.loads" in result.variable_value or "isinstance" in result.variable_value
 
 
 def test_append_variable_expression_value(append_variable_activity_fixtures: list[dict]) -> None:
@@ -2771,3 +2773,48 @@ def test_fail_activity_dispatch() -> None:
     }
     result = translate_activity(activity)
     assert isinstance(result, DatabricksNotebookActivity)
+
+
+# --- CRP-4: camelCase parity tests ---
+
+
+def test_append_variable_camel_case_variable_name() -> None:
+    """AppendVariable accepts camelCase variableName."""
+    activity = {
+        "name": "Append camel",
+        "type": "AppendVariable",
+        "depends_on": [],
+        "variableName": "my_array",
+        "value": "item",
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, SetVariableActivity)
+    assert result.variable_name == "my_array"
+
+
+def test_fail_activity_snake_case_error_code() -> None:
+    """Fail accepts snake_case error_code."""
+    activity = {
+        "name": "Pipeline Error SC",
+        "type": "Fail",
+        "depends_on": [],
+        "message": "Something went wrong",
+        "error_code": "ERR_001",
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, DatabricksNotebookActivity)
+
+
+def test_inactive_activity_no_mark_as_defaults_to_succeeded() -> None:
+    """Inactive activity without onInactiveMarkAs defaults to Succeeded."""
+    activity = {
+        "name": "Inactive No Mark",
+        "type": "DatabricksNotebook",
+        "state": "Inactive",
+        "depends_on": [],
+        "notebook_path": "/Workspace/notebooks/real",
+    }
+    with pytest.warns(NotTranslatableWarning):
+        result, _ctx = visit_activity(activity, False, default_context())
+    assert isinstance(result, DatabricksNotebookActivity)
+    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"

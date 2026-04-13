@@ -54,7 +54,10 @@ def translate_fail_activity(
         get_literal_or_expression(raw_message, context, ExpressionContext.FAIL_MESSAGE, emission_config=emission_config)
 
     # Resolve error code expression (check both camelCase and snake_case)
-    raw_error_code = activity.get("errorCode") or activity.get("error_code")
+    if "errorCode" in activity:
+        raw_error_code = activity.get("errorCode")
+    else:
+        raw_error_code = activity.get("error_code")
     if raw_error_code is not None:
         get_literal_or_expression(
             raw_error_code, context, ExpressionContext.FAIL_ERROR_CODE, emission_config=emission_config

@@ -134,14 +134,37 @@ def _translate_system_variable(
 
     resolved_pairs: list[str] = []
     for entry in raw_value:
+        if not isinstance(entry, dict):
+            return (
+                UnsupportedValue(
+                    value=activity,
+                    message="Invalid setSystemVariable entry; expected {'key': ..., 'value': ...}",
+                ),
+                context,
+            )
         key = entry.get("key")
         val = entry.get("value")
         if key is None or val is None:
-            continue
+            return (
+                UnsupportedValue(
+                    value=activity,
+                    message="Invalid setSystemVariable entry; missing 'key' or 'value'",
+                ),
+                context,
+            )
         resolved_val = parse_variable_value(val, context, emission_config=emission_config)
         if isinstance(resolved_val, UnsupportedValue):
             resolved_val = repr(val)
         resolved_pairs.append(f"{key!r}: {resolved_val}")
+
+    if not resolved_pairs:
+        return (
+            UnsupportedValue(
+                value=activity,
+                message="Missing or invalid 'value' for setSystemVariable activity; expected non-empty list of key-value pairs",
+            ),
+            context,
+        )
 
     variable_value = "{" + ", ".join(resolved_pairs) + "}"
 
