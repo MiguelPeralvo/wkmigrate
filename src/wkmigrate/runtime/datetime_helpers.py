@@ -63,6 +63,42 @@ _ADF_TO_STRFTIME: list[tuple[str, str]] = [
 ]
 _ADF_TOKEN_CONTEXT_CHARS = frozenset("yMdHhmsft")
 
+# Mapping of common Windows timezone IDs to IANA timezone names.
+# ADF uses Windows timezone names (e.g., "Romance Standard Time") because
+# Azure is built on .NET, which uses the Windows timezone database.
+# Python's zoneinfo only supports IANA names, so we translate here.
+# Source: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones
+_WINDOWS_TO_IANA: dict[str, str] = {
+    "Romance Standard Time": "Europe/Madrid",
+    "W. Europe Standard Time": "Europe/Berlin",
+    "Central European Standard Time": "Europe/Warsaw",
+    "Central Europe Standard Time": "Europe/Budapest",
+    "GMT Standard Time": "Europe/London",
+    "Greenwich Standard Time": "Atlantic/Reykjavik",
+    "Eastern Standard Time": "America/New_York",
+    "Pacific Standard Time": "America/Los_Angeles",
+    "Central Standard Time": "America/Chicago",
+    "Mountain Standard Time": "America/Denver",
+    "Atlantic Standard Time": "America/Halifax",
+    "US Mountain Standard Time": "America/Phoenix",
+    "Hawaiian Standard Time": "Pacific/Honolulu",
+    "Alaskan Standard Time": "America/Anchorage",
+    "China Standard Time": "Asia/Shanghai",
+    "Tokyo Standard Time": "Asia/Tokyo",
+    "India Standard Time": "Asia/Kolkata",
+    "AUS Eastern Standard Time": "Australia/Sydney",
+    "New Zealand Standard Time": "Pacific/Auckland",
+    "SA Pacific Standard Time": "America/Bogota",
+    "Arabian Standard Time": "Asia/Dubai",
+    "Russian Standard Time": "Europe/Moscow",
+    "UTC": "UTC",
+}
+
+
+def _resolve_timezone(tz_name: str) -> str:
+    """Resolve a timezone name to IANA, translating Windows IDs if needed."""
+    return _WINDOWS_TO_IANA.get(tz_name, tz_name)
+
 
 def utc_now() -> datetime:
     """Return current UTC datetime."""
@@ -70,8 +106,15 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def format_datetime(dt: datetime, adf_format: str) -> str:
-    """Format datetime using ADF/.NET style format tokens."""
+def format_datetime(dt: datetime | str, adf_format: str) -> str:
+    """Format datetime using ADF/.NET style format tokens.
+
+    Accepts both datetime objects and ISO 8601 date strings (ADF behavior).
+    """
+    if isinstance(dt, str):
+        if dt.endswith("Z"):
+            dt = dt[:-1] + "+00:00"
+        dt = datetime.fromisoformat(dt)
 
     working_format = adf_format
     millisecond_marker = "__WK_MILLISECOND__"
@@ -132,11 +175,11 @@ def start_of_day(dt: datetime) -> datetime:
 def convert_time_zone(dt: datetime, source_tz: str, target_tz: str) -> datetime:
     """Convert a datetime between named time zones."""
     try:
-        source_zone = ZoneInfo(source_tz)
+        source_zone = ZoneInfo(_resolve_timezone(source_tz))
     except ZoneInfoNotFoundError as exc:
         raise ValueError(f"Invalid source timezone '{source_tz}'") from exc
     try:
-        target_zone = ZoneInfo(target_tz)
+        target_zone = ZoneInfo(_resolve_timezone(target_tz))
     except ZoneInfoNotFoundError as exc:
         raise ValueError(f"Invalid target timezone '{target_tz}'") from exc
 

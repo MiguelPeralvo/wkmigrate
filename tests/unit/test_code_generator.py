@@ -154,6 +154,23 @@ def test_inline_datetime_helpers_match_runtime_helpers() -> None:
     )
     assert helper_namespace["_wkmigrate_utc_now"]().tzinfo == utc_now().tzinfo
 
+    # W-25: Windows timezone names produce same result as IANA equivalent
+    dt_april = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
+    assert helper_namespace["_wkmigrate_convert_time_zone"](
+        dt_april, "UTC", "Romance Standard Time"
+    ) == convert_time_zone(dt_april, "UTC", "Romance Standard Time")
+    assert helper_namespace["_wkmigrate_convert_time_zone"](
+        dt_april, "UTC", "Eastern Standard Time"
+    ) == convert_time_zone(dt_april, "UTC", "Eastern Standard Time")
+
+    # W-27: String input to format_datetime
+    assert helper_namespace["_wkmigrate_format_datetime"]("2026-04-13T14:30:00", "yyyy/MM/dd") == format_datetime(
+        "2026-04-13T14:30:00", "yyyy/MM/dd"
+    )
+    assert helper_namespace["_wkmigrate_format_datetime"](
+        "2026-04-13T14:30:00Z", "yyyy-MM-dd HH:mm:ss"
+    ) == format_datetime("2026-04-13T14:30:00Z", "yyyy-MM-dd HH:mm:ss")
+
     with pytest.raises(ValueError):
         convert_time_zone(dt, "Invalid/Zone", "UTC")
     with pytest.raises(ValueError):
