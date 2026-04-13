@@ -11,6 +11,7 @@ from wkmigrate.parsers.format_converter import convert_adf_datetime_format_to_sp
 
 FunctionEmitter = Callable[[list[str]], str | UnsupportedValue]
 _PIPELINE_PARAMETER_EXPRESSION_PREFIX = "dbutils.widgets.get("
+_TASKVALUES_EXPRESSION_PREFIX = "dbutils.jobs.taskValues.get("
 
 
 def _require_arity(
@@ -53,7 +54,8 @@ def _emit_unary_string_call(name: str, method: str) -> FunctionEmitter:
     def _emit(args: list[str]) -> str | UnsupportedValue:
         if error := _require_arity(name, args, 1, 1):
             return error
-        return f"str({args[0]}).{method}()"
+        arg = args[0]
+        return f"(None if ({arg}) is None else str({arg}).{method}())"
 
     return _emit
 
@@ -104,9 +106,9 @@ def _emit_binary_operator(name: str, operator: str) -> FunctionEmitter:
 
 
 def _coerce_numeric_operand(arg: str) -> str:
-    """Coerce pipeline parameter widget expressions to numeric values in math contexts."""
+    """Coerce string-returning expressions to numeric values in math contexts."""
 
-    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX):
+    if arg.startswith(_PIPELINE_PARAMETER_EXPRESSION_PREFIX) or arg.startswith(_TASKVALUES_EXPRESSION_PREFIX):
         return f"(lambda __wkm_p: int(__wkm_p) if __wkm_p.lstrip('-').isdigit() else float(__wkm_p))(str({arg}))"
     return arg
 
@@ -251,6 +253,72 @@ def _emit_convert_time_zone(args: list[str]) -> str | UnsupportedValue:
     return f"_wkmigrate_convert_time_zone({args[0]}, {args[1]}, {args[2]})"
 
 
+def _emit_add_minutes(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addMinutes", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_minutes({args[0]}, {args[1]})"
+
+
+def _emit_add_seconds(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("addSeconds", args, 2, 2):
+        return error
+    return f"_wkmigrate_add_seconds({args[0]}, {args[1]})"
+
+
+def _emit_day_of_week(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("dayOfWeek", args, 1, 1):
+        return error
+    return f"_wkmigrate_day_of_week({args[0]})"
+
+
+def _emit_day_of_month(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("dayOfMonth", args, 1, 1):
+        return error
+    return f"_wkmigrate_day_of_month({args[0]})"
+
+
+def _emit_day_of_year(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("dayOfYear", args, 1, 1):
+        return error
+    return f"_wkmigrate_day_of_year({args[0]})"
+
+
+def _emit_ticks(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("ticks", args, 1, 1):
+        return error
+    return f"_wkmigrate_ticks({args[0]})"
+
+
+def _emit_guid(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("guid", args, 0, 0):
+        return error
+    return "_wkmigrate_guid()"
+
+
+def _emit_rand(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("rand", args, 2, 2):
+        return error
+    return f"_wkmigrate_rand({args[0]}, {args[1]})"
+
+
+def _emit_base64(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("base64", args, 1, 1):
+        return error
+    return f"_wkmigrate_base64({args[0]})"
+
+
+def _emit_base64_to_string(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("base64ToString", args, 1, 1):
+        return error
+    return f"_wkmigrate_base64_to_string({args[0]})"
+
+
+def _emit_nth_index_of(args: list[str]) -> str | UnsupportedValue:
+    if error := _require_arity("nthIndexOf", args, 3, 3):
+        return error
+    return f"_wkmigrate_nth_index_of({args[0]}, {args[1]}, {args[2]})"
+
+
 FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "concat": _emit_concat,
     "substring": _emit_substring,
@@ -300,6 +368,17 @@ FUNCTION_REGISTRY: dict[str, FunctionEmitter] = {
     "addhours": _emit_add_hours,
     "startofday": _emit_start_of_day,
     "converttimezone": _emit_convert_time_zone,
+    "addminutes": _emit_add_minutes,
+    "addseconds": _emit_add_seconds,
+    "dayofweek": _emit_day_of_week,
+    "dayofmonth": _emit_day_of_month,
+    "dayofyear": _emit_day_of_year,
+    "ticks": _emit_ticks,
+    "guid": _emit_guid,
+    "rand": _emit_rand,
+    "base64": _emit_base64,
+    "base64tostring": _emit_base64_to_string,
+    "nthindexof": _emit_nth_index_of,
 }
 
 # ---------------------------------------------------------------------------

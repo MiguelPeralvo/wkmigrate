@@ -5,7 +5,7 @@ the Web activity notebook builder and configurable credentials scope.
 """
 
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -158,6 +158,51 @@ def test_inline_datetime_helpers_match_runtime_helpers() -> None:
         convert_time_zone(dt, "Invalid/Zone", "UTC")
     with pytest.raises(ValueError):
         helper_namespace["_wkmigrate_convert_time_zone"](dt, "Invalid/Zone", "UTC")
+
+
+def test_inline_w27_helpers_execute_correctly() -> None:
+    """W-27: addMinutes, addSeconds, dayOfWeek/Month/Year, ticks, guid, rand, base64, nthIndexOf."""
+    helper_namespace: dict[str, object] = {}
+    exec("\n".join(_INLINE_DATETIME_HELPERS), helper_namespace)  # noqa: S102
+
+    dt = datetime(2026, 3, 25, 10, 20, 30, 123000, tzinfo=timezone.utc)  # Wednesday
+
+    # addMinutes / addSeconds
+    assert helper_namespace["_wkmigrate_add_minutes"](dt, 30) == dt + timedelta(minutes=30)
+    assert helper_namespace["_wkmigrate_add_seconds"](dt, 60) == dt + timedelta(seconds=60)
+
+    # dayOfWeek: Wednesday = 4 in ADF (Sun=1, Mon=2, ..., Sat=7)
+    assert helper_namespace["_wkmigrate_day_of_week"](dt) == 4
+
+    # dayOfMonth
+    assert helper_namespace["_wkmigrate_day_of_month"](dt) == 25
+
+    # dayOfYear: March 25 = 31+28+25 = 84
+    assert helper_namespace["_wkmigrate_day_of_year"](dt) == 84
+
+    # ticks: .NET ticks (100-ns intervals since 0001-01-01)
+    ticks = helper_namespace["_wkmigrate_ticks"](dt)
+    assert isinstance(ticks, int)
+    assert ticks > 0
+
+    # guid: returns a UUID-format string
+    guid = helper_namespace["_wkmigrate_guid"]()
+    assert isinstance(guid, str)
+    assert len(guid) == 36  # UUID format: 8-4-4-4-12
+
+    # rand: returns int in range
+    result = helper_namespace["_wkmigrate_rand"](1, 100)
+    assert 1 <= result <= 100
+
+    # base64 / base64ToString
+    assert helper_namespace["_wkmigrate_base64"]("hello") == "aGVsbG8="
+    assert helper_namespace["_wkmigrate_base64_to_string"]("aGVsbG8=") == "hello"
+
+    # nthIndexOf
+    assert helper_namespace["_wkmigrate_nth_index_of"]("a-b-c-d", "-", 1) == 1
+    assert helper_namespace["_wkmigrate_nth_index_of"]("a-b-c-d", "-", 2) == 3
+    assert helper_namespace["_wkmigrate_nth_index_of"]("a-b-c-d", "-", 3) == 5
+    assert helper_namespace["_wkmigrate_nth_index_of"]("a-b-c-d", "-", 4) == -1
 
 
 def test_web_activity_notebook_with_unsupported_auth_type() -> None:
