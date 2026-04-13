@@ -602,3 +602,93 @@ def test_crp2_regular_dot_unchanged() -> None:
     """Regular . access is not affected by the ?. feature."""
     result = _emit_expression("@pipeline().parameters.env")
     assert result == "dbutils.widgets.get('env')"
+
+
+# ---------------------------------------------------------------------------
+# CRP-6: G-19 through G-24 remaining expression gaps
+# ---------------------------------------------------------------------------
+
+
+def test_crp6_g19_uri_component() -> None:
+    """G-19: uriComponent() should emit urllib.parse.quote."""
+    result = _emit_expression("@uriComponent('hello world')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "urllib.parse.quote" in result
+    assert "safe=''" in result
+
+
+def test_crp6_g19_uri_component_to_string() -> None:
+    """G-19: uriComponentToString() should emit urllib.parse.unquote."""
+    result = _emit_expression("@uriComponentToString('%20')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "urllib.parse.unquote" in result
+
+
+def test_crp6_g19_uri_component_tracks_import() -> None:
+    """G-19: uriComponent/uriComponentToString must track urllib.parse import."""
+    resolved = get_literal_or_expression("@uriComponent('x')")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "urllib.parse" in resolved.required_imports
+
+    resolved2 = get_literal_or_expression("@uriComponentToString('x')")
+    assert not isinstance(resolved2, UnsupportedValue)
+    assert "urllib.parse" in resolved2.required_imports
+
+
+def test_crp6_g19_uri_component_nested() -> None:
+    """G-19: uriComponent inside replace (real CRP0001 pattern)."""
+    result = _emit_expression("@replace(uriComponent('hello world'), '%20', '+')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "urllib.parse.quote" in result
+    assert ".replace" in result
+
+
+def test_crp6_g20_char() -> None:
+    """G-20: char(N) should emit chr(int(N))."""
+    result = _emit_expression("@char(65)")
+    assert not isinstance(result, UnsupportedValue)
+    assert "chr(int(" in result
+
+
+def test_crp6_g21_run_output_case_insensitive() -> None:
+    """G-21: activity().output.runOutPut (capital P) should resolve."""
+    result = _emit_expression("@activity('Control').output.runOutPut")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "['runOutPut']" in result
+
+
+def test_crp6_g22_run_page_url() -> None:
+    """G-22: activity().output.runPageUrl should resolve."""
+    result = _emit_expression("@activity('notebook1').output.runPageUrl")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "['runPageUrl']" in result
+
+
+def test_crp6_g23_deep_output_chain() -> None:
+    """G-23: activity().output.tasks with deep chain should resolve."""
+    result = _emit_expression("@activity('X').output.tasks")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "['tasks']" in result
+
+
+def test_crp6_g23_arbitrary_output_type() -> None:
+    """G-23: any output type should pass through after whitelist removal."""
+    result = _emit_expression("@activity('X').output.customProperty")
+    assert not isinstance(result, UnsupportedValue)
+    assert "['customProperty']" in result
+
+
+def test_crp6_g24_substring_2_arg() -> None:
+    """G-24: substring(s, start) 2-arg form should emit s[start:]."""
+    result = _emit_expression("@substring('abcdef', 2)")
+    assert not isinstance(result, UnsupportedValue)
+    assert "str('abcdef')[2:]" == result
+
+
+def test_crp6_g24_substring_3_arg_unchanged() -> None:
+    """G-24: substring(s, start, len) 3-arg form still works."""
+    result = _emit_expression("@substring('abcdef', 1, 3)")
+    assert result == "str('abcdef')[1:1 + 3]"
