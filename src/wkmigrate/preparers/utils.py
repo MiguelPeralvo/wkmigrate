@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 from databricks.sdk.service.compute import Library, MavenLibrary, PythonPyPiLibrary, RCranLibrary
 from wkmigrate.models.ir.pipeline import Activity
+from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.expression_parsers import ResolvedExpression
 from wkmigrate.utils import parse_mapping
 
@@ -65,7 +66,10 @@ def get_base_task(activity: Activity) -> dict[str, Any]:
                 }
             )
             for dep in activity.depends_on
+            if not isinstance(dep, UnsupportedValue)
         ]
+        if not depends_on:
+            depends_on = None
     if activity.libraries:
         libraries = [_create_library(library) for library in activity.libraries]
     return parse_mapping(

@@ -8,12 +8,15 @@ from wkmigrate.models.ir.pipeline import (
     Authentication,
     ColumnMapping,
     CopyActivity,
+    DatabricksNotebookActivity,
+    Dependency,
     ForEachActivity,
     LookupActivity,
     Pipeline,
     RunJobActivity,
     WebActivity,
 )
+from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
 from wkmigrate.preparers.lookup_activity_preparer import prepare_lookup_activity
@@ -276,6 +279,46 @@ def test_collect_data_source_secrets_uses_provided_scope() -> None:
     assert len(secrets) > 0
     for secret in secrets:
         assert secret.scope == "my_scope"
+
+
+# ---------------------------------------------------------------------------
+# CRP-9: get_base_task() safety net for UnsupportedValue (W-26B)
+# ---------------------------------------------------------------------------
+
+
+def test_get_base_task_filters_unsupported_dependencies() -> None:
+    """get_base_task() must skip UnsupportedValue objects in depends_on without crashing."""
+    from wkmigrate.preparers.utils import get_base_task
+
+    activity = DatabricksNotebookActivity(
+        name="test_task",
+        task_key="test_task",
+        notebook_path="/Workspace/test",
+        depends_on=[
+            Dependency(task_key="good_dep", outcome=None),
+            UnsupportedValue(value={"bad": "dep"}, message="unsupported condition"),
+        ],
+    )
+    result = get_base_task(activity)
+    deps = result["depends_on"]
+    assert len(deps) == 1
+    assert deps[0]["task_key"] == "good_dep"
+
+
+def test_get_base_task_all_unsupported_dependencies_yields_none() -> None:
+    """When all dependencies are unsupported, depends_on should be None."""
+    from wkmigrate.preparers.utils import get_base_task
+
+    activity = DatabricksNotebookActivity(
+        name="test_task",
+        task_key="test_task",
+        notebook_path="/Workspace/test",
+        depends_on=[
+            UnsupportedValue(value={}, message="bad"),
+        ],
+    )
+    result = get_base_task(activity)
+    assert "depends_on" not in result or result["depends_on"] is None
 
 
 def _make_pipeline_with_lookup() -> Pipeline:
