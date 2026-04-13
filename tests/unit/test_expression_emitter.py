@@ -337,3 +337,157 @@ def test_div_emits_integer_division() -> None:
     assert not isinstance(resolved, UnsupportedValue)
     assert "//" in resolved.code
     assert resolved.code.count("/") >= 2  # // has two slashes
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-2: pipeline().globalParameters.X
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_global_parameters_emit() -> None:
+    """pipeline().globalParameters.env_variable emits spark.conf.get."""
+    result = _emit_expression("@pipeline().globalParameters.env_variable")
+    assert not isinstance(result, UnsupportedValue)
+    assert result == "spark.conf.get('pipeline.globalParam.env_variable', '')"
+
+
+def test_crp1_global_parameters_in_concat() -> None:
+    """globalParameters works when nested inside concat()."""
+    result = _emit_expression("@concat('/Volumes/', pipeline().globalParameters.env_variable, '/libs/')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "spark.conf.get('pipeline.globalParam.env_variable', '')" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-3: activity().output.runOutput
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_activity_run_output() -> None:
+    """activity('X').output.runOutput emits taskValues.get with ['runOutput']."""
+    result = _emit_expression("@activity('Control ejecucion').output.runOutput")
+    assert not isinstance(result, UnsupportedValue)
+    assert "dbutils.jobs.taskValues.get(taskKey='Control ejecucion', key='result')" in result
+    assert "['runOutput']" in result
+
+
+def test_crp1_activity_run_output_in_equals() -> None:
+    """runOutput works when nested inside equals()."""
+    result = _emit_expression("@equals(activity('ExisteDatoDelDia').output.runOutput, 1)")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "['runOutput']" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-4: activity().output.pipelineReturnValue.X
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_pipeline_return_value() -> None:
+    """activity('X').output.pipelineReturnValue.str_array emits chained accessors."""
+    result = _emit_expression("@activity('datatsources').output.pipelineReturnValue.str_array")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "['pipelineReturnValue']" in result
+    assert "['str_array']" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-5: activity().error.X
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_activity_error_message() -> None:
+    """activity('X').error.message emits taskValues.get for error."""
+    result = _emit_expression("@activity('internal switch').error.message")
+    assert not isinstance(result, UnsupportedValue)
+    assert "taskValues.get" in result
+    assert "'error'" in result
+    assert "'message'" in result
+
+
+def test_crp1_activity_error_code() -> None:
+    """activity('X').error.errorCode emits taskValues.get for error."""
+    result = _emit_expression("@activity('internal switch').error.errorCode")
+    assert not isinstance(result, UnsupportedValue)
+    assert "'errorCode'" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-6: activity().output (bare, no sub-property)
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_activity_output_bare() -> None:
+    """activity('X').output (bare) emits taskValues.get without accessor chain."""
+    result = _emit_expression("@activity('cmd_notebook_BW1').output")
+    assert not isinstance(result, UnsupportedValue)
+    assert result == "dbutils.jobs.taskValues.get(taskKey='cmd_notebook_BW1', key='result')"
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-7: pipeline().DataFactory
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_pipeline_data_factory() -> None:
+    """pipeline().DataFactory emits spark.conf.get."""
+    result = _emit_expression("@pipeline().DataFactory")
+    assert not isinstance(result, UnsupportedValue)
+    assert result == "spark.conf.get('pipeline.globalParam.DataFactory', '')"
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-8: pipeline().TriggeredByPipelineRunId
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_pipeline_triggered_by_run_id() -> None:
+    """pipeline().TriggeredByPipelineRunId emits multitaskParentRunId tag."""
+    result = _emit_expression("@pipeline().TriggeredByPipelineRunId")
+    assert not isinstance(result, UnsupportedValue)
+    assert "multitaskParentRunId" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-9: convertFromUtc function
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_convert_from_utc_2_args() -> None:
+    """convertFromUtc with 2 args emits convert_time_zone from UTC."""
+    result = _emit_expression("@convertFromUtc(utcnow(), 'Romance Standard Time')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "_wkmigrate_convert_time_zone(" in result
+    assert "'UTC'" in result
+    assert "'Romance Standard Time'" in result
+
+
+def test_crp1_convert_from_utc_3_args() -> None:
+    """convertFromUtc with 3 args wraps in format_datetime."""
+    result = _emit_expression("@convertFromUtc(utcnow(), 'Romance Standard Time', 'dd/MM/yyyy HH:mm')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "_wkmigrate_format_datetime(" in result
+    assert "_wkmigrate_convert_time_zone(" in result
+
+
+# ---------------------------------------------------------------------------
+# CRP1 G-10: convertTimeZone with 4th arg (format)
+# ---------------------------------------------------------------------------
+
+
+def test_crp1_convert_time_zone_4_args() -> None:
+    """convertTimeZone with 4 args wraps in format_datetime."""
+    result = _emit_expression("@convertTimeZone(utcnow(), 'UTC', 'Romance Standard Time', 'dd/MM/yyyy')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "_wkmigrate_format_datetime(" in result
+    assert "_wkmigrate_convert_time_zone(" in result
+
+
+def test_crp1_convert_time_zone_3_args_regression() -> None:
+    """Existing 3-arg convertTimeZone still works after arity change."""
+    result = _emit_expression("@convertTimeZone(utcnow(), 'UTC', 'Romance Standard Time')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "_wkmigrate_convert_time_zone(" in result
+    assert "_wkmigrate_format_datetime" not in result

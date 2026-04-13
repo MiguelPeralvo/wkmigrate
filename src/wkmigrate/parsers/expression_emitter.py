@@ -26,8 +26,10 @@ _PIPELINE_VARS: dict[str, str] = {
     "RunId": "dbutils.jobs.getContext().tags().get('runId', '')",
     "TriggerTime": "dbutils.jobs.getContext().tags().get('startTime', '')",
     "GroupId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
+    "DataFactory": "spark.conf.get('pipeline.globalParam.DataFactory', '')",
+    "TriggeredByPipelineRunId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
 }
-_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {"firstRow", "value"}
+_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {"firstRow", "value", "runOutput", "pipelineReturnValue"}
 _DATETIME_HELPER_FUNCTIONS: set[str] = {
     "utcnow",
     "formatdatetime",
@@ -35,6 +37,7 @@ _DATETIME_HELPER_FUNCTIONS: set[str] = {
     "addhours",
     "startofday",
     "converttimezone",
+    "convertfromutc",
 }
 
 
@@ -233,6 +236,9 @@ class PythonEmitter(EmitterProtocol):
         if properties[0] == "parameters" and len(properties) == 2:
             return f"dbutils.widgets.get({properties[1]!r})"
 
+        if properties[0] == "globalParameters" and len(properties) == 2:
+            return f"spark.conf.get({('pipeline.globalParam.' + properties[1])!r}, '')"
+
         return UnsupportedValue(
             value=".".join(properties),
             message=f"Unsupported pipeline property access '@pipeline().{'.'.join(properties)}'",
@@ -244,13 +250,24 @@ class PythonEmitter(EmitterProtocol):
         properties: list[str],
         index_segments: list[AstNode],
     ) -> str | UnsupportedValue:
-        """Emit ``activity('X').output...`` references."""
+        """Emit ``activity('X').output...`` or ``activity('X').error...`` references."""
 
         if len(root.args) != 1 or not isinstance(root.args[0], StringLiteral):
             return UnsupportedValue(
                 value=root.name,
                 message="activity() requires exactly one string-literal argument",
             )
+
+        task_key = root.args[0].value
+
+        # Bare .output (no sub-property) — e.g. contains(activity('X').output, 'runError')
+        if len(properties) == 1 and properties[0] == "output":
+            return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
+
+        # Error property access — e.g. activity('X').error.message
+        if len(properties) >= 1 and properties[0] == "error":
+            error_property = properties[1] if len(properties) >= 2 else "message"
+            return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='error').get({error_property!r}, '')"
 
         if len(properties) < 2 or properties[0] != "output":
             return UnsupportedValue(
@@ -260,13 +277,11 @@ class PythonEmitter(EmitterProtocol):
 
         output_type = properties[1]
         if output_type not in _SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES:
-            task_key = root.args[0].value
             return UnsupportedValue(
                 value=".".join(properties),
                 message=f"Unsupported activity output reference type '@activity('{task_key}').output.{output_type}'",
             )
 
-        task_key = root.args[0].value
         base = f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key='result')"
         remaining_properties = properties[1:]
         if not remaining_properties and not index_segments:
