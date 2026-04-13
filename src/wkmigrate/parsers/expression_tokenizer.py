@@ -2,22 +2,23 @@
 
 Converts an expression source string into a ``list[Token]`` consumed by the
 recursive-descent parser in ``expression_parser.py``. The token vocabulary is small
-(12 types) because the ADF expression grammar is small.
+(13 types) because the ADF expression grammar is small.
 
 Token types:
 
-    STRING    — single-quoted string literal, with ``''`` escape for embedded quotes
-    NUMBER    — integer or float literal
-    BOOL      — ``true`` or ``false`` (case-insensitive)
-    NULL      — ``null`` literal
-    IDENT     — function or property name
-    LPAREN    — ``(``
-    RPAREN    — ``)``
-    LBRACKET  — ``[``
-    RBRACKET  — ``]``
-    COMMA     — ``,``
-    DOT       — ``.``
-    EOF       — end-of-input sentinel
+    STRING        — single-quoted string literal, with ``''`` escape for embedded quotes
+    NUMBER        — integer or float literal
+    BOOL          — ``true`` or ``false`` (case-insensitive)
+    NULL          — ``null`` literal
+    IDENT         — function or property name
+    LPAREN        — ``(``
+    RPAREN        — ``)``
+    LBRACKET      — ``[``
+    RBRACKET      — ``]``
+    COMMA         — ``,``
+    DOT           — ``.``
+    OPTIONAL_DOT  — ``?.``
+    EOF           — end-of-input sentinel
 
 On lexical errors (unterminated string, unknown character), the tokenizer returns
 ``UnsupportedValue`` rather than raising. This is consistent with wkmigrate's
@@ -53,6 +54,7 @@ class TokenType(StrEnum):
     RBRACKET = "RBRACKET"
     COMMA = "COMMA"
     DOT = "DOT"
+    OPTIONAL_DOT = "OPTIONAL_DOT"
     EOF = "EOF"
 
 
@@ -132,6 +134,12 @@ def tokenize(expression: str) -> list[Token] | UnsupportedValue:
                 tokens.append(Token(token_type=TokenType.NULL, value=lower_value, position=start))
                 continue
             tokens.append(Token(token_type=TokenType.IDENT, value=value, position=start))
+            continue
+
+        # Handle ?. (optional chaining)
+        if char == "?" and idx + 1 < length and expression[idx + 1] == ".":
+            tokens.append(Token(token_type=TokenType.OPTIONAL_DOT, value="?.", position=idx))
+            idx += 2
             continue
 
         return UnsupportedValue(

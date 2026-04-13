@@ -74,10 +74,11 @@ class FunctionCall:
 
 @dataclass(frozen=True, slots=True)
 class PropertyAccess:
-    """Property access expression (``target.property``)."""
+    """Property access expression (``target.property`` or ``target?.property``)."""
 
     target: "AstNode"
     property_name: str
+    optional: bool = False
 
 
 @dataclass(frozen=True, slots=True)

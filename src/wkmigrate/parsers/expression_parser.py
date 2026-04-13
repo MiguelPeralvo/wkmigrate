@@ -249,6 +249,14 @@ class _Parser:
                 primary = PropertyAccess(target=primary, property_name=str(identifier.value))
                 continue
 
+            if token.token_type == TokenType.OPTIONAL_DOT:
+                self._advance()
+                identifier = self._consume(TokenType.IDENT, "Expected property name after '?.'")
+                if isinstance(identifier, UnsupportedValue):
+                    return identifier
+                primary = PropertyAccess(target=primary, property_name=str(identifier.value), optional=True)
+                continue
+
             if token.token_type == TokenType.LBRACKET:
                 self._advance()
                 index_expr = self._parse_expression()
