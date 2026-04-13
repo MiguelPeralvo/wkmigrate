@@ -1,0 +1,64 @@
+[
+  {
+    "id": "basic",
+    "description": "Basic ExecutePipeline with literal parameters",
+    "input": {
+      "name": "run_child_pipeline",
+      "type": "ExecutePipeline",
+      "description": "Execute a child pipeline with literal params",
+      "depends_on": [],
+      "pipeline": {
+        "referenceName": "lakeh_a_pl_operational_log",
+        "type": "PipelineReference"
+      },
+      "wait_on_completion": true,
+      "parameters": {
+        "logType": "START",
+        "message": "Pipeline started"
+      }
+    },
+    "expected": {
+      "name": "run_child_pipeline",
+      "task_key": "run_child_pipeline",
+      "description": "Execute a child pipeline with literal params",
+      "pipeline_name": "lakeh_a_pl_operational_log"
+    }
+  },
+  {
+    "id": "expression_params",
+    "description": "ExecutePipeline with expression parameters",
+    "input": {
+      "name": "run_with_expressions",
+      "type": "ExecutePipeline",
+      "description": "Execute pipeline with expression params",
+      "depends_on": [],
+      "pipeline": {
+        "referenceName": "child_pipeline",
+        "type": "PipelineReference"
+      },
+      "parameters": {
+        "applicationName": {
+          "value": "@pipeline().parameters.applicationName",
+          "type": "Expression"
+        },
+        "staticParam": "literal_value"
+      }
+    },
+    "expected": {
+      "name": "run_with_expressions",
+      "task_key": "run_with_expressions",
+      "pipeline_name": "child_pipeline"
+    }
+  },
+  {
+    "id": "missing_ref",
+    "description": "ExecutePipeline with missing pipeline reference",
+    "input": {
+      "name": "bad_execute",
+      "type": "ExecutePipeline",
+      "pipeline": {}
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing"
+  }
+]

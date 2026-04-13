@@ -1,0 +1,105 @@
+[
+  {
+    "id": "single_case",
+    "description": "Switch with one case and a default",
+    "input": {
+      "name": "route_by_type",
+      "type": "Switch",
+      "description": "Route by activity type",
+      "depends_on": [],
+      "on": {
+        "value": "@pipeline().parameters.routeType",
+        "type": "Expression"
+      },
+      "cases": [
+        {
+          "value": "NOTEBOOK",
+          "activities": [
+            {
+              "name": "run_notebook",
+              "type": "DatabricksNotebook",
+              "depends_on": [],
+              "notebook_path": "/Workspace/notebooks/handler"
+            }
+          ]
+        }
+      ],
+      "default_activities": [
+        {
+          "name": "default_notebook",
+          "type": "DatabricksNotebook",
+          "depends_on": [],
+          "notebook_path": "/Workspace/notebooks/default_handler"
+        }
+      ]
+    },
+    "expected": {
+      "name": "route_by_type",
+      "task_key": "route_by_type",
+      "op": "EQUAL_TO"
+    }
+  },
+  {
+    "id": "multi_case",
+    "description": "Switch with two cases and a default",
+    "input": {
+      "name": "multi_route",
+      "type": "Switch",
+      "description": "Route by type with multiple cases",
+      "depends_on": [],
+      "on": {
+        "value": "@pipeline().parameters.mode",
+        "type": "Expression"
+      },
+      "cases": [
+        {
+          "value": "FAST",
+          "activities": [
+            {
+              "name": "fast_path",
+              "type": "DatabricksNotebook",
+              "depends_on": [],
+              "notebook_path": "/Workspace/notebooks/fast"
+            }
+          ]
+        },
+        {
+          "value": "SLOW",
+          "activities": [
+            {
+              "name": "slow_path",
+              "type": "DatabricksNotebook",
+              "depends_on": [],
+              "notebook_path": "/Workspace/notebooks/slow"
+            }
+          ]
+        }
+      ],
+      "default_activities": [
+        {
+          "name": "default_path",
+          "type": "DatabricksNotebook",
+          "depends_on": [],
+          "notebook_path": "/Workspace/notebooks/default"
+        }
+      ]
+    },
+    "expected": {
+      "name": "multi_route",
+      "task_key": "multi_route",
+      "op": "EQUAL_TO",
+      "child_count_gte": 3
+    }
+  },
+  {
+    "id": "missing_on",
+    "description": "Switch with missing on expression",
+    "input": {
+      "name": "bad_switch",
+      "type": "Switch",
+      "cases": []
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing"
+  }
+]

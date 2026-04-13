@@ -61,6 +61,15 @@ from wkmigrate.translators.activity_translators.spark_python_activity_translator
 from wkmigrate.translators.activity_translators.copy_activity_translator import (
     translate_copy_activity,
 )
+from wkmigrate.translators.activity_translators.execute_pipeline_activity_translator import (
+    translate_execute_pipeline_activity,
+)
+from wkmigrate.translators.activity_translators.switch_activity_translator import (
+    translate_switch_activity,
+)
+from wkmigrate.translators.activity_translators.until_activity_translator import (
+    translate_until_activity,
+)
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.parsers.expression_parsers import ResolvedExpression, parse_variable_value
 from wkmigrate.parsers.expression_ast import StringLiteral
@@ -703,12 +712,14 @@ def test_unsupported_type_creates_placeholder(unsupported_activity_fixtures: lis
     assert result.notebook_path == fixture["expected"]["notebook_path"]
 
 
-def test_execute_pipeline_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
-    """Test that ExecutePipeline activity creates placeholder."""
+def test_execute_pipeline_from_unsupported_fixture(unsupported_activity_fixtures: list[dict]) -> None:
+    """ExecutePipeline is now supported — produces RunJobActivity (not placeholder)."""
     fixture = get_fixture(unsupported_activity_fixtures, "execute_pipeline")
     result = translate_activity(fixture["input"])
 
-    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+    assert isinstance(result, RunJobActivity)
+    assert result.pipeline is not None
+    assert result.pipeline.name == "child_pipeline"
 
 
 def test_wait_creates_placeholder_with_dependency(unsupported_activity_fixtures: list[dict]) -> None:
@@ -2420,3 +2431,167 @@ def test_normalize_activity_preserves_flat_format() -> None:
     result = translate_activity(activity)
     assert isinstance(result, SetVariableActivity)
     assert result.variable_name == "x"
+
+
+# --- CRP-3: ExecutePipeline translator ---
+
+
+def test_execute_pipeline_basic(execute_pipeline_activity_fixtures: list[dict]) -> None:
+    """ExecutePipeline with literal params produces RunJobActivity."""
+    fixture = get_fixture(execute_pipeline_activity_fixtures, "basic")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_execute_pipeline_activity(activity, base_kwargs)
+    assert isinstance(result, RunJobActivity)
+    assert result.pipeline is not None
+    assert result.pipeline.name == fixture["expected"]["pipeline_name"]
+
+
+def test_execute_pipeline_expression_params(execute_pipeline_activity_fixtures: list[dict]) -> None:
+    """ExecutePipeline resolves expression parameters via the expression system."""
+    fixture = get_fixture(execute_pipeline_activity_fixtures, "expression_params")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_execute_pipeline_activity(activity, base_kwargs)
+    assert isinstance(result, RunJobActivity)
+    assert result.job_parameters is not None
+    app_name_param = result.job_parameters.get("applicationName")
+    assert app_name_param is not None
+    param_str = app_name_param.code if hasattr(app_name_param, "code") else str(app_name_param)
+    assert "dbutils.widgets.get" in param_str
+
+
+def test_execute_pipeline_missing_ref(execute_pipeline_activity_fixtures: list[dict]) -> None:
+    """ExecutePipeline with missing pipeline reference returns UnsupportedValue."""
+    fixture = get_fixture(execute_pipeline_activity_fixtures, "missing_ref")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_execute_pipeline_activity(activity, base_kwargs)
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_execute_pipeline_dispatch() -> None:
+    """ExecutePipeline routes through translate_activity dispatcher."""
+    activity = {
+        "name": "run_child",
+        "type": "ExecutePipeline",
+        "depends_on": [],
+        "pipeline": {"referenceName": "child_job", "type": "PipelineReference"},
+        "parameters": {"env": "prod"},
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, RunJobActivity)
+    assert result.pipeline is not None
+    assert result.pipeline.name == "child_job"
+
+
+# --- CRP-3: Switch translator ---
+
+
+def test_switch_single_case(switch_activity_fixtures: list[dict]) -> None:
+    """Switch with one case produces IfConditionActivity with EQUAL_TO op."""
+    fixture = get_fixture(switch_activity_fixtures, "single_case")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_switch_activity(activity, base_kwargs)
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    assert result.child_activities
+
+
+def test_switch_multi_case(switch_activity_fixtures: list[dict]) -> None:
+    """Switch with two cases produces chained IfCondition with child activities."""
+    fixture = get_fixture(switch_activity_fixtures, "multi_case")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_switch_activity(activity, base_kwargs)
+    assert isinstance(result, IfConditionActivity)
+    assert result.op == "EQUAL_TO"
+    # Should have children: true-branch activities + a nested IfCondition (false branch)
+    assert len(result.child_activities) >= 2
+
+
+def test_switch_missing_on(switch_activity_fixtures: list[dict]) -> None:
+    """Switch with missing on expression returns UnsupportedValue."""
+    fixture = get_fixture(switch_activity_fixtures, "missing_on")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_switch_activity(activity, base_kwargs)
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_switch_dispatch() -> None:
+    """Switch routes through translate_activity dispatcher."""
+    activity = {
+        "name": "route_test",
+        "type": "Switch",
+        "depends_on": [],
+        "on": {"value": "@pipeline().parameters.mode", "type": "Expression"},
+        "cases": [
+            {
+                "value": "A",
+                "activities": [
+                    {
+                        "name": "case_a",
+                        "type": "DatabricksNotebook",
+                        "depends_on": [],
+                        "notebook_path": "/Workspace/notebooks/a",
+                    }
+                ],
+            }
+        ],
+        "default_activities": [],
+    }
+    result = translate_activity(activity)
+    assert isinstance(result, IfConditionActivity)
+
+
+# --- CRP-3: Until translator ---
+
+
+def test_until_basic(until_activity_fixtures: list[dict]) -> None:
+    """Until resolves condition and returns placeholder (not UnsupportedValue)."""
+    fixture = get_fixture(until_activity_fixtures, "basic")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_until_activity(activity, base_kwargs)
+    assert not isinstance(result, UnsupportedValue)
+
+
+def test_until_missing_expression(until_activity_fixtures: list[dict]) -> None:
+    """Until with missing expression returns UnsupportedValue."""
+    fixture = get_fixture(until_activity_fixtures, "missing_expression")
+    activity = fixture["input"]
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_until_activity(activity, base_kwargs)
+    assert isinstance(result, UnsupportedValue)
+
+
+def test_until_with_timeout() -> None:
+    """Until with explicit timeout does not crash."""
+    activity = {
+        "name": "timeout_loop",
+        "type": "Until",
+        "depends_on": [],
+        "expression": {"value": "@equals(variables('done'), 'yes')", "type": "Expression"},
+        "timeout": "0.02:00:00",
+        "activities": [],
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result, _ctx = translate_until_activity(activity, base_kwargs)
+    assert not isinstance(result, UnsupportedValue)
+
+
+def test_until_dispatch() -> None:
+    """Until routes through translate_activity dispatcher."""
+    activity = {
+        "name": "loop_test",
+        "type": "Until",
+        "depends_on": [],
+        "expression": {"value": "@equals(variables('x'), 'done')", "type": "Expression"},
+        "timeout": "0.01:00:00",
+        "activities": [],
+    }
+    result = translate_activity(activity)
+    # Until returns a placeholder notebook, not UnsupportedValue
+    assert isinstance(result, DatabricksNotebookActivity)

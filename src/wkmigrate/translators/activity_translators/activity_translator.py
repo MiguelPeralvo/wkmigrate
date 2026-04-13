@@ -50,12 +50,17 @@ from wkmigrate.translators.activity_translators.copy_activity_translator import 
 from wkmigrate.translators.activity_translators.databricks_job_activity_translator import (
     translate_databricks_job_activity,
 )
+from wkmigrate.translators.activity_translators.execute_pipeline_activity_translator import (
+    translate_execute_pipeline_activity,
+)
 from wkmigrate.translators.activity_translators.for_each_activity_translator import translate_for_each_activity
 from wkmigrate.translators.activity_translators.if_condition_activity_translator import translate_if_condition_activity
 from wkmigrate.translators.activity_translators.lookup_activity_translator import translate_lookup_activity
 from wkmigrate.translators.activity_translators.notebook_activity_translator import translate_notebook_activity
 from wkmigrate.translators.activity_translators.set_variable_activity_translator import translate_set_variable_activity
 from wkmigrate.translators.activity_translators.spark_jar_activity_translator import translate_spark_jar_activity
+from wkmigrate.translators.activity_translators.switch_activity_translator import translate_switch_activity
+from wkmigrate.translators.activity_translators.until_activity_translator import translate_until_activity
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
@@ -246,6 +251,15 @@ def _dispatch_activity(
                 translate_copy_activity(activity, base_kwargs, context, emission_config=emission_config),
                 context,
             )
+        case "ExecutePipeline":
+            return (
+                translate_execute_pipeline_activity(activity, base_kwargs, context, emission_config=emission_config),
+                context,
+            )
+        case "Switch":
+            return translate_switch_activity(activity, base_kwargs, context, emission_config=emission_config)
+        case "Until":
+            return translate_until_activity(activity, base_kwargs, context, emission_config=emission_config)
         case _:
             translator = context.registry.get(activity_type)
             if translator is not None:
