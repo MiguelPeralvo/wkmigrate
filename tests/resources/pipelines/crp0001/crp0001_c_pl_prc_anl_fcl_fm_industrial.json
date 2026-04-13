@@ -1,0 +1,557 @@
+{
+	"name": "crp0001_c_pl_prc_anl_fcl_fm_industrial",
+	"properties": {
+		"activities": [
+			{
+				"name": "log_start",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "lakeh_a_pl_operational_log_start",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"applicationName": {
+							"value": "@pipeline().parameters.applicationName",
+							"type": "Expression"
+						},
+						"message": {
+							"value": "Inicio proceso de carga @{pipeline().parameters.tabledestination}",
+							"type": "Expression"
+						},
+						"pipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"uuid": {
+							"value": "@variables('uuid')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "log_end",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Until3",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "lakeh_a_pl_operational_log_end",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"applicationName": {
+							"value": "@pipeline().parameters.applicationName",
+							"type": "Expression"
+						},
+						"message": {
+							"value": "Fin proceso de carga @{pipeline().parameters.tabledestination}",
+							"type": "Expression"
+						},
+						"pipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"uuid": {
+							"value": "@variables('uuid')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Until1",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "log_start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    variables('ResultadoEjecucion'),\n    equals(length(variables('Intentos')),\n            pipeline().parameters.maxReintentos)\n    )",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Set variable1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "crp0001_pl_prc_anl_fcl_fm_calculoIndicadores_industrial",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ResultadoEjecucion",
+								"value": true
+							}
+						},
+						{
+							"name": "Append variable1",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "crp0001_pl_prc_anl_fcl_fm_calculoIndicadores_industrial",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "Intentos",
+								"value": "\"reintento\""
+							}
+						},
+						{
+							"name": "crp0001_pl_prc_anl_fcl_fm_calculoIndicadores_industrial",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_fcl_fm_calculoIndicadores_industrial",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"applicationName": {
+										"value": "@pipeline().parameters.applicationName",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.month",
+										"type": "Expression"
+									},
+									"num_workers": {
+										"value": "@pipeline().parameters.num_workers",
+										"type": "Expression"
+									},
+									"sourcetable": {
+										"value": "@pipeline().parameters.sourcetable",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.year",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Until2",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Reinicio Result Ejecucion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Reinicio Intentos",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    variables('ResultadoEjecucion'),\n    equals(length(variables('Intentos')),\n            pipeline().parameters.maxReintentos)\n    )",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Set variable1_copy1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "crp0001_pl_prc_anl_fcl_fm_factFinal_industrial_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ResultadoEjecucion",
+								"value": true
+							}
+						},
+						{
+							"name": "Append variable1_copy1",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "crp0001_pl_prc_anl_fcl_fm_factFinal_industrial_copy1",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "Intentos",
+								"value": "\"reintento\""
+							}
+						},
+						{
+							"name": "crp0001_pl_prc_anl_fcl_fm_factFinal_industrial_copy1",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_fcl_fm_factFinal_industrial",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"applicationName": {
+										"value": "@pipeline().parameters.applicationName",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.month",
+										"type": "Expression"
+									},
+									"num_workers": {
+										"value": "@pipeline().parameters.num_workers",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_fcl_fm",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.year",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Until3",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Reinicio Resultado Ejecucion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Reinicio Intentos2",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    variables('ResultadoEjecucion'),\n    equals(length(variables('Intentos')),\n            pipeline().parameters.maxReintentos)\n    )",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Set variable1_copy1_copy1",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Ejecuta Comunes_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ResultadoEjecucion",
+								"value": true
+							}
+						},
+						{
+							"name": "Append variable1_copy1_copy1",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "Ejecuta Comunes_copy1",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "Intentos",
+								"value": "\"reintento\""
+							}
+						},
+						{
+							"name": "Ejecuta Comunes_copy1",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@pipeline().parameters.ejecutaComunes",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "crp0001_pl_prc_anl_fcl_fm_comunes_industrial_copy1",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "crp0001_c_pl_prc_anl_fcl_fm_comunes_industrial",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"applicationName": {
+													"value": "@pipeline().parameters.applicationName",
+													"type": "Expression"
+												},
+												"tabledestination": {
+													"value": "@pipeline().parameters.tabledestination",
+													"type": "Expression"
+												},
+												"typeExec": {
+													"value": "@pipeline().parameters.typeExec",
+													"type": "Expression"
+												},
+												"year": {
+													"value": "@pipeline().parameters.year",
+													"type": "Expression"
+												},
+												"month": {
+													"value": "@pipeline().parameters.month",
+													"type": "Expression"
+												},
+												"num_workers": {
+													"value": "@pipeline().parameters.num_workers",
+													"type": "Expression"
+												},
+												"sourcetable": {
+													"value": "@pipeline().parameters.sourcetable",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Reinicio Result Ejecucion",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Until1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ResultadoEjecucion",
+					"value": false
+				}
+			},
+			{
+				"name": "Reinicio Intentos",
+				"type": "AppendVariable",
+				"dependsOn": [
+					{
+						"activity": "Until1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Intentos",
+					"value": "[]"
+				}
+			},
+			{
+				"name": "Reinicio Resultado Ejecucion",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Until2",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ResultadoEjecucion",
+					"value": false
+				}
+			},
+			{
+				"name": "Reinicio Intentos2",
+				"type": "AppendVariable",
+				"dependsOn": [
+					{
+						"activity": "Until2",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Intentos",
+					"value": "[]"
+				}
+			}
+		],
+		"parameters": {
+			"applicationName": {
+				"type": "string",
+				"defaultValue": "crp0001"
+			},
+			"date": {
+				"type": "string"
+			},
+			"ejecutaComunes": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"month": {
+				"type": "string",
+				"defaultValue": "01"
+			},
+			"num_workers": {
+				"type": "int",
+				"defaultValue": 6
+			},
+			"sourcetable": {
+				"type": "string",
+				"defaultValue": "datahub01%env%aucdatagold.finance.crp0001_tb_aux_fcl"
+			},
+			"tabledestination": {
+				"type": "string",
+				"defaultValue": "datahub01%env%aucdatagold.finance.crp0001_tb_aux_fcl"
+			},
+			"typeExec": {
+				"type": "string",
+				"defaultValue": "current"
+			},
+			"year": {
+				"type": "string",
+				"defaultValue": "2022"
+			},
+			"maxReintentos": {
+				"type": "int",
+				"defaultValue": 5
+			}
+		},
+		"variables": {
+			"uuid": {
+				"type": "String",
+				"defaultValue": "@concat('lakeh#', pipeline().parameters.applicationName, '#', utcnow('yyyyMMddHHmmssfff'))"
+			},
+			"ResultadoEjecucion": {
+				"type": "Boolean",
+				"defaultValue": false
+			},
+			"Intentos": {
+				"type": "Array",
+				"defaultValue": []
+			}
+		},
+		"folder": {
+			"name": "crp0001/FCL-FM"
+		},
+		"annotations": []
+	}
+}
