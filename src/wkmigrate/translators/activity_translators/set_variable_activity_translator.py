@@ -61,6 +61,13 @@ def translate_set_variable_activity(
         activity_translator = import_module("wkmigrate.translators.activity_translators.activity_translator")
         context = activity_translator.default_context()
 
+    # G-16: Handle setSystemVariable (pipeline return values)
+    is_system_variable = activity.get("setSystemVariable")
+    if is_system_variable is None:
+        is_system_variable = activity.get("set_system_variable")
+    if is_system_variable is True:
+        return _translate_system_variable(activity, base_kwargs, context, emission_config)
+
     variable_name = activity.get("variable_name")
     if not variable_name:
         return (
@@ -97,6 +104,76 @@ def translate_set_variable_activity(
             **base_kwargs,
             variable_name=variable_name,
             variable_value=parsed_variable_value,
+        ),
+        context,
+    )
+
+
+def _translate_system_variable(
+    activity: dict,
+    base_kwargs: dict,
+    context: TranslationContext,
+    emission_config: EmissionConfig | None,
+) -> tuple[SetVariableActivity | UnsupportedValue, TranslationContext]:
+    """Handle ``setSystemVariable=true`` (pipeline return values).
+
+    When ``setSystemVariable`` is true the ``value`` property is a list of
+    key-value pairs that represent pipeline return values.  Each entry is
+    resolved through the expression system and the result is emitted as a
+    Python dict literal.
+    """
+    raw_value = activity.get("value")
+    if not raw_value or not isinstance(raw_value, list):
+        return (
+            UnsupportedValue(
+                value=activity,
+                message="Missing or invalid 'value' for setSystemVariable activity; expected non-empty list of key-value pairs",
+            ),
+            context,
+        )
+
+    resolved_pairs: list[str] = []
+    for entry in raw_value:
+        if not isinstance(entry, dict):
+            return (
+                UnsupportedValue(
+                    value=activity,
+                    message="Invalid setSystemVariable entry; expected {'key': ..., 'value': ...}",
+                ),
+                context,
+            )
+        key = entry.get("key")
+        val = entry.get("value")
+        if key is None or val is None:
+            return (
+                UnsupportedValue(
+                    value=activity,
+                    message="Invalid setSystemVariable entry; missing 'key' or 'value'",
+                ),
+                context,
+            )
+        resolved_val = parse_variable_value(val, context, emission_config=emission_config)
+        if isinstance(resolved_val, UnsupportedValue):
+            resolved_val = repr(val)
+        resolved_pairs.append(f"{key!r}: {resolved_val}")
+
+    if not resolved_pairs:
+        return (
+            UnsupportedValue(
+                value=activity,
+                message="Missing or invalid 'value' for setSystemVariable activity; expected non-empty list of key-value pairs",
+            ),
+            context,
+        )
+
+    variable_value = "{" + ", ".join(resolved_pairs) + "}"
+
+    context = context.with_variable("pipelineReturnValue", base_kwargs["task_key"])
+    return (
+        SetVariableActivity(
+            **base_kwargs,
+            variable_name="pipelineReturnValue",
+            variable_value=variable_value,
         ),
         context,
     )

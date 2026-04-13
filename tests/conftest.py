@@ -148,6 +148,18 @@ def until_activity_fixtures() -> list[dict]:
 
 
 @pytest.fixture
+def append_variable_activity_fixtures() -> list[dict]:
+    """Load AppendVariable activity test fixtures."""
+    return load_fixtures("append_variable_activities.json")
+
+
+@pytest.fixture
+def fail_activity_fixtures() -> list[dict]:
+    """Load Fail activity test fixtures."""
+    return load_fixtures("fail_activities.json")
+
+
+@pytest.fixture
 def complex_pipeline_fixtures() -> list[dict]:
     """Load complex pipeline test fixtures."""
     return load_fixtures("pipelines.json")

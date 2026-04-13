@@ -282,5 +282,39 @@
       "variable_name": "columnVal",
       "variable_value": "dbutils.jobs.taskValues.get(taskKey='LookupConfig', key='result')['firstRow']['myColumn']"
     }
+  },
+  {
+    "id": "set_system_variable",
+    "description": "SetVariable with setSystemVariable=true (pipelineReturnValue)",
+    "input": {
+      "name": "mkstring",
+      "type": "SetVariable",
+      "depends_on": [],
+      "variable_name": "pipelineReturnValue",
+      "value": [
+        {"key": "str_array", "value": "result_value"}
+      ],
+      "set_system_variable": true
+    },
+    "expected": {
+      "name": "mkstring",
+      "task_key": "mkstring",
+      "variable_name": "pipelineReturnValue",
+      "variable_value": "{'str_array': 'result_value'}"
+    }
+  },
+  {
+    "id": "set_system_variable_empty_value",
+    "description": "SetVariable with setSystemVariable=true but empty value list",
+    "input": {
+      "name": "bad_system_var",
+      "type": "SetVariable",
+      "depends_on": [],
+      "variable_name": "pipelineReturnValue",
+      "value": [],
+      "set_system_variable": true
+    },
+    "expected_unsupported": true,
+    "expected_message": "Missing or invalid"
   }
 ]
