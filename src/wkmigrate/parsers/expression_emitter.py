@@ -29,13 +29,6 @@ _PIPELINE_VARS: dict[str, str] = {
     "DataFactory": "spark.conf.get('pipeline.globalParam.DataFactory', '')",
     "TriggeredByPipelineRunId": "dbutils.jobs.getContext().tags().get('multitaskParentRunId', '')",
 }
-_SUPPORTED_ACTIVITY_OUTPUT_REFERENCE_TYPES: set[str] = {
-    "firstRow",
-    "value",
-    "runOutput",
-    "pipelineReturnValue",
-    "runPageUrl",
-}
 _DATETIME_HELPER_FUNCTIONS: set[str] = {
     "utcnow",
     "formatdatetime",
@@ -159,6 +152,8 @@ class PythonEmitter(EmitterProtocol):
 
         if lowered == "json":
             self.required_imports.add("json")
+        if lowered in {"uricomponent", "uricomponenttostring"}:
+            self.required_imports.add("urllib.parse")
         if lowered in _DATETIME_HELPER_FUNCTIONS:
             self.required_imports.add("wkmigrate_datetime_helpers")
 

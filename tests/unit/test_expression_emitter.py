@@ -624,6 +624,17 @@ def test_crp6_g19_uri_component_to_string() -> None:
     assert "urllib.parse.unquote" in result
 
 
+def test_crp6_g19_uri_component_tracks_import() -> None:
+    """G-19: uriComponent/uriComponentToString must track urllib.parse import."""
+    resolved = get_literal_or_expression("@uriComponent('x')")
+    assert not isinstance(resolved, UnsupportedValue)
+    assert "urllib.parse" in resolved.required_imports
+
+    resolved2 = get_literal_or_expression("@uriComponentToString('x')")
+    assert not isinstance(resolved2, UnsupportedValue)
+    assert "urllib.parse" in resolved2.required_imports
+
+
 def test_crp6_g19_uri_component_nested() -> None:
     """G-19: uriComponent inside replace (real CRP0001 pattern)."""
     result = _emit_expression("@replace(uriComponent('hello world'), '%20', '+')")
