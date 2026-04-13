@@ -712,12 +712,14 @@ def test_unsupported_type_creates_placeholder(unsupported_activity_fixtures: lis
     assert result.notebook_path == fixture["expected"]["notebook_path"]
 
 
-def test_execute_pipeline_creates_placeholder(unsupported_activity_fixtures: list[dict]) -> None:
-    """Test that ExecutePipeline activity creates placeholder."""
+def test_execute_pipeline_from_unsupported_fixture(unsupported_activity_fixtures: list[dict]) -> None:
+    """ExecutePipeline is now supported — produces RunJobActivity (not placeholder)."""
     fixture = get_fixture(unsupported_activity_fixtures, "execute_pipeline")
     result = translate_activity(fixture["input"])
 
-    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+    assert isinstance(result, RunJobActivity)
+    assert result.pipeline is not None
+    assert result.pipeline.name == "child_pipeline"
 
 
 def test_wait_creates_placeholder_with_dependency(unsupported_activity_fixtures: list[dict]) -> None:

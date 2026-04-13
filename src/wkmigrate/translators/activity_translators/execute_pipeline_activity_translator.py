@@ -49,14 +49,21 @@ def translate_execute_pipeline_activity(
         if the pipeline reference is missing.
     """
     pipeline_ref = activity.get("pipeline") or {}
-    referenced_pipeline = pipeline_ref.get("referenceName")
+    if not isinstance(pipeline_ref, dict):
+        return UnsupportedValue(
+            value=activity,
+            message="Invalid 'pipeline' in ExecutePipeline activity; expected object",
+        )
+    referenced_pipeline = pipeline_ref.get("referenceName") or pipeline_ref.get("reference_name")
     if not referenced_pipeline:
         return UnsupportedValue(
             value=activity,
             message="Missing 'pipeline.referenceName' in ExecutePipeline activity",
         )
 
-    wait_on_completion = activity.get("wait_on_completion", True)
+    wait_on_completion = activity.get("waitOnCompletion")
+    if wait_on_completion is None:
+        wait_on_completion = activity.get("wait_on_completion", True)
     if not wait_on_completion:
         warnings.warn(
             NotTranslatableWarning(

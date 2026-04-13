@@ -26,9 +26,10 @@ branches.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from importlib import import_module
 
-from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
+from wkmigrate.models.ir.pipeline import Activity, Dependency, IfConditionActivity
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.translator_result import TranslationResult
 from wkmigrate.models.ir.unsupported import UnsupportedValue
@@ -93,21 +94,27 @@ def translate_switch_activity(
     # Translate default activities
     default_children: list[Activity] = []
     if default_activity_defs:
-        default_children, context = _translate_branch_activities(default_activity_defs, context)
+        default_children, context = _translate_branch_activities(default_activity_defs, context, emission_config)
 
-    # Build right-leaning chain from last case to first
+    # Build right-leaning chain from last case to first.
+    # The outermost case (first in list, last in reversed iteration) uses
+    # parent_task_name so that children's dependency edges match the final
+    # IfConditionActivity's task_key.
     current_false_children = default_children
+    cases_list = list(cases)
+    num_cases = len(cases_list)
 
-    for case_def in reversed(cases):
+    for i, case_def in enumerate(reversed(cases_list)):
         case_value = case_def.get("value", "")
         case_activity_defs = case_def.get("activities") or []
 
         case_true_children: list[Activity] = []
         if case_activity_defs:
-            case_true_children, context = _translate_branch_activities(case_activity_defs, context)
+            case_true_children, context = _translate_branch_activities(case_activity_defs, context, emission_config)
 
-        # Build intermediate IfCondition name for chained cases
-        case_task_name = f"{parent_task_name}_case_{case_value}"
+        # Outermost case (last iteration) uses parent_task_name to match base_kwargs
+        is_outermost = i == num_cases - 1
+        case_task_name = parent_task_name if is_outermost else f"{parent_task_name}_case_{case_value}"
 
         # Add dependency edges: true-branch children depend on this condition
         true_with_deps = _add_dependency_edges(case_true_children, case_task_name, "true")
@@ -125,23 +132,10 @@ def translate_switch_activity(
         # This condition becomes the false branch of the next outer condition
         current_false_children = [inner_condition]
 
-    # The outermost result: if only one case was processed, unwrap it and
-    # apply base_kwargs; otherwise the chain is already built.
-    if len(cases) == 1:
-        # Single case — apply base_kwargs directly to the only IfCondition
-        single = current_false_children[0]
-        assert isinstance(single, IfConditionActivity)
-        result = IfConditionActivity(
-            **base_kwargs,
-            op=single.op,
-            left=single.left,
-            right=single.right,
-            child_activities=single.child_activities,
-        )
-        return result, context
-
-    if len(cases) >= 2:
-        # Multi-case: the outermost condition is the last one built (first case)
+    # Unwrap the outermost IfConditionActivity and apply base_kwargs metadata.
+    # The task_key/name already matches parent_task_name, so children's
+    # dependency edges remain valid.
+    if cases:
         outermost = current_false_children[0]
         assert isinstance(outermost, IfConditionActivity)
         result = IfConditionActivity(
@@ -163,14 +157,15 @@ def translate_switch_activity(
 def _translate_branch_activities(
     activity_defs: list[dict],
     context: TranslationContext,
+    emission_config: EmissionConfig | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
-    """Translate a list of branch activities, threading context."""
+    """Translate a list of branch activities, threading context and emission_config."""
     activity_translator = import_module("wkmigrate.translators.activity_translators.activity_translator")
     visit_activity = activity_translator.visit_activity
 
     translated: list[Activity] = []
     for activity_def in activity_defs:
-        result, context = visit_activity(activity_def, True, context)
+        result, context = visit_activity(activity_def, True, context, emission_config)
         translated.append(result)
     return translated, context
 
@@ -182,27 +177,14 @@ def _add_dependency_edges(
 ) -> list[Activity]:
     """Return copies of activities with a parent dependency edge added.
 
-    This mirrors the pattern in ``if_condition_activity_translator._translate_child_activities``
-    where child activities receive ``depends_on`` edges linking them to their
-    parent condition task.
+    Uses ``dataclasses.replace()`` to preserve the concrete Activity subclass
+    and all its fields (e.g. ``notebook_path``, ``pipeline``, nested
+    ``child_activities``).
     """
-    from wkmigrate.models.ir.pipeline import Dependency
-
     result: list[Activity] = []
     parent_dep = Dependency(task_key=parent_task_name, outcome=outcome)
     for activity in activities:
         existing_deps = activity.depends_on or []
-        # Create a shallow copy with the new dependency
-        updated = Activity(
-            name=activity.name,
-            task_key=activity.task_key,
-            description=activity.description,
-            timeout_seconds=activity.timeout_seconds,
-            max_retries=activity.max_retries,
-            min_retry_interval_millis=activity.min_retry_interval_millis,
-            depends_on=[*existing_deps, parent_dep],
-            new_cluster=activity.new_cluster,
-            libraries=activity.libraries,
-        )
+        updated = replace(activity, depends_on=[*existing_deps, parent_dep])
         result.append(updated)
     return result

@@ -78,7 +78,7 @@ def translate_until_activity(
     inner_activity_defs = activity.get("activities") or []
     if inner_activity_defs:
         activity_translator = import_module("wkmigrate.translators.activity_translators.activity_translator")
-        _inner_activities, context = activity_translator.translate_activities_with_context(
+        _inner_activities, _ = activity_translator.translate_activities_with_context(
             inner_activity_defs, context, emission_config
         )
 
