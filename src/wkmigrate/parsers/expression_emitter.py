@@ -163,20 +163,26 @@ class PythonEmitter(EmitterProtocol):
 
         root, properties = _flatten_property_chain(node)
 
+        # Extract just names for pipeline/activity dispatch (they don't use ?.)
+        prop_names = [name for name, _ in properties]
+
         if isinstance(root, FunctionCall):
             lowered = root.name.lower()
             if lowered == "pipeline":
-                return self._emit_pipeline_property_access(root, properties)
+                return self._emit_pipeline_property_access(root, prop_names)
             if lowered == "activity":
-                return self._emit_activity_property_access(root, properties, index_segments=[])
+                return self._emit_activity_property_access(root, prop_names, index_segments=[])
 
         root_result = self.emit_node(root)
         if isinstance(root_result, UnsupportedValue):
             return root_result
 
         code = root_result.code
-        for property_name in properties:
-            code = f"({code})[{property_name!r}]"
+        for property_name, is_optional in properties:
+            if is_optional:
+                code = f"({code} or {{}}).get({property_name!r})"
+            else:
+                code = f"({code})[{property_name!r}]"
         return code
 
     def _emit_index_access(self, node: IndexAccess) -> str | UnsupportedValue:
@@ -184,8 +190,9 @@ class PythonEmitter(EmitterProtocol):
 
         if isinstance(node.object, PropertyAccess):
             root, properties = _flatten_property_chain(node.object)
+            prop_names = [name for name, _ in properties]
             if isinstance(root, FunctionCall) and root.name.lower() == "activity":
-                return self._emit_activity_property_access(root, properties, index_segments=[node.index])
+                return self._emit_activity_property_access(root, prop_names, index_segments=[node.index])
 
         object_expression = self.emit_node(node.object)
         if isinstance(object_expression, UnsupportedValue):
@@ -300,14 +307,14 @@ class PythonEmitter(EmitterProtocol):
         return f"{base}{''.join(accessors)}"
 
 
-def _flatten_property_chain(node: PropertyAccess) -> tuple[AstNode, list[str]]:
-    """Flatten nested property-access AST to ``(root, [prop1, prop2, ...])``."""
+def _flatten_property_chain(node: PropertyAccess) -> tuple[AstNode, list[tuple[str, bool]]]:
+    """Flatten nested property-access AST to ``(root, [(prop1, optional1), ...])``."""
 
-    properties: list[str] = []
+    properties: list[tuple[str, bool]] = []
     current: AstNode = node
 
     while isinstance(current, PropertyAccess):
-        properties.append(current.property_name)
+        properties.append((current.property_name, current.optional))
         current = current.target
 
     properties.reverse()

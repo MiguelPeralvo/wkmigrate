@@ -234,3 +234,45 @@ def test_parse_grouped_expression() -> None:
     result = parse_expression("(concat('a', 'b'))")
 
     assert result == FunctionCall(name="concat", args=(StringLiteral(value="a"), StringLiteral(value="b")))
+
+
+# --- CRP-2: Optional chaining (?.) ---
+
+
+def test_crp2_tokenize_optional_dot() -> None:
+    """?.  produces an OPTIONAL_DOT token."""
+    tokens = tokenize("item()?.condition")
+    assert not isinstance(tokens, UnsupportedValue)
+    types = [t.token_type for t in tokens]
+    assert TokenType.OPTIONAL_DOT in types
+    opt_token = [t for t in tokens if t.token_type == TokenType.OPTIONAL_DOT][0]
+    assert opt_token.value == "?."
+
+
+def test_crp2_lone_question_mark_still_errors() -> None:
+    """? without . still returns UnsupportedValue."""
+    result = tokenize("item()? condition")
+    assert isinstance(result, UnsupportedValue)
+    assert "Unsupported token '?'" in result.message
+
+
+def test_crp2_parse_optional_property_access() -> None:
+    """item()?.condition parses to PropertyAccess with optional=True."""
+    result = parse_expression("@item()?.condition")
+    assert isinstance(result, PropertyAccess)
+    assert result.optional is True
+    assert result.property_name == "condition"
+    assert isinstance(result.target, FunctionCall)
+    assert result.target.name == "item"
+
+
+def test_crp2_parse_nested_optional_chain() -> None:
+    """item()?.condition?.name produces two optional PropertyAccess nodes."""
+    result = parse_expression("@item()?.condition?.name")
+    assert isinstance(result, PropertyAccess)
+    assert result.optional is True
+    assert result.property_name == "name"
+    inner = result.target
+    assert isinstance(inner, PropertyAccess)
+    assert inner.optional is True
+    assert inner.property_name == "condition"

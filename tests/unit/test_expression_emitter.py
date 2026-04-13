@@ -570,3 +570,35 @@ def test_coalesce_with_trim_preserves_null_fallthrough() -> None:
     emitted = _emit_expression("coalesce(trim(null), 'fallback')")
     assert "is None" in emitted
     assert "'fallback'" in emitted
+
+
+# --- CRP-2: Optional chaining (?.) emission ---
+
+
+def test_crp2_optional_chaining_emit() -> None:
+    """item()?.condition emits null-safe Python."""
+    result = _emit_expression("@item()?.condition")
+    assert not isinstance(result, UnsupportedValue)
+    assert result == "(item or {}).get('condition')"
+
+
+def test_crp2_optional_chaining_nested() -> None:
+    """item()?.condition?.name emits chained null-safe access."""
+    result = _emit_expression("@item()?.condition?.name")
+    assert not isinstance(result, UnsupportedValue)
+    assert ".get('condition')" in result
+    assert ".get('name')" in result
+
+
+def test_crp2_optional_chaining_in_coalesce() -> None:
+    """?.  works inside coalesce()."""
+    result = _emit_expression("@coalesce(item()?.condition, 'notFound')")
+    assert not isinstance(result, UnsupportedValue)
+    assert "(item or {}).get('condition')" in result
+    assert "'notFound'" in result
+
+
+def test_crp2_regular_dot_unchanged() -> None:
+    """Regular . access is not affected by the ?. feature."""
+    result = _emit_expression("@pipeline().parameters.env")
+    assert result == "dbutils.widgets.get('env')"
