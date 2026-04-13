@@ -1,10 +1,12 @@
 """Shared helpers for workflow preparers."""
 
 from __future__ import annotations
+import warnings
 from typing import Any
 from databricks.sdk.service.compute import Library, MavenLibrary, PythonPyPiLibrary, RCranLibrary
 from wkmigrate.models.ir.pipeline import Activity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
+from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.parsers.expression_parsers import ResolvedExpression
 from wkmigrate.utils import parse_mapping
 
@@ -58,6 +60,16 @@ def get_base_task(activity: Activity) -> dict[str, Any]:
     depends_on = None
     libraries = None
     if activity.depends_on:
+        # depends_on is typed as list[Dependency] but _parse_dependency() can produce
+        # UnsupportedValue objects that leak through the frozen dataclass construction.
+        unsupported = [dep for dep in activity.depends_on if isinstance(dep, UnsupportedValue)]
+        for unsup in unsupported:
+            warnings.warn(
+                NotTranslatableWarning(
+                    "depends_on",
+                    f"Dropping unsupported dependency for task '{activity.task_key}': {unsup.message}",  # type: ignore[attr-defined]
+                )
+            )
         depends_on = [
             parse_mapping(
                 {

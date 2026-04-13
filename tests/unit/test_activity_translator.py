@@ -269,6 +269,14 @@ class TestParseDependency:
         )
         assert isinstance(result, UnsupportedValue)
 
+    def test_parent_outcome_missing_activity_rejected(self):
+        """Missing 'activity' in outcome-based parent dep should return UnsupportedValue."""
+        result = _parse_dependency(
+            {"outcome": "true"},
+            is_conditional_task=True,
+        )
+        assert isinstance(result, UnsupportedValue)
+
 
 def test_translate_unsupported_activity_creates_placeholder():
     """Unknown activity types should be translated into a placeholder notebook activity."""

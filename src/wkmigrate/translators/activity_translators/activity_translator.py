@@ -520,16 +520,17 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     """
     Parses an individual dependency from a dictionary.
 
-    When ``is_conditional_task`` is True, dependencies fall into two categories:
+    Dependencies fall into two categories based on their structure:
 
     1. **Parent dependencies** -- have an ``outcome`` field (injected by IfCondition
        translator). These are returned directly with the given outcome.
     2. **Sibling dependencies** -- have ``dependency_conditions`` (from ADF JSON).
-       These use the standard ``SUCCEEDED`` condition regardless of the parent flag.
+       These use the standard ``SUCCEEDED`` condition regardless of context.
 
     Args:
         dependency: Dependency definition as a ``dict``.
-        is_conditional_task: Whether the task is a conditional task.
+        is_conditional_task: Retained for call-site compatibility; no longer used
+            for branching (the ``outcome`` field presence determines the path).
 
     Returns:
         Dependency object describing the upstream relationship.

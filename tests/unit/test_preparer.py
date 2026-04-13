@@ -286,8 +286,10 @@ def test_collect_data_source_secrets_uses_provided_scope() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_get_base_task_filters_unsupported_dependencies() -> None:
-    """get_base_task() must skip UnsupportedValue objects in depends_on without crashing."""
+def test_get_base_task_filters_unsupported_dependencies_with_warning() -> None:
+    """get_base_task() must warn and skip UnsupportedValue objects in depends_on."""
+    import pytest
+    from wkmigrate.not_translatable import NotTranslatableWarning
     from wkmigrate.preparers.utils import get_base_task
 
     activity = DatabricksNotebookActivity(
@@ -299,7 +301,8 @@ def test_get_base_task_filters_unsupported_dependencies() -> None:
             UnsupportedValue(value={"bad": "dep"}, message="unsupported condition"),
         ],
     )
-    result = get_base_task(activity)
+    with pytest.warns(NotTranslatableWarning, match="Dropping unsupported dependency"):
+        result = get_base_task(activity)
     deps = result["depends_on"]
     assert len(deps) == 1
     assert deps[0]["task_key"] == "good_dep"
@@ -307,6 +310,8 @@ def test_get_base_task_filters_unsupported_dependencies() -> None:
 
 def test_get_base_task_all_unsupported_dependencies_yields_none() -> None:
     """When all dependencies are unsupported, depends_on should be None."""
+    import pytest
+    from wkmigrate.not_translatable import NotTranslatableWarning
     from wkmigrate.preparers.utils import get_base_task
 
     activity = DatabricksNotebookActivity(
@@ -317,7 +322,8 @@ def test_get_base_task_all_unsupported_dependencies_yields_none() -> None:
             UnsupportedValue(value={}, message="bad"),
         ],
     )
-    result = get_base_task(activity)
+    with pytest.warns(NotTranslatableWarning):
+        result = get_base_task(activity)
     assert "depends_on" not in result or result["depends_on"] is None
 
 
