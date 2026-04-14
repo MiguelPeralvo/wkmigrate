@@ -406,7 +406,15 @@ def _get_base_properties(activity: dict, is_conditional_task: bool = False) -> d
         Activity base properties (e.g. name, description) as a ``dict``.
     """
     policy = _parse_policy(activity.get("policy"))
-    depends_on = _parse_dependencies(activity.get("depends_on"), is_conditional_task)
+    raw_deps = activity.get("depends_on")
+    depends_on = _parse_dependencies(raw_deps, is_conditional_task)
+
+    # CRP-10: derive task-level run_if from ADF dependency conditions.
+    # ADF expresses Completed/Failed per-dependency, but Databricks uses a
+    # task-level ``run_if`` field. We scan the raw deps for non-default
+    # conditions and promote the strongest one. Priority: ALL_DONE > ALL_FAILED.
+    run_if = _derive_run_if_from_raw_deps(raw_deps)
+
     cluster_spec = activity.get("linked_service_definition")
     new_cluster = translate_databricks_cluster_spec(cluster_spec) if cluster_spec else None
     task_key = activity.get("name") or "UNNAMED_TASK"
@@ -420,6 +428,7 @@ def _get_base_properties(activity: dict, is_conditional_task: bool = False) -> d
         "depends_on": depends_on,
         "new_cluster": new_cluster,
         "libraries": activity.get("libraries"),
+        "run_if": run_if,
     }
 
 
@@ -516,6 +525,57 @@ def _parse_dependencies(
     return [_parse_dependency(dependency, is_conditional_task) for dependency in dependencies]
 
 
+# Maps ADF dependency condition strings to Databricks Jobs semantics.
+# Each entry is (dependency_outcome, task_run_if):
+# - dependency_outcome: value for ``depends_on[].outcome`` (None = default/succeeded)
+# - task_run_if: value for the task-level ``run_if`` field (None = default ALL_SUCCESS)
+#
+# ``Completed`` and ``Failed`` are task-level run conditions (``run_if``), NOT
+# per-dependency outcomes. The dependency itself is kept with ``outcome=None``
+# so it appears in the DAG, while the ``run_if`` string is surfaced via
+# ``_derive_run_if()`` and emitted at the task level by ``get_base_task()``.
+_ADF_CONDITION_TO_SEMANTICS: dict[str, tuple[str | None, str | None]] = {
+    "SUCCEEDED": (None, None),             # Default — run on success
+    "COMPLETED": (None, "ALL_DONE"),       # Run regardless of upstream outcome
+    "FAILED": (None, "ALL_FAILED"),        # Run only if upstream failed
+}
+
+
+def _derive_run_if_from_raw_deps(raw_deps: list[dict] | None) -> str | None:
+    """Derive the task-level ``run_if`` from raw ADF dependency dicts.
+
+    ADF allows per-dependency conditions (``Completed``, ``Failed``), but
+    Databricks Jobs expresses these at the task level via ``run_if``.  We
+    scan the raw dependency dicts for non-default conditions and promote the
+    strongest one.  Priority: ``ALL_DONE`` > ``ALL_FAILED`` > ``None``.
+
+    Returns ``None`` when all dependencies use the default ``Succeeded``
+    condition (or the deps list is empty/None).
+    """
+    if not raw_deps:
+        return None
+    run_if_candidates: set[str] = set()
+    for dep in raw_deps:
+        conditions = dep.get("dependency_conditions", [])
+        if not conditions:
+            continue
+        raw = conditions[0]
+        if not isinstance(raw, str):
+            continue
+        key = raw.strip().upper()
+        semantics = _ADF_CONDITION_TO_SEMANTICS.get(key)
+        if semantics is not None:
+            _, task_run_if = semantics
+            if task_run_if is not None:
+                run_if_candidates.add(task_run_if)
+    if not run_if_candidates:
+        return None
+    # ALL_DONE is the broadest — it subsumes ALL_FAILED
+    if "ALL_DONE" in run_if_candidates:
+        return "ALL_DONE"
+    return run_if_candidates.pop()
+
+
 def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> Dependency | UnsupportedValue:
     """
     Parses an individual dependency from a dictionary.
@@ -525,7 +585,10 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     1. **Parent dependencies** -- have an ``outcome`` field (injected by IfCondition
        translator). These are returned directly with the given outcome.
     2. **Sibling dependencies** -- have ``dependency_conditions`` (from ADF JSON).
-       These use the standard ``SUCCEEDED`` condition regardless of context.
+       These use ``_ADF_CONDITION_TO_SEMANTICS`` to validate the condition.
+       ``Succeeded`` deps get ``outcome=None``; ``Completed``/``Failed`` deps
+       also get ``outcome=None`` (the condition is expressed via the task-level
+       ``run_if`` field, derived separately by ``_get_base_properties``).
 
     Args:
         dependency: Dependency definition as a ``dict``.
@@ -548,14 +611,20 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
         return Dependency(task_key=task_key, outcome=outcome)
 
     # Sibling dependency from ADF JSON (dependency_conditions)
-    supported_conditions = ["SUCCEEDED"]
-    if any(condition.upper() not in supported_conditions for condition in conditions):
+    raw_condition = conditions[0] if conditions else "SUCCEEDED"
+    if not isinstance(raw_condition, str):
         return UnsupportedValue(
-            value=dependency, message="Dependencies with conditions other than 'Succeeded' are not supported."
+            value=dependency, message=f"Dependency condition '{raw_condition}' is not a valid string."
+        )
+    condition_key = raw_condition.strip().upper()
+    if condition_key not in _ADF_CONDITION_TO_SEMANTICS:
+        return UnsupportedValue(
+            value=dependency, message=f"Dependency condition '{raw_condition}' is not supported."
         )
 
     task_key = dependency.get("activity")
     if not task_key:
         return UnsupportedValue(value=dependency, message="Missing value 'activity' for task dependency")
 
-    return Dependency(task_key=task_key, outcome=None)
+    dep_outcome, _ = _ADF_CONDITION_TO_SEMANTICS[condition_key]
+    return Dependency(task_key=task_key, outcome=dep_outcome)
