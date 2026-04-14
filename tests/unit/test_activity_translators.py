@@ -746,14 +746,15 @@ def test_no_name_gets_default(unsupported_activity_fixtures: list[dict]) -> None
     assert result.task_key == "UNNAMED_TASK"
 
 
-def test_failed_dependency_maps_to_all_failed(unsupported_activity_fixtures: list[dict]) -> None:
-    """CRP-10: dependency on Failed condition maps to ALL_FAILED outcome."""
+def test_failed_dependency_accepted_with_run_if(unsupported_activity_fixtures: list[dict]) -> None:
+    """CRP-10: Failed condition accepted — dep kept with outcome=None, run_if at task level."""
     fixture = get_fixture(unsupported_activity_fixtures, "dependency_failed")
     result = translate_activity(fixture["input"])
 
     assert result.depends_on is not None
     assert isinstance(result.depends_on[0], Dependency)
-    assert result.depends_on[0].outcome == "ALL_FAILED"
+    assert result.depends_on[0].outcome is None  # run_if is task-level
+    assert result.run_if == "ALL_FAILED"
 
 
 def test_skipped_dependency_creates_unsupported(unsupported_activity_fixtures: list[dict]) -> None:

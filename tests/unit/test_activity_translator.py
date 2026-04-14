@@ -5,6 +5,7 @@ from contextlib import nullcontext as does_not_raise
 import pytest
 
 from wkmigrate.translators.activity_translators.activity_translator import (
+    _derive_run_if_from_raw_deps,
     _parse_dependency,
     translate_activities,
     translate_activity,
@@ -277,25 +278,25 @@ class TestParseDependency:
         )
         assert isinstance(result, UnsupportedValue)
 
-    def test_completed_condition_maps_to_all_done(self):
-        """CRP-10: Completed condition should map to ALL_DONE outcome."""
+    def test_completed_condition_accepted(self):
+        """CRP-10: Completed condition accepted — dep outcome stays None (run_if is task-level)."""
         result = _parse_dependency(
             {"activity": "Step1", "dependency_conditions": ["Completed"]},
             is_conditional_task=False,
         )
         assert isinstance(result, Dependency)
         assert result.task_key == "Step1"
-        assert result.outcome == "ALL_DONE"
+        assert result.outcome is None  # run_if=ALL_DONE is task-level, not dep-level
 
-    def test_failed_condition_maps_to_all_failed(self):
-        """CRP-10: Failed condition should map to ALL_FAILED outcome."""
+    def test_failed_condition_accepted(self):
+        """CRP-10: Failed condition accepted — dep outcome stays None (run_if is task-level)."""
         result = _parse_dependency(
             {"activity": "Step1", "dependency_conditions": ["Failed"]},
             is_conditional_task=False,
         )
         assert isinstance(result, Dependency)
         assert result.task_key == "Step1"
-        assert result.outcome == "ALL_FAILED"
+        assert result.outcome is None  # run_if=ALL_FAILED is task-level, not dep-level
 
     def test_completed_case_insensitive(self):
         """CRP-10: Completed condition should be case-insensitive."""
@@ -304,7 +305,7 @@ class TestParseDependency:
             is_conditional_task=False,
         )
         assert isinstance(result, Dependency)
-        assert result.outcome == "ALL_DONE"
+        assert result.outcome is None
 
     def test_failed_inside_conditional(self):
         """CRP-10: Failed condition should work inside conditional context too."""
@@ -314,7 +315,7 @@ class TestParseDependency:
         )
         assert isinstance(result, Dependency)
         assert result.task_key == "Step1"
-        assert result.outcome == "ALL_FAILED"
+        assert result.outcome is None
 
     def test_succeeded_outcome_still_none(self):
         """CRP-10 regression: Succeeded must still produce outcome=None."""
@@ -324,6 +325,51 @@ class TestParseDependency:
         )
         assert isinstance(result, Dependency)
         assert result.outcome is None
+
+    def test_non_string_condition_rejected(self):
+        """CRP-10: Non-string condition entry returns UnsupportedValue."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": [None]},
+            is_conditional_task=False,
+        )
+        assert isinstance(result, UnsupportedValue)
+
+
+class TestDeriveRunIf:
+    """Unit tests for _derive_run_if_from_raw_deps()."""
+
+    def test_none_deps_returns_none(self):
+        assert _derive_run_if_from_raw_deps(None) is None
+
+    def test_empty_deps_returns_none(self):
+        assert _derive_run_if_from_raw_deps([]) is None
+
+    def test_all_succeeded_returns_none(self):
+        deps = [{"activity": "A", "dependency_conditions": ["Succeeded"]}]
+        assert _derive_run_if_from_raw_deps(deps) is None
+
+    def test_completed_returns_all_done(self):
+        deps = [{"activity": "A", "dependency_conditions": ["Completed"]}]
+        assert _derive_run_if_from_raw_deps(deps) == "ALL_DONE"
+
+    def test_failed_returns_all_failed(self):
+        deps = [{"activity": "A", "dependency_conditions": ["Failed"]}]
+        assert _derive_run_if_from_raw_deps(deps) == "ALL_FAILED"
+
+    def test_mixed_completed_and_failed_prefers_all_done(self):
+        deps = [
+            {"activity": "A", "dependency_conditions": ["Completed"]},
+            {"activity": "B", "dependency_conditions": ["Failed"]},
+        ]
+        assert _derive_run_if_from_raw_deps(deps) == "ALL_DONE"
+
+    def test_no_conditions_returns_none(self):
+        deps = [{"activity": "A"}]
+        assert _derive_run_if_from_raw_deps(deps) is None
+
+    def test_non_string_condition_skipped(self):
+        deps = [{"activity": "A", "dependency_conditions": [None]}]
+        assert _derive_run_if_from_raw_deps(deps) is None
 
 
 def test_translate_unsupported_activity_creates_placeholder():
