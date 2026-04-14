@@ -516,6 +516,15 @@ def _parse_dependencies(
     return [_parse_dependency(dependency, is_conditional_task) for dependency in dependencies]
 
 
+# Maps ADF dependency condition strings to Databricks Jobs outcome values.
+# ``None`` means "default succeeded" (outcome field omitted from the task dict).
+_ADF_CONDITION_TO_OUTCOME: dict[str, str | None] = {
+    "SUCCEEDED": None,       # Standard dependency — run on success (default)
+    "COMPLETED": "ALL_DONE", # Run regardless of upstream outcome
+    "FAILED": "ALL_FAILED",  # Run only if upstream failed
+}
+
+
 def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> Dependency | UnsupportedValue:
     """
     Parses an individual dependency from a dictionary.
@@ -525,7 +534,8 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
     1. **Parent dependencies** -- have an ``outcome`` field (injected by IfCondition
        translator). These are returned directly with the given outcome.
     2. **Sibling dependencies** -- have ``dependency_conditions`` (from ADF JSON).
-       These use the standard ``SUCCEEDED`` condition regardless of context.
+       These use ``_ADF_CONDITION_TO_OUTCOME`` to map ADF conditions to Databricks
+       outcome values. Supported: ``Succeeded``, ``Completed``, ``Failed``.
 
     Args:
         dependency: Dependency definition as a ``dict``.
@@ -548,14 +558,14 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
         return Dependency(task_key=task_key, outcome=outcome)
 
     # Sibling dependency from ADF JSON (dependency_conditions)
-    supported_conditions = ["SUCCEEDED"]
-    if any(condition.upper() not in supported_conditions for condition in conditions):
+    condition_key = conditions[0].upper() if conditions else "SUCCEEDED"
+    if condition_key not in _ADF_CONDITION_TO_OUTCOME:
         return UnsupportedValue(
-            value=dependency, message="Dependencies with conditions other than 'Succeeded' are not supported."
+            value=dependency, message=f"Dependency condition '{conditions[0]}' is not supported."
         )
 
     task_key = dependency.get("activity")
     if not task_key:
         return UnsupportedValue(value=dependency, message="Missing value 'activity' for task dependency")
 
-    return Dependency(task_key=task_key, outcome=None)
+    return Dependency(task_key=task_key, outcome=_ADF_CONDITION_TO_OUTCOME[condition_key])

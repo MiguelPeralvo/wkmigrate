@@ -277,6 +277,54 @@ class TestParseDependency:
         )
         assert isinstance(result, UnsupportedValue)
 
+    def test_completed_condition_maps_to_all_done(self):
+        """CRP-10: Completed condition should map to ALL_DONE outcome."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": ["Completed"]},
+            is_conditional_task=False,
+        )
+        assert isinstance(result, Dependency)
+        assert result.task_key == "Step1"
+        assert result.outcome == "ALL_DONE"
+
+    def test_failed_condition_maps_to_all_failed(self):
+        """CRP-10: Failed condition should map to ALL_FAILED outcome."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": ["Failed"]},
+            is_conditional_task=False,
+        )
+        assert isinstance(result, Dependency)
+        assert result.task_key == "Step1"
+        assert result.outcome == "ALL_FAILED"
+
+    def test_completed_case_insensitive(self):
+        """CRP-10: Completed condition should be case-insensitive."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": ["completed"]},
+            is_conditional_task=False,
+        )
+        assert isinstance(result, Dependency)
+        assert result.outcome == "ALL_DONE"
+
+    def test_failed_inside_conditional(self):
+        """CRP-10: Failed condition should work inside conditional context too."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": ["Failed"]},
+            is_conditional_task=True,
+        )
+        assert isinstance(result, Dependency)
+        assert result.task_key == "Step1"
+        assert result.outcome == "ALL_FAILED"
+
+    def test_succeeded_outcome_still_none(self):
+        """CRP-10 regression: Succeeded must still produce outcome=None."""
+        result = _parse_dependency(
+            {"activity": "Step1", "dependency_conditions": ["Succeeded"]},
+            is_conditional_task=False,
+        )
+        assert isinstance(result, Dependency)
+        assert result.outcome is None
+
 
 def test_translate_unsupported_activity_creates_placeholder():
     """Unknown activity types should be translated into a placeholder notebook activity."""
