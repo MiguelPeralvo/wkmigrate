@@ -25,6 +25,7 @@ from wkmigrate.models.ir.pipeline import (
     WebActivity,
 )
 from wkmigrate.models.workflows.artifacts import PreparedActivity, PreparedWorkflow
+from wkmigrate.preparers.utils import sanitize_task_key
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
 from wkmigrate.preparers.if_condition_activity_preparer import prepare_if_condition_activity
@@ -53,8 +54,23 @@ def prepare_workflow(
     Returns:
         Prepared workflow containing the Databricks job payload and supporting artifacts for the pipeline.
     """
+    _check_task_key_collisions(pipeline.tasks)
     activities = [prepare_activity(task, files_to_delta_sinks, credentials_scope) for task in pipeline.tasks]
     return PreparedWorkflow(pipeline=pipeline, activities=activities)
+
+
+def _check_task_key_collisions(tasks: list[Activity]) -> None:
+    """Raise ``ValueError`` if distinct raw task keys sanitize to the same value."""
+    seen: dict[str, str] = {}  # sanitized -> original
+    for task in tasks:
+        sanitized = sanitize_task_key(task.task_key)
+        original = seen.get(sanitized)
+        if original is not None and original != task.task_key:
+            raise ValueError(
+                f"Task key collision: '{original}' and '{task.task_key}' "
+                f"both sanitize to '{sanitized}'"
+            )
+        seen[sanitized] = task.task_key
 
 
 def prepare_activity(

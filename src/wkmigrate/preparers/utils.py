@@ -1,6 +1,7 @@
 """Shared helpers for workflow preparers."""
 
 from __future__ import annotations
+import re
 import warnings
 from typing import Any
 from databricks.sdk.service.compute import Library, MavenLibrary, PythonPyPiLibrary, RCranLibrary
@@ -47,6 +48,21 @@ def unwrap_value(value: Any) -> Any:
     return value
 
 
+def sanitize_task_key(key: str) -> str:
+    """Replace characters not accepted by the Databricks Jobs API.
+
+    The Jobs API only allows ``[a-zA-Z0-9_-]`` in task keys.  ADF activity
+    names frequently contain spaces and other characters that must be replaced.
+
+    Args:
+        key: Raw task key (typically the ADF activity name).
+
+    Returns:
+        Sanitized key safe for the Databricks Jobs API.
+    """
+    return re.sub(r'[^a-zA-Z0-9_-]', '_', key)
+
+
 def get_base_task(activity: Activity) -> dict[str, Any]:
     """
     Returns the fields common to every task.
@@ -73,7 +89,7 @@ def get_base_task(activity: Activity) -> dict[str, Any]:
         depends_on = [
             parse_mapping(
                 {
-                    "task_key": dep.task_key,
+                    "task_key": sanitize_task_key(dep.task_key),
                     "outcome": dep.outcome,
                 }
             )
@@ -86,7 +102,7 @@ def get_base_task(activity: Activity) -> dict[str, Any]:
         libraries = [_create_library(library) for library in activity.libraries]
     return parse_mapping(
         {
-            "task_key": activity.task_key,
+            "task_key": sanitize_task_key(activity.task_key),
             "description": activity.description,
             "timeout_seconds": activity.timeout_seconds,
             "max_retries": activity.max_retries,
