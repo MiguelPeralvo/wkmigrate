@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wkmigrate.code_generator import DEFAULT_CREDENTIALS_SCOPE
 from wkmigrate.definition_stores.workspace_definition_store import WorkspaceDefinitionStore
 from wkmigrate.models.ir.pipeline import (
@@ -445,3 +447,20 @@ def test_prepare_workflow_sanitizes_depends_on_refs() -> None:
     assert tasks[0]["task_key"] == "Set_Run_ID"
     assert tasks[1]["task_key"] == "Use_Run_ID"
     assert tasks[1]["depends_on"] == [{"task_key": "Set_Run_ID"}]
+
+
+def test_prepare_workflow_raises_on_task_key_collision() -> None:
+    """Distinct raw keys that sanitize to the same value raise ValueError."""
+    task_a = DatabricksNotebookActivity(
+        name="Set.Run.ID",
+        task_key="Set.Run.ID",
+        notebook_path="/notebooks/a",
+    )
+    task_b = DatabricksNotebookActivity(
+        name="Set Run ID",
+        task_key="Set Run ID",
+        notebook_path="/notebooks/b",
+    )
+    pipeline = Pipeline(name="test", tasks=[task_a, task_b], parameters=None, schedule=None, tags={})
+    with pytest.raises(ValueError, match="Task key collision"):
+        prepare_workflow(pipeline)
