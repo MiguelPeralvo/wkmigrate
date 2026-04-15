@@ -22,6 +22,7 @@ from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_acti
 from wkmigrate.preparers.lookup_activity_preparer import prepare_lookup_activity
 from wkmigrate.preparers.preparer import prepare_workflow
 from wkmigrate.preparers.run_job_activity_preparer import prepare_run_job_activity
+from wkmigrate.preparers.utils import sanitize_task_key
 from wkmigrate.preparers.web_activity_preparer import prepare_web_activity
 
 
@@ -370,3 +371,77 @@ def _make_run_job_with_lookup_pipeline(name: str = "RunJobTest") -> RunJobActivi
         task_key=name.lower(),
         pipeline=_make_pipeline_with_lookup(),
     )
+
+
+# ---------------------------------------------------------------------------
+# sanitize_task_key tests
+# ---------------------------------------------------------------------------
+
+
+def test_sanitize_task_key_replaces_spaces() -> None:
+    """Spaces in ADF activity names are replaced with underscores."""
+    assert sanitize_task_key("Set Run ID") == "Set_Run_ID"
+
+
+def test_sanitize_task_key_already_valid() -> None:
+    """Keys that are already valid pass through unchanged."""
+    assert sanitize_task_key("already_valid-key123") == "already_valid-key123"
+
+
+def test_sanitize_task_key_special_chars() -> None:
+    """Non-alphanumeric, non-dash, non-underscore characters are replaced."""
+    assert sanitize_task_key("Año 2024 (FCL)") == "A_o_2024__FCL_"
+
+
+def test_sanitize_task_key_idempotent() -> None:
+    """Applying sanitize twice gives the same result as once."""
+    raw = "Set Run ID"
+    once = sanitize_task_key(raw)
+    twice = sanitize_task_key(once)
+    assert once == twice
+
+
+def test_sanitize_task_key_empty() -> None:
+    """Empty string returns empty string."""
+    assert sanitize_task_key("") == ""
+
+
+# ---------------------------------------------------------------------------
+# prepare_workflow task_key sanitization integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_prepare_workflow_sanitizes_task_keys() -> None:
+    """task_key values with spaces are sanitized in the prepared workflow."""
+    activity = DatabricksNotebookActivity(
+        name="Set Run ID",
+        task_key="Set Run ID",
+        notebook_path="/notebooks/set_run_id",
+    )
+    pipeline = Pipeline(name="test", tasks=[activity], parameters=None, schedule=None, tags={})
+    workflow = prepare_workflow(pipeline)
+
+    task_keys = [t["task_key"] for t in workflow.tasks]
+    assert task_keys == ["Set_Run_ID"]
+
+
+def test_prepare_workflow_sanitizes_depends_on_refs() -> None:
+    """depends_on task_key references are sanitized to match the sanitized task_key."""
+    upstream = DatabricksNotebookActivity(
+        name="Set Run ID",
+        task_key="Set Run ID",
+        notebook_path="/notebooks/set_run_id",
+    )
+    downstream = DatabricksNotebookActivity(
+        name="Use Run ID",
+        task_key="Use Run ID",
+        notebook_path="/notebooks/use_run_id",
+        depends_on=[Dependency(task_key="Set Run ID")],
+    )
+    pipeline = Pipeline(name="test", tasks=[upstream, downstream], parameters=None, schedule=None, tags={})
+    workflow = prepare_workflow(pipeline)
+
+    tasks = workflow.tasks
+    assert tasks[0]["task_key"] == "Set_Run_ID"
+    assert tasks[1]["task_key"] == "Use_Run_ID"
+    assert tasks[1]["depends_on"] == [{"task_key": "Set_Run_ID"}]
