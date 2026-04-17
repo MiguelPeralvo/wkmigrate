@@ -535,9 +535,9 @@ def _parse_dependencies(
 # so it appears in the DAG, while the ``run_if`` string is surfaced via
 # ``_derive_run_if()`` and emitted at the task level by ``get_base_task()``.
 _ADF_CONDITION_TO_SEMANTICS: dict[str, tuple[str | None, str | None]] = {
-    "SUCCEEDED": (None, None),             # Default — run on success
-    "COMPLETED": (None, "ALL_DONE"),       # Run regardless of upstream outcome
-    "FAILED": (None, "ALL_FAILED"),        # Run only if upstream failed
+    "SUCCEEDED": (None, None),  # Default — run on success
+    "COMPLETED": (None, "ALL_DONE"),  # Run regardless of upstream outcome
+    "FAILED": (None, "ALL_FAILED"),  # Run only if upstream failed
 }
 
 
@@ -618,9 +618,7 @@ def _parse_dependency(dependency: dict, is_conditional_task: bool = False) -> De
         )
     condition_key = raw_condition.strip().upper()
     if condition_key not in _ADF_CONDITION_TO_SEMANTICS:
-        return UnsupportedValue(
-            value=dependency, message=f"Dependency condition '{raw_condition}' is not supported."
-        )
+        return UnsupportedValue(value=dependency, message=f"Dependency condition '{raw_condition}' is not supported.")
 
     task_key = dependency.get("activity")
     if not task_key:
