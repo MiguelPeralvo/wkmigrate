@@ -1,0 +1,545 @@
+{
+	"name": "crp0001_c_pl_prc_anl_persist_global",
+	"properties": {
+		"activities": [
+			{
+				"name": "if_quim",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'qui')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_qui",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_qui_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_eyp",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'eyp')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_eyp",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_eyp_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_trad",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'trad')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_trad",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_trad_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_peru",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'peru')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_peru",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_peru_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_mytg",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'mytg')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_mytg",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_mytg_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_refe",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'refe')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_refe",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_refe_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_overv",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_quim",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_trad",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_peru",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_mytg",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_refe",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'overv')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_overv",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_overv_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_cmg",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'cmg')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_cmg",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_cmg_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_gbc",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'gbc')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_gbc",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/Persistencia/crp0001_c_nb_prc_edw_e_t_l_gbc_persist",
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									},
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_busc",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'busc')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_busc",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_busc_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_cmd_upd",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'cmd_upd')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "cmd_update",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/common/crp0001_c_nb_prc_anl_l_update_cmd",
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									},
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.deequLibFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": "1",
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_colec_eyp",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_eyp",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'colec_eyp')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_colec_eyp",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_colec_eyp_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_colec_bfc",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(pipeline().parameters.execution,'colec_bfc')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "persist_colec_bfc",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "crp0001_c_pl_prc_anl_colec_bfc_persist",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"des_ficheroArray": {
+										"value": "@pipeline().parameters.ParamColecBFC_desFicheroArray",
+										"type": "Expression"
+									},
+									"des_vistasArray": {
+										"value": "@pipeline().parameters.ParamColecBFC_desvistasArray",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.ParamColecBFC_month",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.ParamColecBFC_typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.ParamColecBFC_year",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"ParamColecBFC_desFicheroArray": {
+				"type": "string"
+			},
+			"ParamColecBFC_desvistasArray": {
+				"type": "string",
+				"defaultValue": "10. CR_Colección,9. ROACE_Coleccion,1.5 CMG_COLECCION_CAJA,12. Resultados_Coleccion"
+			},
+			"ParamColecBFC_month": {
+				"type": "string",
+				"defaultValue": "01"
+			},
+			"ParamColecBFC_typeExec": {
+				"type": "string",
+				"defaultValue": "custom"
+			},
+			"ParamColecBFC_year": {
+				"type": "string",
+				"defaultValue": "2022"
+			},
+			"execution": {
+				"type": "array",
+				"defaultValue": [
+					"qui",
+					"trad",
+					"refe",
+					"mytg",
+					"peru",
+					"overv",
+					"eyp",
+					"cmg",
+					"gbc",
+					"busc",
+					"colec_eyp",
+					"colec_bfc"
+				]
+			}
+		},
+		"variables": {
+			"Indicadores": {
+				"type": "Array",
+				"defaultValue": []
+			}
+		},
+		"folder": {
+			"name": "crp0001/Persistencia"
+		},
+		"annotations": []
+	}
+}

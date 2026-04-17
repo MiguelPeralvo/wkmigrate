@@ -54,6 +54,7 @@ from wkmigrate.parsers.emission_config import EmissionConfig
 from wkmigrate.parsers.expression_ast import AstNode, FunctionCall
 from wkmigrate.parsers.expression_emitter import emit
 from wkmigrate.parsers.expression_parser import parse_expression
+from wkmigrate.preparers.utils import sanitize_task_key
 
 _CONDITION_FUNCTION_TO_OP: dict[str, str] = {
     "equals": "EQUAL_TO",
@@ -233,7 +234,9 @@ def _parse_condition_expression(
         return native
 
     # INV-2/INV-3: wrapper-notebook path for compound / bare predicates.
-    wrapper_key = f"{parent_task_name}__crp11_wrap"
+    # Sanitize so the task key matches what the preparer will emit for the
+    # NotebookTask sibling (Databricks Jobs API only accepts [a-zA-Z0-9_-]).
+    wrapper_key = sanitize_task_key(f"{parent_task_name}__crp11_wrap")
     notebook_content, widgets = get_condition_wrapper_notebook_content(
         predicate_ast=parsed,
         wrapper_task_key=wrapper_key,
