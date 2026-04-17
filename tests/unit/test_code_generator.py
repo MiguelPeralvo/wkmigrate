@@ -12,12 +12,14 @@ import pytest
 from wkmigrate.code_generator import (
     _INLINE_DATETIME_HELPERS,
     DEFAULT_CREDENTIALS_SCOPE,
+    get_condition_wrapper_notebook_content,
     get_database_options,
     get_file_options,
     get_option_expressions,
     get_set_variable_notebook_content,
     get_web_activity_notebook_content,
 )
+from wkmigrate.parsers.expression_parser import parse_expression
 from wkmigrate.models.ir.pipeline import Authentication
 from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.parsers.expression_parsers import ResolvedExpression
@@ -373,3 +375,142 @@ def test_set_variable_notebook_skips_datetime_helpers_for_simple_values() -> Non
     )
 
     assert "def _wkmigrate_utc_now" not in content
+
+
+# ---------------------------------------------------------------------------
+# CRP-11 — wrapper notebook content generator for compound IfConditions
+# ---------------------------------------------------------------------------
+
+
+def _ast(expression: str):
+    """Parse an expression and return the AST, asserting parse success."""
+
+    parsed = parse_expression(expression)
+    assert not hasattr(parsed, "message"), f"Parse failed: {parsed}"
+    return parsed
+
+
+def test_condition_wrapper_contains_publishes_branch_task_value() -> None:
+    """@contains over a pipeline parameter emits widget + predicate + taskValues.set."""
+    ast = _ast("@contains(pipeline().parameters.module, 'foo')")
+
+    content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_1",
+    )
+
+    assert content.startswith("# Databricks notebook source")
+    assert "module" in widgets
+    assert 'dbutils.widgets.text("module"' in content
+    assert "'foo' in str(dbutils.widgets.get('module'))" in content
+    assert 'dbutils.jobs.taskValues.set(key="branch"' in content
+    # taskValues.set appears exactly once — predicate is evaluated once.
+    assert content.count('dbutils.jobs.taskValues.set(key="branch"') == 1
+
+
+def test_condition_wrapper_compound_and_evaluates_once() -> None:
+    """@and(...) emits a single evaluation of the full predicate."""
+    ast = _ast("@and(not(empty(pipeline().parameters.module)), " "equals(pipeline().parameters.env, 'prod'))")
+
+    content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_2",
+    )
+
+    assert set(widgets) == {"module", "env"}
+    # Single publish call — not one per sub-expression.
+    assert content.count("dbutils.jobs.taskValues.set") == 1
+
+
+def test_condition_wrapper_declares_widget_per_referenced_parameter() -> None:
+    """Every referenced pipeline parameter gets a widgets.text declaration."""
+    ast = _ast("@or(equals(pipeline().parameters.region, 'eu'), " "equals(pipeline().parameters.stage, 'prod'))")
+
+    content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_3",
+    )
+
+    assert set(widgets) == {"region", "stage"}
+    assert 'dbutils.widgets.text("region"' in content
+    assert 'dbutils.widgets.text("stage"' in content
+
+
+def test_condition_wrapper_unsupported_function_embeds_raise_not_implemented() -> None:
+    """Functions outside the 47-function registry produce a loud-failing wrapper (INV-5)."""
+    ast = _ast("@xml('<root/>')")
+
+    content, _ = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_4",
+    )
+
+    assert "raise NotImplementedError" in content
+    assert "xml" in content
+    # Never silently succeed: no taskValues.set("branch", True) path exists when unsupported.
+    assert 'dbutils.jobs.taskValues.set(key="branch", value="True")' not in content
+
+
+def test_condition_wrapper_nested_intersection_over_array_literal() -> None:
+    """Nested @not(@empty(@intersection(param, createArray(...)))) translates to set intersection."""
+    ast = _ast("@not(empty(intersection(pipeline().parameters.module, " "createArray('a', 'b', 'c'))))")
+
+    content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_5",
+    )
+
+    assert widgets == ["module"]
+    # PythonEmitter uses set() intersection for @intersection.
+    assert "set(" in content
+    assert "dbutils.jobs.taskValues.set" in content
+
+
+def test_condition_wrapper_activity_output_truthiness() -> None:
+    """Bare activity output references are wrapped and published as a boolean."""
+    ast = _ast("@activity('Foo').output.runOutput")
+
+    content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_6",
+    )
+
+    assert widgets == []
+    assert 'dbutils.jobs.taskValues.set(key="branch"' in content
+    assert "bool(" in content
+
+
+def test_condition_wrapper_widget_collector_recurses_index_and_interpolation() -> None:
+    """Widget collector recurses IndexAccess + StringInterpolation (PR #19 bot feedback)."""
+    # IndexAccess: activity('A').output[pipeline().parameters.idx]
+    ast_index = _ast("@equals(activity('A').output[pipeline().parameters.idx], 'x')")
+    _, widgets_index = get_condition_wrapper_notebook_content(
+        predicate_ast=ast_index,
+        wrapper_task_key="wrap_idx",
+    )
+    assert "idx" in widgets_index
+
+    # StringInterpolation: "prefix-@{pipeline().parameters.name}-suffix"
+    ast_interp = _ast("prefix-@{pipeline().parameters.name}-suffix")
+    _, widgets_interp = get_condition_wrapper_notebook_content(
+        predicate_ast=ast_interp,
+        wrapper_task_key="wrap_interp",
+    )
+    assert "name" in widgets_interp
+
+
+def test_condition_wrapper_idempotent() -> None:
+    """Two identical calls return byte-identical notebook content (INV-4)."""
+    ast = _ast("@and(contains(pipeline().parameters.module, 'foo'), " "not(empty(pipeline().parameters.env)))")
+
+    content_a, widgets_a = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_7",
+    )
+    content_b, widgets_b = get_condition_wrapper_notebook_content(
+        predicate_ast=ast,
+        wrapper_task_key="wrap_if_condition_7",
+    )
+
+    assert content_a == content_b
+    assert widgets_a == widgets_b

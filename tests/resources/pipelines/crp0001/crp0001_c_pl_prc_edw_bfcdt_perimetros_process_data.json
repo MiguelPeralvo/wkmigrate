@@ -1,0 +1,886 @@
+{
+	"name": "crp0001_c_pl_prc_edw_bfcdt_perimetros_process_data",
+	"properties": {
+		"activities": [
+			{
+				"name": "If BAL_ACUM",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','bal','acum','bal_acum'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy bal_acum",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "bal_acum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('bal_acum').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "bal_acum",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_balance_',pipeline().parameters.perimetro,'_acumulado')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_bal",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If BAL_MENS",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','bal','mens','bal_mens'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy bal_mens",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "bal_mens",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('bal_mens').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "bal_mens",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_balance_',pipeline().parameters.perimetro,'_mensual')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_bal",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If CR_ACUM",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If DATOS_MENS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','cr','acum','cr_acum'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy cr_acum",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "cr_acum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('cr_acum').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "cr_acum",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_cuentaresultados_',pipeline().parameters.perimetro,'_acumulado')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_cr",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If CR_MENS",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If DATOS_ACUM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','cr','mens','cr_mens'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy cr_mens",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "cr_mens",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('cr_mens').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "cr_mens",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_cuentaresultados_',pipeline().parameters.perimetro,'_mensual')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_cr",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If TOTALES_ACUM",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If DATOS_ACUM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','total','acum','total_acum'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy totales_acum",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "totales_acum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('totales_acum').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "totales_acum",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_totales_',pipeline().parameters.perimetro,'_acumulado')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@sub(pipeline().parameters.exec_total,1)",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If TOTALES_MENS",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If DATOS_MENS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','total','mens','total_mens'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy total_mens",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "total_mens",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('total_mens').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "total_mens",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_totales_',pipeline().parameters.perimetro,'_mensual')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_total",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If DATOS_ACUM",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If BAL_ACUM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','datos','acum','datos_acum'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy datos_acum",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "datos_acum",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('datos_acum').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "datos_acum",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_datos_',pipeline().parameters.perimetro,'_acumulado')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_data",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "If DATOS_MENS",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "If BAL_MENS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(empty(intersection(pipeline().parameters.module, createArray('all','datos','mens','datos_mens'))))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Set copy datos_mens",
+							"type": "AppendVariable",
+							"dependsOn": [
+								{
+									"activity": "datos_mens",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "array_copy",
+								"value": {
+									"value": "@activity('datos_mens').output.runOutput",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "datos_mens",
+							"type": "DatabricksNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebookPath": "/Shared/DAB-CRP0001/files/src/crp0001/bfc/perimetros/crp0001_c_nb_prc_edw_l_bfc_datos_perimetros",
+								"baseParameters": {
+									"datasource": {
+										"value": "@concat('estrategdato_ap_bfc_datos_',pipeline().parameters.perimetro,'_mensual')",
+										"type": "Expression"
+									},
+									"month": {
+										"value": "@pipeline().parameters.customMonth",
+										"type": "Expression"
+									},
+									"tabledestination": {
+										"value": "@pipeline().parameters.tabledestination",
+										"type": "Expression"
+									},
+									"typeExec": {
+										"value": "@pipeline().parameters.typeExec",
+										"type": "Expression"
+									},
+									"year": {
+										"value": "@pipeline().parameters.customYear",
+										"type": "Expression"
+									}
+								},
+								"libraries": [
+									{
+										"jar": "@concat('/Volumes/datahub01',pipeline().globalParameters.env_variable,'aucdatagold/config_common/common_libraries/',pipeline().globalParameters.libFileName)"
+									}
+								]
+							},
+							"linkedServiceName": {
+								"referenceName": "CRP0001_ls_databricks",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"clusterVersion": {
+										"value": "@pipeline().globalParameters.clusterVersion",
+										"type": "Expression"
+									},
+									"numWorkers": {
+										"value": "@pipeline().parameters.exec_data",
+										"type": "Expression"
+									},
+									"digitalCase": "CRP0001"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "mkstring",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "If CR_MENS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If TOTALES_ACUM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If CR_ACUM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "If TOTALES_MENS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "str_array",
+							"value": {
+								"type": "Expression",
+								"content": "@join(variables('array_copy'),',')"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			}
+		],
+		"parameters": {
+			"customMonth": {
+				"type": "string",
+				"defaultValue": "01"
+			},
+			"customYear": {
+				"type": "string",
+				"defaultValue": "2022"
+			},
+			"exec_bal": {
+				"type": "int",
+				"defaultValue": 2
+			},
+			"exec_cr": {
+				"type": "int",
+				"defaultValue": 2
+			},
+			"exec_data": {
+				"type": "int",
+				"defaultValue": 2
+			},
+			"exec_total": {
+				"type": "int",
+				"defaultValue": 2
+			},
+			"module": {
+				"type": "array",
+				"defaultValue": [
+					"all"
+				]
+			},
+			"perimetro": {
+				"type": "string",
+				"defaultValue": "STATUTORY"
+			},
+			"tabledestination": {
+				"type": "string",
+				"defaultValue": "datahub01%env%aucdatagold.finance.crp0001_tb_fac_x_bfc_statut"
+			},
+			"typeExec": {
+				"type": "string",
+				"defaultValue": "custom"
+			}
+		},
+		"variables": {
+			"array_copy": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "crp0001/bfc/Perimetros"
+		},
+		"annotations": []
+	}
+}

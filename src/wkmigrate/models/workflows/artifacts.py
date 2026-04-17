@@ -22,8 +22,18 @@ class PreparedWorkflow:
 
     @property
     def tasks(self) -> list[dict[str, Any]]:
-        """Task dicts for the activities at this level."""
-        return [activity.task for activity in self.activities]
+        """Task dicts for the activities at this level, including any extras.
+
+        Extras (e.g. a wrapper notebook task emitted alongside an IfCondition
+        condition_task) are inserted before their owning activity's task so that
+        downstream ``depends_on`` wiring resolves correctly.
+        """
+        result: list[dict[str, Any]] = []
+        for activity in self.activities:
+            if activity.extra_tasks:
+                result.extend(activity.extra_tasks)
+            result.append(activity.task)
+        return result
 
     @property
     def all_notebooks(self) -> list[NotebookArtifact]:
@@ -87,6 +97,7 @@ class PreparedActivity:
     pipelines: list[PipelineInstruction] | None = None
     secrets: list[SecretInstruction] | None = None
     inner_workflow: "PreparedWorkflow" | None = None
+    extra_tasks: list[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)

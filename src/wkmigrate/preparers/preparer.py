@@ -67,8 +67,7 @@ def _check_task_key_collisions(tasks: list[Activity]) -> None:
         original = seen.get(sanitized)
         if original is not None and original != task.task_key:
             raise ValueError(
-                f"Task key collision: '{original}' and '{task.task_key}' "
-                f"both sanitize to '{sanitized}'"
+                f"Task key collision: '{original}' and '{task.task_key}' " f"both sanitize to '{sanitized}'"
             )
         seen[sanitized] = task.task_key
 

@@ -231,12 +231,24 @@ class IfConditionActivity(Activity):
         left: Left-hand operand used in the conditional expression.
         right: Right-hand operand used in the conditional expression.
         child_activities: Activities that form the body of the conditional branch.
+        wrapper_notebook_key: When set, the condition_task reads a task value
+            published by a preceding wrapper notebook with this task key. The
+            preparer emits the wrapper notebook + a NotebookTask alongside the
+            condition task. ``None`` means the predicate is a native binary
+            comparison (no wrapper needed) — CRP-11.
+        wrapper_notebook_content: Python notebook source for the wrapper body.
+            Populated only when ``wrapper_notebook_key`` is set.
+        wrapper_widgets: Ordered pipeline-parameter names declared as widgets
+            in the wrapper notebook.
     """
 
     op: str
     left: str
     right: str
     child_activities: list[Activity] = field(default_factory=list)
+    wrapper_notebook_key: str | None = None
+    wrapper_notebook_content: str | None = None
+    wrapper_widgets: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True, kw_only=True)

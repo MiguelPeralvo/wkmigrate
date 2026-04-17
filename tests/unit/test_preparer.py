@@ -13,6 +13,7 @@ from wkmigrate.models.ir.pipeline import (
     DatabricksNotebookActivity,
     Dependency,
     ForEachActivity,
+    IfConditionActivity,
     LookupActivity,
     Pipeline,
     RunJobActivity,
@@ -21,6 +22,7 @@ from wkmigrate.models.ir.pipeline import (
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
+from wkmigrate.preparers.if_condition_activity_preparer import prepare_if_condition_activity
 from wkmigrate.preparers.lookup_activity_preparer import prepare_lookup_activity
 from wkmigrate.preparers.preparer import prepare_workflow
 from wkmigrate.preparers.run_job_activity_preparer import prepare_run_job_activity
@@ -464,3 +466,70 @@ def test_prepare_workflow_raises_on_task_key_collision() -> None:
     pipeline = Pipeline(name="test", tasks=[task_a, task_b], parameters=None, schedule=None, tags={})
     with pytest.raises(ValueError, match="Task key collision"):
         prepare_workflow(pipeline)
+
+
+# ---------------------------------------------------------------------------
+# CRP-11 — IfCondition wrapper-notebook preparer
+# ---------------------------------------------------------------------------
+
+
+def test_prepare_if_condition_native_has_no_wrapper_artifacts() -> None:
+    """Simple binary comparisons produce only the condition_task (no wrapper)."""
+    activity = IfConditionActivity(
+        name="if_native",
+        task_key="if_native",
+        depends_on=[],
+        op="EQUAL_TO",
+        left="'foo'",
+        right="'bar'",
+        child_activities=[],
+    )
+
+    prepared = prepare_if_condition_activity(activity)
+
+    assert "condition_task" in prepared.task
+    assert prepared.task["condition_task"]["left"] == "'foo'"
+    assert prepared.task["condition_task"]["right"] == "'bar'"
+    assert prepared.notebooks is None
+    assert prepared.extra_tasks is None
+
+
+def test_prepare_if_condition_wrapper_emits_notebook_and_extra_task() -> None:
+    """Compound predicate wrapper attaches a NotebookTask + NotebookArtifact."""
+    activity = IfConditionActivity(
+        name="if_compound",
+        task_key="if_compound",
+        depends_on=[],
+        op="EQUAL_TO",
+        left="{{tasks.if_compound__crp11_wrap.values.branch}}",
+        right="True",
+        child_activities=[],
+        wrapper_notebook_key="if_compound__crp11_wrap",
+        wrapper_notebook_content="# Databricks notebook source\n_branch = True\n",
+        wrapper_widgets=["module", "env"],
+    )
+
+    prepared = prepare_if_condition_activity(activity)
+
+    # Wrapper NotebookArtifact written under /wkmigrate/if_condition_wrappers/<key>.
+    assert prepared.notebooks is not None
+    assert len(prepared.notebooks) == 1
+    notebook = prepared.notebooks[0]
+    assert notebook.file_path == "/wkmigrate/if_condition_wrappers/if_compound__crp11_wrap"
+    assert "_branch" in notebook.content
+
+    # Extra task: NotebookTask that runs the wrapper before the condition_task.
+    assert prepared.extra_tasks is not None and len(prepared.extra_tasks) == 1
+    extra = prepared.extra_tasks[0]
+    assert extra["task_key"] == "if_compound__crp11_wrap"
+    assert extra["notebook_task"]["notebook_path"] == notebook.file_path
+    # Widget values are forwarded from job-level parameters.
+    assert extra["notebook_task"]["base_parameters"] == {
+        "module": "{{job.parameters.module}}",
+        "env": "{{job.parameters.env}}",
+    }
+
+    # condition_task depends_on includes the wrapper so ordering is guaranteed.
+    depends_on = prepared.task.get("depends_on") or []
+    keys = [(entry.task_key if hasattr(entry, "task_key") else entry.get("task_key")) for entry in depends_on]
+    assert "if_compound__crp11_wrap" in keys
