@@ -480,6 +480,25 @@ def test_condition_wrapper_activity_output_truthiness() -> None:
     assert "bool(" in content
 
 
+def test_condition_wrapper_widget_collector_recurses_index_and_interpolation() -> None:
+    """Widget collector recurses IndexAccess + StringInterpolation (PR #19 bot feedback)."""
+    # IndexAccess: activity('A').output[pipeline().parameters.idx]
+    ast_index = _ast("@equals(activity('A').output[pipeline().parameters.idx], 'x')")
+    _, widgets_index = get_condition_wrapper_notebook_content(
+        predicate_ast=ast_index,
+        wrapper_task_key="wrap_idx",
+    )
+    assert "idx" in widgets_index
+
+    # StringInterpolation: "prefix-@{pipeline().parameters.name}-suffix"
+    ast_interp = _ast("prefix-@{pipeline().parameters.name}-suffix")
+    _, widgets_interp = get_condition_wrapper_notebook_content(
+        predicate_ast=ast_interp,
+        wrapper_task_key="wrap_interp",
+    )
+    assert "name" in widgets_interp
+
+
 def test_condition_wrapper_idempotent() -> None:
     """Two identical calls return byte-identical notebook content (INV-4)."""
     ast = _ast("@and(contains(pipeline().parameters.module, 'foo'), " "not(empty(pipeline().parameters.env)))")

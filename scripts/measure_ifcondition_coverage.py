@@ -99,12 +99,17 @@ def _is_native_shape(node: AstNode) -> bool:
 
 
 def classify_predicate(expression: str, supported_funcs: set[str]) -> str:
+    """Classify a predicate by AST shape.
+
+    ``native`` is reserved for predicates that Databricks ``condition_task`` can
+    evaluate directly — binary comparison functions (``equals``/``greater``/...)
+    or ``not(equals(...))`` between simple references/literals. Bare references
+    like ``@activity('X').output.runOutput`` are NOT native: ``condition_task``
+    requires a binary comparison, so they need the wrapper's boolean coercion.
+    """
     parsed = parse_expression(expression)
     if isinstance(parsed, UnsupportedValue):
         return "parse_error"
-
-    if _is_simple_ref_or_literal(parsed):
-        return "native"
 
     if _is_native_shape(parsed):
         return "native"

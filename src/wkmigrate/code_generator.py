@@ -24,7 +24,9 @@ from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_
 from wkmigrate.parsers.expression_ast import (
     AstNode,
     FunctionCall,
+    IndexAccess,
     PropertyAccess,
+    StringInterpolation,
 )
 from wkmigrate.parsers.expression_emitter import emit_with_imports
 from wkmigrate.parsers.expression_parsers import ResolvedExpression
@@ -245,6 +247,12 @@ def _collect_pipeline_parameter_widgets(node: AstNode) -> list[str]:
         elif isinstance(n, FunctionCall):
             for arg in n.args:
                 _visit(arg)
+        elif isinstance(n, IndexAccess):
+            _visit(n.object)
+            _visit(n.index)
+        elif isinstance(n, StringInterpolation):
+            for part in n.parts:
+                _visit(part)
 
     _visit(node)
     return seen
