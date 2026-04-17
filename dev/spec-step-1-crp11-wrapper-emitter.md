@@ -27,7 +27,7 @@
 
 ## Error modes
 
-- **EM-1** Expression parse failure (malformed ADF expression) → raise `ExpressionParseError`; caller converts to `NotTranslatableWarning` + `UnsupportedValue`.
+- **EM-1** Expression parse failure (malformed ADF expression) → `parse_expression` returns `UnsupportedValue`; wrapper emitter returns `UnsupportedValue` to caller, which emits `NotTranslatableWarning` + falls through to existing broken-fallback path guarded by `NotTranslatableWarning` (no new wrapper file written).
 - **EM-2** Function not in registry → emit wrapper with `NotImplementedError` body + `NotTranslatableWarning(match=r"function <name> not supported")`.
 - **EM-3** `variables()` reference detected → emit wrapper with `NotImplementedError` + `warning match=r"variables\(\) mutation not supported"`. Do not block conversion of siblings.
 
