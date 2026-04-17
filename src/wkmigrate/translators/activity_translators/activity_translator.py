@@ -192,7 +192,7 @@ def visit_activity(
                     stacklevel=2,
                 )
                 base_properties = _get_base_properties(activity, is_conditional_task)
-                translated = get_placeholder_activity(base_properties)
+                translated: Activity = get_placeholder_activity(base_properties)
             if name:
                 context = context.with_activity(name, translated)
             return translated, context

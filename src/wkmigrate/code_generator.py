@@ -230,28 +230,28 @@ def _collect_pipeline_parameter_widgets(node: AstNode) -> list[str]:
 
     seen: list[str] = []
 
-    def _visit(n: AstNode) -> None:
-        if isinstance(n, PropertyAccess):
-            inner = n.target
+    def _visit(current: AstNode) -> None:
+        if isinstance(current, PropertyAccess):
+            inner = current.target
             if (
                 isinstance(inner, PropertyAccess)
                 and inner.property_name == "parameters"
                 and isinstance(inner.target, FunctionCall)
                 and inner.target.name.lower() == "pipeline"
             ):
-                name = n.property_name
+                name = current.property_name
                 if name not in seen:
                     seen.append(name)
                 return
             _visit(inner)
-        elif isinstance(n, FunctionCall):
-            for arg in n.args:
+        elif isinstance(current, FunctionCall):
+            for arg in current.args:
                 _visit(arg)
-        elif isinstance(n, IndexAccess):
-            _visit(n.object)
-            _visit(n.index)
-        elif isinstance(n, StringInterpolation):
-            for part in n.parts:
+        elif isinstance(current, IndexAccess):
+            _visit(current.object)
+            _visit(current.index)
+        elif isinstance(current, StringInterpolation):
+            for part in current.parts:
                 _visit(part)
 
     _visit(node)

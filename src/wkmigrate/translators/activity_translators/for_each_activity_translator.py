@@ -104,6 +104,7 @@ def translate_for_each_activity(
     is_sequential = activity.get("isSequential")
     if is_sequential is None:
         is_sequential = activity.get("is_sequential")
+    concurrency: "int | ResolvedExpression | None"
     if is_sequential is True:
         concurrency = 1
     else:
