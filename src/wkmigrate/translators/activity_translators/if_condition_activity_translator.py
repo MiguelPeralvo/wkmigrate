@@ -44,6 +44,7 @@ from importlib import import_module
 
 import warnings
 
+from wkmigrate.code_generator import get_condition_wrapper_notebook_content
 from wkmigrate.models.ir.translation_context import TranslationContext
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.models.ir.pipeline import Activity, IfConditionActivity
@@ -97,7 +98,9 @@ def translate_if_condition_activity(
             context,
         )
 
-    parsed = _parse_condition_expression(source_expression, context)
+    parent_task_name = activity.get("name") or "IF_CONDITION_PARENT_TASK"
+
+    parsed = _parse_condition_expression(source_expression, context, parent_task_name)
     if isinstance(parsed, UnsupportedValue):
         return UnsupportedValue(value=activity, message=parsed.message), context
 
@@ -111,13 +114,12 @@ def translate_if_condition_activity(
             context,
         )
 
-    parent_task_name = activity.get("name") or "IF_CONDITION_PARENT_TASK"
-
     child_activities: list[Activity] = []
+    wrapper_key = parsed.get("wrapper_notebook_key")
     for branch_key, outcome in (("if_false_activities", "false"), ("if_true_activities", "true")):
         branch = activity.get(branch_key)
         if branch:
-            children, context = _translate_child_activities(branch, parent_task_name, outcome, context)
+            children, context = _translate_child_activities(branch, parent_task_name, outcome, context, wrapper_key)
             child_activities.extend(children)
 
     if not child_activities:
@@ -132,6 +134,9 @@ def translate_if_condition_activity(
         left=parsed["left"],
         right=parsed["right"],
         child_activities=child_activities,
+        wrapper_notebook_key=parsed.get("wrapper_notebook_key"),
+        wrapper_notebook_content=parsed.get("wrapper_notebook_content"),
+        wrapper_widgets=parsed.get("wrapper_widgets") or [],
     )
     return result, context
 
@@ -141,18 +146,24 @@ def _translate_child_activities(
     parent_task_name: str,
     parent_task_outcome: str,
     context: TranslationContext,
+    wrapper_notebook_key: str | None = None,
 ) -> tuple[list[Activity], TranslationContext]:
     """
     Translates child activities referenced by IfCondition tasks.
 
     The context is threaded through each child so that the activity cache is shared
-    across all branches.
+    across all branches. When ``wrapper_notebook_key`` is supplied the child
+    activity's ``depends_on`` is extended with a Succeeded dependency on the
+    wrapper task so that no branch fires until the wrapper has published the
+    ``branch`` task value (INV-3).
 
     Args:
         child_activities: Child activity definitions attached to the IfCondition.
         parent_task_name: Name of the parent IfCondition task.
         parent_task_outcome: Expected outcome (``'true'``/``'false'``).
         context: Current translation context.
+        wrapper_notebook_key: When set, the wrapper notebook task key that each
+            child must also depend on.
 
     Returns:
         A tuple with the translated children and the updated context.
@@ -160,26 +171,48 @@ def _translate_child_activities(
     activity_translator = import_module("wkmigrate.translators.activity_translators.activity_translator")
     visit_activity = activity_translator.visit_activity
     parent_dependency = {"activity": parent_task_name, "outcome": parent_task_outcome}
+    extra_dependencies: list[dict] = []
+    if wrapper_notebook_key:
+        extra_dependencies.append({"activity": wrapper_notebook_key, "outcome": "Succeeded"})
 
     translated: list[Activity] = []
     for activity in child_activities:
         _activity = activity.copy()
-        _activity["depends_on"] = [*(activity.get("depends_on") or []), parent_dependency]
+        _activity["depends_on"] = [
+            *(activity.get("depends_on") or []),
+            parent_dependency,
+            *extra_dependencies,
+        ]
         result, context = visit_activity(_activity, True, context)
         translated.append(result)
     return translated, context
 
 
-def _parse_condition_expression(condition: dict, context: TranslationContext) -> dict | UnsupportedValue:
+def _parse_condition_expression(
+    condition: dict, context: TranslationContext, parent_task_name: str
+) -> dict | UnsupportedValue:
     """
     Parses a condition expression in an If Condition activity definition.
 
+    For binary comparison predicates (``equals``/``not(equals)``/``greater``/
+    ``less``/...) between simple references/literals the native
+    ``condition_task`` shape is produced (INV-1 native preferred).
+
+    For compound predicates (``and``/``or``/``not``/``contains``/...) or
+    bare references, a wrapper Databricks notebook is emitted via CRP-11's
+    :func:`get_condition_wrapper_notebook_content`. The condition_task then
+    reads the published boolean via a ``{{tasks.<wrapper>.values.branch}}``
+    task-values reference (INV-2, INV-3).
+
     Args:
         condition: Condition expression dictionary from ADF.
+        context: Translation context (used to resolve ``variables()``).
+        parent_task_name: Name of the IfCondition activity — used to derive a
+            unique wrapper task key.
 
     Returns:
-        Dictionary describing the parsed operator and its operands, or ``UnsupportedValue``
-        when the expression cannot be parsed.
+        Dictionary describing the parsed operator and its operands, optionally
+        with wrapper fields, or ``UnsupportedValue`` if parsing fails.
     """
     condition_value = str(condition.get("value"))
     if not condition_value:
@@ -194,41 +227,57 @@ def _parse_condition_expression(condition: dict, context: TranslationContext) ->
             message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
         )
 
-    if not isinstance(parsed, FunctionCall):
-        return UnsupportedValue(
-            value=condition,
-            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
-        )
+    # INV-1: native condition_task path for simple binary comparisons.
+    native = _try_native_condition(parsed, context)
+    if native is not None:
+        return native
 
-    lowered_name = parsed.name.lower()
-    op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
-    if op_name is not None and len(parsed.args) == 2:
-        left = _emit_condition_operand(parsed.args[0], context)
-        if isinstance(left, UnsupportedValue):
-            return left
-        right = _emit_condition_operand(parsed.args[1], context)
-        if isinstance(right, UnsupportedValue):
-            return right
-        return {"op": op_name, "left": left, "right": right}
-
-    # Fallback: emit the entire expression as Python code for truthy evaluation.
-    # This handles @and(...), @or(...), @if(...), and any non-comparison expression.
-    # We set right="" so downstream consumers (e.g. lmv walker) skip the pair
-    # rather than producing a semantically wrong "== True" comparison.
-    emitted = emit(parsed, context)
-    if isinstance(emitted, UnsupportedValue):
-        return UnsupportedValue(
-            value=condition,
-            message=f"Unsupported conditional expression '{condition_value}' in IfCondition activity 'expression'",
-        )
+    # INV-2/INV-3: wrapper-notebook path for compound / bare predicates.
+    wrapper_key = f"{parent_task_name}__crp11_wrap"
+    notebook_content, widgets = get_condition_wrapper_notebook_content(
+        predicate_ast=parsed,
+        wrapper_task_key=wrapper_key,
+        context=context,
+    )
     warnings.warn(
         NotTranslatableWarning(
             "expression",
-            f"IfCondition compound predicate emitted as Python expression: {condition_value}",
+            f"IfCondition compound predicate routed through wrapper notebook '{wrapper_key}': " f"{condition_value}",
         ),
         stacklevel=3,
     )
-    return {"op": "EQUAL_TO", "left": emitted, "right": ""}
+    return {
+        "op": "EQUAL_TO",
+        "left": f"{{{{tasks.{wrapper_key}.values.branch}}}}",
+        "right": "True",
+        "wrapper_notebook_key": wrapper_key,
+        "wrapper_notebook_content": notebook_content,
+        "wrapper_widgets": widgets,
+    }
+
+
+def _try_native_condition(parsed: AstNode, context: TranslationContext) -> dict | None:
+    """Return a native condition_task dict if the predicate is a simple binary comparison.
+
+    Handles ``@equals(x, y)``, ``@greater(x, y)`` and friends from the direct
+    mapping in ``_CONDITION_FUNCTION_TO_OP``. Returns ``None`` if the shape is
+    not a native binary comparison so the caller can fall back to the wrapper.
+    """
+    if not isinstance(parsed, FunctionCall):
+        return None
+
+    lowered_name = parsed.name.lower()
+    op_name = _CONDITION_FUNCTION_TO_OP.get(lowered_name)
+    if op_name is None or len(parsed.args) != 2:
+        return None
+
+    left = _emit_condition_operand(parsed.args[0], context)
+    if isinstance(left, UnsupportedValue):
+        return None
+    right = _emit_condition_operand(parsed.args[1], context)
+    if isinstance(right, UnsupportedValue):
+        return None
+    return {"op": op_name, "left": left, "right": right}
 
 
 def _emit_condition_operand(operand: AstNode, context: TranslationContext) -> str | UnsupportedValue:

@@ -585,8 +585,8 @@ def test_if_condition_missing_expression_returns_unsupported(if_condition_activi
     assert fixture["expected_message"] in result.message
 
 
-def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fixtures: list[dict]) -> None:
-    """Compound expression (previously unsupported) now uses Python fallback."""
+def test_if_condition_compound_expression_uses_wrapper(if_condition_activity_fixtures: list[dict]) -> None:
+    """Compound expression routes through a wrapper notebook (CRP-11)."""
     fixture = get_fixture(if_condition_activity_fixtures, "unsupported_expression")
     base_kwargs = get_base_kwargs(fixture["input"])
     with warnings.catch_warnings(record=True):
@@ -594,14 +594,18 @@ def test_if_condition_compound_expression_uses_fallback(if_condition_activity_fi
         result, _ctx = translate_if_condition_activity(fixture["input"], base_kwargs)
 
     assert isinstance(result, IfConditionActivity)
+    # CRP-11: compound predicates now emit a wrapper notebook, and the
+    # condition_task reads the published boolean via task values.
     assert result.op == "EQUAL_TO"
-    # W-21: non-comparison expressions no longer wrap with right="True"
-    # right="" signals a truthy predicate (lmv walker skips empty right)
-    assert result.right == ""
+    assert result.right == "True"
+    assert result.wrapper_notebook_key is not None
+    assert result.left == f"{{{{tasks.{result.wrapper_notebook_key}.values.branch}}}}"
+    assert result.wrapper_notebook_content is not None
+    assert "dbutils.jobs.taskValues.set" in result.wrapper_notebook_content
 
 
-def test_if_condition_not_equals_expression() -> None:
-    """not(equals()) falls through to compound predicate path (emits Python code)."""
+def test_if_condition_not_equals_expression_uses_wrapper() -> None:
+    """not(equals()) is a compound predicate → routes through wrapper notebook (CRP-11)."""
     activity = {
         "name": "if_not_equals",
         "type": "IfCondition",
@@ -614,8 +618,10 @@ def test_if_condition_not_equals_expression() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    assert result.right == ""
-    assert "not" in result.left.lower() or "!=" in result.left
+    assert result.right == "True"
+    assert result.wrapper_notebook_key is not None
+    assert result.left.startswith("{{tasks.")
+    assert result.left.endswith(".values.branch}}")
 
 
 def test_if_condition_dynamic_left_operand_expression() -> None:
@@ -660,7 +666,7 @@ def test_if_condition_no_children(if_condition_activity_fixtures: list[dict]) ->
 
 
 def test_if_condition_and_compound_predicate() -> None:
-    """IfCondition with @and(equals(...), greater(...)) should NOT return UnsupportedValue."""
+    """IfCondition with @and(...) routes through wrapper notebook (CRP-11)."""
     activity = {
         "name": "if_and",
         "type": "IfCondition",
@@ -675,12 +681,14 @@ def test_if_condition_and_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
-    assert result.right == ""
+    assert result.right == "True"
+    assert result.wrapper_notebook_key == "if_and__crp11_wrap"
+    assert result.left == "{{tasks.if_and__crp11_wrap.values.branch}}"
+    assert "dbutils.jobs.taskValues.set" in (result.wrapper_notebook_content or "")
 
 
 def test_if_condition_or_compound_predicate() -> None:
-    """IfCondition with @or(...) should produce a fallback condition, not UnsupportedValue."""
+    """IfCondition with @or(...) routes through wrapper notebook (CRP-11)."""
     activity = {
         "name": "if_or",
         "type": "IfCondition",
@@ -695,8 +703,8 @@ def test_if_condition_or_compound_predicate() -> None:
 
     assert isinstance(result, IfConditionActivity)
     assert result.op == "EQUAL_TO"
-    # W-21: non-comparison expressions use right="" (truthy predicate, no == True wrap)
-    assert result.right == ""
+    assert result.right == "True"
+    assert result.wrapper_notebook_key == "if_or__crp11_wrap"
 
 
 def test_if_condition_simple_equals_still_works(if_condition_activity_fixtures: list[dict]) -> None:
