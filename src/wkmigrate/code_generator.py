@@ -18,7 +18,15 @@ from wkmigrate.parsers.dataset_parsers import (
     DEFAULT_PORTS,
 )
 from wkmigrate.models.ir.pipeline import Authentication
+from wkmigrate.models.ir.translation_context import TranslationContext
+from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning, not_translatable_context
+from wkmigrate.parsers.expression_ast import (
+    AstNode,
+    FunctionCall,
+    PropertyAccess,
+)
+from wkmigrate.parsers.expression_emitter import emit_with_imports
 from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 _DATETIME_HELPER_MARKER = "_wkmigrate_"
@@ -207,6 +215,116 @@ def get_set_variable_notebook_content(variable_name: str, variable_value: str) -
         ]
     )
     return autopep8.fix_code("\n".join(script_lines))
+
+
+def _collect_pipeline_parameter_widgets(node: AstNode) -> list[str]:
+    """Walk an AST and return ordered unique pipeline-parameter names referenced.
+
+    Parameters are referenced via ``@pipeline().parameters.<name>`` which parses
+    as ``PropertyAccess(target=PropertyAccess(target=FunctionCall('pipeline'), 'parameters'), <name>)``.
+    Order of first appearance is preserved to keep widget declarations deterministic
+    (INV-4 idempotency).
+    """
+
+    seen: list[str] = []
+
+    def _visit(n: AstNode) -> None:
+        if isinstance(n, PropertyAccess):
+            inner = n.target
+            if (
+                isinstance(inner, PropertyAccess)
+                and inner.property_name == "parameters"
+                and isinstance(inner.target, FunctionCall)
+                and inner.target.name.lower() == "pipeline"
+            ):
+                name = n.property_name
+                if name not in seen:
+                    seen.append(name)
+                return
+            _visit(inner)
+        elif isinstance(n, FunctionCall):
+            for arg in n.args:
+                _visit(arg)
+
+    _visit(node)
+    return seen
+
+
+def get_condition_wrapper_notebook_content(
+    predicate_ast: AstNode,
+    wrapper_task_key: str,
+    context: TranslationContext | None = None,
+) -> tuple[str, list[str]]:
+    """Generate a wrapper notebook that evaluates a compound IfCondition predicate in Python.
+
+    The resulting notebook declares one Databricks widget per referenced pipeline parameter,
+    evaluates the predicate once via the shared ``PythonEmitter``, and publishes the boolean
+    result as a Databricks task value under the key ``"branch"``. Downstream ``condition_task``
+    tasks read that value via ``dbutils.jobs.taskValues.get``.
+
+    Invariants:
+        - INV-2: predicate is emitted via the shared ``PythonEmitter``. No bespoke logic.
+        - INV-4: output is deterministic — two calls with the same inputs return identical bytes.
+        - INV-5: when ``PythonEmitter`` returns ``UnsupportedValue`` (unsupported function, etc.),
+          the wrapper body raises ``NotImplementedError`` at runtime rather than silently publishing
+          ``True``. The caller should still emit a ``NotTranslatableWarning``.
+
+    Args:
+        predicate_ast: Parsed AST for the compound predicate.
+        wrapper_task_key: Key used to identify the wrapper task (not embedded in the
+            notebook content itself; forwarded by the preparer into the task definition).
+        context: Translation context used by ``PythonEmitter`` to resolve variable
+            references to task keys.
+
+    Returns:
+        Tuple ``(notebook_content, referenced_widgets)`` where ``notebook_content`` is
+        the Python notebook source string and ``referenced_widgets`` is the ordered list
+        of pipeline-parameter names that must be supplied as job-level widget values.
+    """
+
+    del wrapper_task_key  # reserved for future use (e.g., task-value key scoping)
+    widgets = _collect_pipeline_parameter_widgets(predicate_ast)
+    emitted = emit_with_imports(predicate_ast, context)
+
+    script_lines: list[str] = ["# Databricks notebook source"]
+    if isinstance(emitted, UnsupportedValue):
+        unsupported_expr = repr(str(emitted.value))
+        message = repr(emitted.message)
+        script_lines.extend(
+            [
+                "",
+                "# wkmigrate could not translate this ADF expression.",
+                "# Failing loudly at runtime rather than silently publishing True (INV-5).",
+                f"raise NotImplementedError("
+                f'"wkmigrate cannot translate compound IfCondition predicate "'
+                f" + {unsupported_expr} + "
+                f'" - reason: " + {message})',
+            ]
+        )
+        return "\n".join(script_lines), widgets
+
+    if emitted.required_imports:
+        for import_name in sorted(emitted.required_imports):
+            if import_name == "wkmigrate_datetime_helpers":
+                script_lines.extend(["", *_INLINE_DATETIME_HELPERS])
+            else:
+                script_lines.append(f"import {import_name}")
+
+    script_lines.extend(["", "# Declare widgets for pipeline parameters referenced by the predicate."])
+    for widget in widgets:
+        script_lines.append(f'dbutils.widgets.text("{widget}", "")')
+
+    script_lines.extend(
+        [
+            "",
+            "# Evaluate compound predicate once.",
+            f"_branch = bool({emitted.code})",
+            "",
+            "# Publish boolean result for the downstream condition_task.",
+            'dbutils.jobs.taskValues.set(key="branch", value=str(_branch))',
+        ]
+    )
+    return "\n".join(script_lines), widgets
 
 
 def get_option_expressions(dataset_definition: dict, credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE) -> list[str]:
