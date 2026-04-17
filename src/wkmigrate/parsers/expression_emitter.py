@@ -123,8 +123,27 @@ class PythonEmitter(EmitterProtocol):
             variable_name = node.args[0].value
             task_key = self.context.get_variable_task_key(variable_name) if self.context is not None else None
             if task_key is None:
-                # Best-effort: emit a taskValues lookup using the SetVariable naming convention
+                # Best-effort: the SetVariable producer isn't visible in the current
+                # translation context (common when SetVariable is nested inside a
+                # multi-activity ForEach body that translates in a fresh context).
+                # Warn loudly so the ops review catches it before production deploy —
+                # see dev/step-3-variables-fanin.md for the proper fan-in design.
+                import warnings as _w
+
+                from wkmigrate.not_translatable import NotTranslatableWarning as _Warning
+
                 task_key = f"set_variable_{variable_name}"
+                _w.warn(
+                    _Warning(
+                        "variables",
+                        f"variables({variable_name!r}) producer not in context cache; "
+                        f"emitting best-effort taskKey={task_key!r}. "
+                        f"Likely the SetVariable lives inside a multi-activity ForEach — "
+                        f"the resulting lookup will fail at runtime. See "
+                        f"dev/step-3-variables-fanin.md for the fan-in design.",
+                    ),
+                    stacklevel=3,
+                )
             return f"dbutils.jobs.taskValues.get(taskKey={task_key!r}, key={variable_name!r})"
 
         if lowered == "item":

@@ -119,6 +119,77 @@ def test_three_pipelines_produce_no_unsupported_values() -> None:
         _walk(pipeline.tasks)
 
 
+def test_wrapper_resolves_variables_to_upstream_setvariable_task_keys() -> None:
+    """Step 3 fan-in: wrapper body emits taskValues.get() for variables() references.
+
+    Two cases covered here:
+
+    1. Flat pipeline (SetVariable and IfCondition at the same level) — the
+       ``variable_cache`` resolves the actual SetVariable task key, so the
+       wrapper body contains ``taskKey='<SetVariable task key>'``.
+    2. SetVariable nested inside a multi-activity ForEach + IfCondition at
+       the outer level — a known limitation: ``_build_inner_pipeline()``
+       uses a fresh context so inner SetVariables don't populate the outer
+       variable_cache. In this case the wrapper falls back to the
+       ``set_variable_<name>`` best-effort key, which is semantically wrong
+       at Databricks runtime (task values don't cross RunJob boundaries).
+       Tracked as a follow-up to Step 3.
+
+    This test locks in both behaviours so we notice when either changes.
+    """
+    pipeline = _translate("lakeh_a_pl_arquetipo_internal.json")
+    compound = [c for c in _collect_if_conditions(pipeline) if c.wrapper_notebook_key]
+    continue_refs = [c for c in compound if "continue" in (c.wrapper_notebook_content or "")]
+    assert continue_refs, "expected a wrapper referencing variables('continue')"
+
+    # For the outer IfCondition (SetVariable lives inside ForEach): expect the
+    # best-effort taskKey form — this documents the known limitation.
+    best_effort = [c for c in continue_refs if "taskKey='set_variable_continue'" in (c.wrapper_notebook_content or "")]
+    assert best_effort, "ForEach-nested SetVariable case: expect best-effort fallback"
+
+
+def test_wrapper_resolves_variables_when_setvariable_is_flat_sibling() -> None:
+    """Companion to the ForEach-nested case: when the SetVariable sits at the
+    same level as the IfCondition (no ForEach in between), the wrapper must
+    emit the real SetVariable task_key via the variable_cache.
+    """
+    import warnings as _warnings
+
+    from wkmigrate.translators.activity_translators.activity_translator import translate_activities_with_context
+    from wkmigrate.utils import normalize_arm_pipeline, recursive_camel_to_snake
+
+    raw = {
+        "name": "flat",
+        "activities": [
+            {
+                "name": "set_mod",
+                "type": "SetVariable",
+                "typeProperties": {"variableName": "module", "value": "bal"},
+                "dependsOn": [],
+            },
+            {
+                "name": "if_compound",
+                "type": "IfCondition",
+                "typeProperties": {
+                    "expression": {"type": "Expression", "value": "@contains(variables('module'), 'bal')"},
+                    "ifTrueActivities": [],
+                    "ifFalseActivities": [],
+                },
+                "dependsOn": [{"activity": "set_mod", "dependencyConditions": ["Succeeded"]}],
+            },
+        ],
+    }
+    normed = normalize_arm_pipeline(recursive_camel_to_snake(raw))
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore")
+        acts, _ctx = translate_activities_with_context(normed["activities"])
+
+    wrapper = next(a for a in acts if getattr(a, "wrapper_notebook_content", None))
+    body = wrapper.wrapper_notebook_content
+    assert "taskKey='set_mod'" in body
+    assert "taskKey='set_variable_module'" not in body
+
+
 def test_perimetros_condition_task_depends_on_wrapper() -> None:
     """INV-3: condition_task depends_on includes the wrapper task."""
     pipeline = _translate("crp0001_c_pl_prc_edw_bfcdt_perimetros_process_data.json")
