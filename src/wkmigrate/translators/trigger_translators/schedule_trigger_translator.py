@@ -55,13 +55,23 @@ def translate_schedule_trigger(trigger_definition: dict) -> dict | None:
 
     cron = parse_cron_expression(recurrence)
     if cron is None:
-        warnings.warn(
-            NotTranslatableWarning(
-                "recurrence",
-                f'Trigger "{trigger_name}" recurrence could not be parsed; skipping schedule',
-            ),
-            stacklevel=2,
-        )
+        if properties.get("runtimeState") == "Started":
+            warnings.warn(
+                NotTranslatableWarning(
+                    "recurrence",
+                    f'Trigger "{trigger_name}" was ENABLED in ADF but has no recurrence — '
+                    "pipeline will NOT be scheduled in Databricks",
+                ),
+                stacklevel=2,
+            )
+        else:
+            warnings.warn(
+                NotTranslatableWarning(
+                    "recurrence",
+                    f'Trigger "{trigger_name}" recurrence could not be parsed; skipping schedule',
+                ),
+                stacklevel=2,
+            )
         return None
 
     return {
