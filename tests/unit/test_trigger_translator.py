@@ -3,6 +3,7 @@
 import pytest
 
 from wkmigrate.enums.interval_type import IntervalType
+from wkmigrate.not_translatable import NotTranslatableWarning
 from wkmigrate.translators.trigger_translators.parsers import parse_cron_expression
 from wkmigrate.translators.trigger_translators.schedule_trigger_translator import (
     translate_schedule_trigger,
@@ -145,12 +146,58 @@ def test_translate_schedule_trigger_parses_result(trigger_definition, expected_r
     "trigger_definition, expected_error_message",
     [
         ({}, 'No value for "properties" with trigger'),
-        ({"properties": {}}, 'No value for "recurrence" with schedule trigger'),
     ],
 )
 def test_translate_schedule_trigger_excepts(trigger_definition, expected_error_message):
     with pytest.raises(ValueError, match=expected_error_message):
         translate_schedule_trigger(trigger_definition)
+
+
+@pytest.mark.parametrize(
+    "trigger_definition, expected_match",
+    [
+        (
+            {"name": "vc_daily", "properties": {}},
+            r'Trigger "vc_daily" has missing or empty recurrence',
+        ),
+        (
+            {"name": "vc_daily", "properties": {"recurrence": {}}},
+            r'Trigger "vc_daily" has missing or empty recurrence',
+        ),
+        (
+            {"name": "vc_daily", "properties": {"recurrence": None}},
+            r'Trigger "vc_daily" has missing or empty recurrence',
+        ),
+        (
+            {"properties": {}},
+            r'Trigger "<unknown>" has missing or empty recurrence',
+        ),
+    ],
+)
+def test_translate_schedule_trigger_empty_recurrence_warns_and_returns_none(trigger_definition, expected_match):
+    with pytest.warns(NotTranslatableWarning, match=expected_match):
+        result = translate_schedule_trigger(trigger_definition)
+    assert result is None
+
+
+def test_translate_schedule_trigger_started_empty_recurrence_emits_stronger_warning():
+    trigger_definition = {
+        "name": "vc_enabled_no_schedule",
+        "properties": {"runtimeState": "Started"},
+    }
+    with pytest.warns(NotTranslatableWarning, match=r"ENABLED in ADF but has no recurrence"):
+        result = translate_schedule_trigger(trigger_definition)
+    assert result is None
+
+
+def test_translate_schedule_trigger_unparseable_recurrence_warns_and_returns_none():
+    trigger_definition = {
+        "name": "vc_malformed",
+        "properties": {"recurrence": {"interval": 1}},
+    }
+    with pytest.warns(NotTranslatableWarning, match=r"could not be parsed"):
+        result = translate_schedule_trigger(trigger_definition)
+    assert result is None
 
 
 @pytest.mark.parametrize(
