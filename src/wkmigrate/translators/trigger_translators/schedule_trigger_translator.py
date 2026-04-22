@@ -59,7 +59,7 @@ def translate_schedule_trigger(trigger_definition: dict) -> dict | None:
             warnings.warn(
                 NotTranslatableWarning(
                     "recurrence",
-                    f'Trigger "{trigger_name}" was ENABLED in ADF but has no recurrence — '
+                    f'Trigger "{trigger_name}" was ENABLED in ADF but recurrence could not be parsed — '
                     "pipeline will NOT be scheduled in Databricks",
                 ),
                 stacklevel=2,
