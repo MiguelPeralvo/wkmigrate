@@ -141,6 +141,20 @@ def write_asset_bundle(prepared: PreparedWorkflow, bundle_dir: str) -> None:
         "targets": {"default": {"workspace": {"host": "https://<WORKSPACE_HOST>"}}},
         "include": job_resources + pipeline_resources,
     }
+
+    # DAB variables lifted from task-level fields (e.g. @concat in SparkJar
+    # library paths). Per-environment overrides are expected via
+    # targets.<env>.variables.<name>.default set by the operator.
+    all_variables = prepared.all_dab_variables
+    if all_variables:
+        manifest["variables"] = {
+            var.name: {
+                "default": var.default,
+                "description": var.description,
+            }
+            for var in all_variables
+        }
+
     with open(os.path.join(bundle_dir, "databricks.yml"), "w", encoding="utf-8") as fh:
         yaml.safe_dump(manifest, fh, sort_keys=False)
 

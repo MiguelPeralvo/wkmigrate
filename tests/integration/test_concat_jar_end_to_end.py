@@ -1,19 +1,21 @@
 """End-to-end test of DAB variable lift for SparkJar library paths.
 
-Runs a real CRP0001 pipeline (``crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR``)
-through the full translator → preparer → writer stack and asserts that:
+Runs a synthesized ADF pipeline (mirroring the CRP0001 ``@concat`` jar shape
+observed in ``crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR.json``) through
+the full translator → preparer → writer stack and asserts that:
 
 * ``prepare_workflow`` surfaces ``DabVariable`` rows on the ``PreparedWorkflow``.
 * Each ``@concat`` ``jar`` entry in the source is rewritten to ``${var.<name>}``.
 * The written ``databricks.yml`` includes a top-level ``variables:`` block.
 
 Marked ``integration`` per repo convention. The test runs without Azure
-credentials since it uses in-repo fixtures only.
+credentials — it synthesizes the pipeline JSON in-process. Real CRP0001
+validation is external (run the converter script against the customer
+export and invoke ``databricks bundle validate`` on each bundle).
 """
 
 from __future__ import annotations
 
-import json
 import os
 import pathlib
 import tempfile
@@ -27,34 +29,66 @@ from wkmigrate.utils import normalize_arm_pipeline, recursive_camel_to_snake
 
 pytestmark = pytest.mark.integration
 
-FIXTURE_DIR = pathlib.Path(__file__).parent.parent / "resources" / "pipelines" / "crp0001"
+
+def _synth_pipeline() -> dict:
+    """Synthesize a minimal ADF pipeline with a SparkJar + @concat jar entries."""
+    return {
+        "name": "synth_concat_jar_pipeline",
+        "properties": {
+            "activities": [
+                {
+                    "name": "ingest_jar_task",
+                    "type": "DatabricksSparkJar",
+                    "description": "Execute a JAR whose path is composed via @concat",
+                    "dependsOn": [],
+                    "policy": {
+                        "timeout": "0.02:00:00",
+                        "retry": 1,
+                        "retryIntervalInSeconds": 60,
+                    },
+                    "typeProperties": {
+                        "mainClassName": "com.example.Main",
+                        "libraries": [
+                            {
+                                "jar": "@concat('/Volumes/datahub01/', pipeline().parameters.env, 'libs/helper.jar')"
+                            },
+                            {
+                                "jar": "/Volumes/datahub01/static/deequ.jar"
+                            },
+                        ],
+                    },
+                }
+            ],
+            "parameters": {
+                "env": {"type": "string", "defaultValue": "dev/"},
+            },
+        },
+    }
 
 
 def test_concat_jar_library_lift_end_to_end() -> None:
-    raw = json.loads((FIXTURE_DIR / "crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR.json").read_text())
+    raw = _synth_pipeline()
     pipeline_ir = translate_pipeline(normalize_arm_pipeline(recursive_camel_to_snake(raw)))
     prepared = prepare_workflow(pipeline_ir)
 
-    # At least one DabVariable must have been emitted (the fixture has multiple
-    # @concat jar entries referencing pipeline().globalParameters.*).
-    assert len(prepared.variables) > 0, "expected @concat jar lift to emit variables"
+    # At least one DabVariable must have been emitted.
+    assert len(prepared.variables) == 1, (
+        "expected exactly one @concat jar lift"
+    )
+    var = prepared.variables[0]
+    assert var.name.startswith("wkm_")
+    assert var.default == "/Volumes/datahub01/dev/libs/helper.jar"
 
-    # Each DabVariable name must start with the wkm_ namespace.
-    for var in prepared.variables:
-        assert var.name.startswith("wkm_"), var.name
-
-    # The emitter must have rewritten every @concat jar entry: there must be at
-    # least one task whose libraries contain a ${var.wkm_...} jar reference.
-    seen_var_ref = False
-    for task in prepared.tasks:
-        for lib in task.get("libraries") or []:
-            jar = lib.get("jar") if isinstance(lib, dict) else getattr(lib, "jar", None)
-            if isinstance(jar, str) and jar.startswith("${var.wkm_"):
-                seen_var_ref = True
-                break
-        if seen_var_ref:
-            break
-    assert seen_var_ref, "no ${var.wkm_...} reference found after emitter ran"
+    # The emitter must have rewritten the @concat jar entry; static jar
+    # flows through unchanged (INV-4).
+    assert len(prepared.tasks) == 1
+    task = prepared.tasks[0]
+    libs = task.get("libraries") or []
+    assert len(libs) == 2
+    # Libraries are Databricks SDK Library objects; their jar attr carries the value.
+    jar_values = [lib.jar if hasattr(lib, "jar") else lib.get("jar") for lib in libs]
+    assert any(j == f"${{var.{var.name}}}" for j in jar_values)
+    assert "/Volumes/datahub01/static/deequ.jar" in jar_values
 
 
 def test_bundle_manifest_includes_variables_block() -> None:
@@ -70,7 +104,7 @@ def test_bundle_manifest_includes_variables_block() -> None:
     finally:
         sys.path.pop(0)
 
-    raw = json.loads((FIXTURE_DIR / "crp0001_c_pl_prc_anl_bfcdt_all_parallel_ppal_AMR.json").read_text())
+    raw = _synth_pipeline()
     pipeline_ir = translate_pipeline(normalize_arm_pipeline(recursive_camel_to_snake(raw)))
     prepared = prepare_workflow(pipeline_ir)
 
@@ -78,10 +112,12 @@ def test_bundle_manifest_includes_variables_block() -> None:
         write_asset_bundle(prepared, bundle_dir)
         manifest_path = os.path.join(bundle_dir, "databricks.yml")
         assert os.path.exists(manifest_path)
-        manifest = yaml.safe_load(open(manifest_path, encoding="utf-8"))
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest = yaml.safe_load(fh)
 
     assert "variables" in manifest, "databricks.yml must include a variables: block"
+    assert len(manifest["variables"]) == 1
     for name, spec in manifest["variables"].items():
         assert name.startswith("wkm_"), name
-        assert "default" in spec
+        assert spec["default"] == "/Volumes/datahub01/dev/libs/helper.jar"
         assert "description" in spec
