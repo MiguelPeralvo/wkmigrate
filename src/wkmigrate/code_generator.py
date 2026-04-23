@@ -864,11 +864,11 @@ def _get_service_principal_authentication_lines(
     scope_value = resource if resource.endswith("/.default") else f"{resource.rstrip('/')}/.default"
     return [
         "",
-        f'_wk_sp_tenant = "{authentication.tenant_id}"',
-        f'_wk_sp_client_id = "{authentication.username}"',
+        f"_wk_sp_tenant = {authentication.tenant_id!r}",
+        f"_wk_sp_client_id = {authentication.username!r}",
         f'_wk_sp_client_secret = dbutils.secrets.get(scope="{credentials_scope}", '
         f'key="{authentication.password_secret_key}")',
-        f'_wk_sp_scope = "{scope_value}"',
+        f"_wk_sp_scope = {scope_value!r}",
         "_wk_sp_token_response = requests.post(",
         '    f"https://login.microsoftonline.com/{_wk_sp_tenant}/oauth2/v2.0/token",',
         "    data={",
