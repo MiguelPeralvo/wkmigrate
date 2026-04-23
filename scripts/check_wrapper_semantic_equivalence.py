@@ -24,7 +24,7 @@ import json
 import pathlib
 import sys
 import traceback
-from collections import Counter, defaultdict
+from collections import Counter
 
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.parsers.expression_emitter import emit
