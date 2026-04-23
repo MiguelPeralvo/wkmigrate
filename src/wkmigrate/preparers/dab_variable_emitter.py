@@ -135,10 +135,10 @@ def _unique_name(base: str, used: set[str]) -> str:
     """Append ``_2``, ``_3``, … until ``base`` no longer collides with ``used``."""
     if base not in used:
         return base
-    n = 2
-    while f"{base}_{n}" in used:
-        n += 1
-    return f"{base}_{n}"
+    suffix = 2
+    while f"{base}_{suffix}" in used:
+        suffix += 1
+    return f"{base}_{suffix}"
 
 
 def _resolve_jar_expression(
@@ -165,8 +165,7 @@ def _resolve_jar_expression(
         warnings.warn(
             NotTranslatableWarning(
                 "libraries[].jar",
-                f"Jar expression is not a lift-eligible @concat(...) call and "
-                f"will embed as-is: {expression}",
+                f"Jar expression is not a lift-eligible @concat(...) call and " f"will embed as-is: {expression}",
             )
         )
         return None, None

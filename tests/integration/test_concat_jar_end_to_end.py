@@ -49,12 +49,8 @@ def _synth_pipeline() -> dict:
                     "typeProperties": {
                         "mainClassName": "com.example.Main",
                         "libraries": [
-                            {
-                                "jar": "@concat('/Volumes/datahub01/', pipeline().parameters.env, 'libs/helper.jar')"
-                            },
-                            {
-                                "jar": "/Volumes/datahub01/static/deequ.jar"
-                            },
+                            {"jar": "@concat('/Volumes/datahub01/', pipeline().parameters.env, 'libs/helper.jar')"},
+                            {"jar": "/Volumes/datahub01/static/deequ.jar"},
                         ],
                     },
                 }
@@ -72,9 +68,7 @@ def test_concat_jar_library_lift_end_to_end() -> None:
     prepared = prepare_workflow(pipeline_ir)
 
     # At least one DabVariable must have been emitted.
-    assert len(prepared.variables) == 1, (
-        "expected exactly one @concat jar lift"
-    )
+    assert len(prepared.variables) == 1, "expected exactly one @concat jar lift"
     var = prepared.variables[0]
     assert var.name.startswith("wkm_")
     assert var.default == "/Volumes/datahub01/dev/libs/helper.jar"
