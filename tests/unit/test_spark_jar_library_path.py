@@ -75,13 +75,14 @@ def test_concat_with_resolvable_pipeline_parameter() -> None:
 def test_concat_with_unresolved_pipeline_parameter_warns_and_placeholders() -> None:
     libs = [{"jar": "@concat(pipeline().parameters.base, '/ingest.jar')"}]
     activity = _make_activity(libs, task_key="ingest_jar")
-    with pytest.warns(NotTranslatableWarning, match=r"libraries\[\]\.jar"):
+    with pytest.warns(NotTranslatableWarning) as captured:
         new_libs, new_vars = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=[{"name": "base"}],  # no default
             existing_var_names=frozenset(),
         )
+    assert any(getattr(w.message, "property_name", None) == "libraries[].jar" for w in captured)
     assert new_libs == [{"jar": "${var.wkm_pipe_ingest_jar_jar_path_UNRESOLVED}"}]
     assert new_vars == []
 
@@ -89,13 +90,14 @@ def test_concat_with_unresolved_pipeline_parameter_warns_and_placeholders() -> N
 def test_concat_with_runtime_activity_ref_warns_and_placeholders() -> None:
     libs = [{"jar": "@concat(activity('x').output.v, '.jar')"}]
     activity = _make_activity(libs, task_key="run_jar")
-    with pytest.warns(NotTranslatableWarning, match=r"libraries\[\]\.jar"):
+    with pytest.warns(NotTranslatableWarning) as captured:
         new_libs, new_vars = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=None,
             existing_var_names=frozenset(),
         )
+    assert any(getattr(w.message, "property_name", None) == "libraries[].jar" for w in captured)
     assert new_libs == [{"jar": "${var.wkm_pipe_run_jar_jar_path_UNRESOLVED}"}]
     assert new_vars == []
 
@@ -153,13 +155,14 @@ def test_multiple_jar_entries_get_indexed_suffixes() -> None:
 def test_non_concat_at_expression_warns_and_passes_through() -> None:
     libs = [{"jar": "@pipeline().parameters.override_jar_path"}]
     activity = _make_activity(libs, task_key="run_jar")
-    with pytest.warns(NotTranslatableWarning, match=r"libraries\[\]\.jar"):
+    with pytest.warns(NotTranslatableWarning) as captured:
         new_libs, new_vars = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=None,
             existing_var_names=frozenset(),
         )
+    assert any(getattr(w.message, "property_name", None) == "libraries[].jar" for w in captured)
     # Non-@concat expressions: pass through unchanged, no variable emitted.
     assert new_libs == libs
     assert new_vars == []

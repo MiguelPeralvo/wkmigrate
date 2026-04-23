@@ -1,10 +1,33 @@
 """This module defines representational classes for Databricks workflow artifacts."""
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
+
+
+@dataclass(frozen=True, slots=True)
+class DabVariable:
+    """A Databricks Asset Bundle top-level variable declaration.
+
+    DAB variables hoist static-resolvable expressions out of task-level fields
+    (e.g. ``@concat(...)`` in ``SparkJar.libraries[].jar``) into a
+    ``variables:`` block at the bundle root, so operators can override defaults
+    per environment via ``targets.<env>.variables.<name>.default``.
+
+    Attributes:
+        name: Variable identifier (namespace-prefixed, snake_case). Used both
+            in the ``variables:`` block and at the reference site as
+            ``${var.<name>}``.
+        default: Default value string emitted into the bundle manifest.
+        description: Human-readable description, typically referencing the
+            original ADF expression for operator traceability.
+    """
+
+    name: str
+    default: str
+    description: str
 
 
 @dataclass(slots=True)
@@ -15,10 +38,13 @@ class PreparedWorkflow:
     Attributes:
         pipeline: Pipeline IR that this workflow was prepared from.
         activities: Prepared activities that make up this workflow's tasks.
+        variables: DAB top-level variables emitted while preparing tasks (e.g.
+            lifted from ``@concat`` SparkJar library paths). Empty by default.
     """
 
     pipeline: Pipeline
     activities: list[PreparedActivity]
+    variables: list[DabVariable] = field(default_factory=list)
 
     @property
     def tasks(self) -> list[dict[str, Any]]:
