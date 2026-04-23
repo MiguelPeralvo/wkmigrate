@@ -143,6 +143,9 @@ class PreparedActivity:
         dab_variables: DAB top-level variables lifted from task-level fields
             (e.g. ``@concat`` in SparkJar library paths). Propagated up to
             ``PreparedWorkflow.variables``.
+        reserved_var_names: Variable names reserved during preparation (e.g. placeholder
+            names for unresolved ``@concat`` expressions) that did not produce a
+            ``DabVariable``. Used by ``prepare_workflow`` to avoid collisions.
     """
 
     task: dict[str, Any]
@@ -152,6 +155,7 @@ class PreparedActivity:
     inner_workflow: "PreparedWorkflow" | None = None
     extra_tasks: list[dict[str, Any]] | None = None
     dab_variables: list["DabVariable"] | None = None
+    reserved_var_names: frozenset[str] | None = None
 
 
 @dataclass(slots=True)

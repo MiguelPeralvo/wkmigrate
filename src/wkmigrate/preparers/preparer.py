@@ -74,6 +74,8 @@ def prepare_workflow(
                     continue
                 used_names.add(var.name)
                 emitted_variables.append(var)
+        if prepared.reserved_var_names:
+            used_names.update(prepared.reserved_var_names)
     return PreparedWorkflow(pipeline=pipeline, activities=activities, variables=emitted_variables)
 
 

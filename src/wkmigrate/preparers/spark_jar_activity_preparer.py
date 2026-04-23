@@ -51,16 +51,17 @@ def prepare_spark_jar_activity(
         variables emitted during lift (accessible via ``dab_variables``).
     """
     emitted_variables: list[DabVariable] = []
+    reserved_names: frozenset[str] = frozenset()
     effective_activity = activity
 
     if pipeline_name is not None and activity.libraries:
-        new_libraries, emitted_variables = lift_concat_jar_libraries(
+        new_libraries, emitted_variables, reserved_names = lift_concat_jar_libraries(
             activity=activity,
             pipeline_name=pipeline_name,
             pipeline_parameters=pipeline_parameters,
             existing_var_names=existing_var_names,
         )
-        if emitted_variables or new_libraries != activity.libraries:
+        if emitted_variables or reserved_names or new_libraries != activity.libraries:
             effective_activity = dataclasses.replace(activity, libraries=new_libraries)
 
     task = parse_mapping(
@@ -75,4 +76,5 @@ def prepare_spark_jar_activity(
     return PreparedActivity(
         task=task,
         dab_variables=emitted_variables or None,
+        reserved_var_names=reserved_names or None,
     )

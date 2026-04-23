@@ -33,7 +33,7 @@ def _make_activity(libraries: list[dict] | None, task_key: str = "run_jar") -> S
 def test_static_jar_passes_through_unchanged() -> None:
     libs = [{"jar": "dbfs:/FileStore/jars/main.jar"}]
     activity = _make_activity(libs)
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=None,
@@ -41,12 +41,13 @@ def test_static_jar_passes_through_unchanged() -> None:
     )
     assert new_libs == libs
     assert new_vars == []
+    assert reserved == frozenset()
 
 
 def test_concat_literals_only_emits_variable() -> None:
     libs = [{"jar": "@concat('dbfs:/a/', 'b.jar')"}]
     activity = _make_activity(libs, task_key="run_jar")
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=None,
@@ -56,12 +57,13 @@ def test_concat_literals_only_emits_variable() -> None:
     assert len(new_vars) == 1
     assert new_vars[0].name == "wkm_pipe_run_jar_jar_path"
     assert new_vars[0].default == "dbfs:/a/b.jar"
+    assert reserved == {"wkm_pipe_run_jar_jar_path"}
 
 
 def test_concat_with_resolvable_pipeline_parameter() -> None:
     libs = [{"jar": "@concat(pipeline().parameters.base, '/ingest.jar')"}]
     activity = _make_activity(libs, task_key="ingest_jar")
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=[{"name": "base", "default": "dbfs:/x"}],
@@ -70,13 +72,14 @@ def test_concat_with_resolvable_pipeline_parameter() -> None:
     assert new_libs == [{"jar": "${var.wkm_pipe_ingest_jar_jar_path}"}]
     assert len(new_vars) == 1
     assert new_vars[0].default == "dbfs:/x/ingest.jar"
+    assert reserved == {"wkm_pipe_ingest_jar_jar_path"}
 
 
 def test_concat_with_unresolved_pipeline_parameter_warns_and_placeholders() -> None:
     libs = [{"jar": "@concat(pipeline().parameters.base, '/ingest.jar')"}]
     activity = _make_activity(libs, task_key="ingest_jar")
     with pytest.warns(NotTranslatableWarning) as captured:
-        new_libs, new_vars = lift_concat_jar_libraries(
+        new_libs, new_vars, reserved = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=[{"name": "base"}],  # no default
@@ -85,13 +88,14 @@ def test_concat_with_unresolved_pipeline_parameter_warns_and_placeholders() -> N
     assert any(getattr(w.message, "property_name", None) == "libraries[].jar" for w in captured)
     assert new_libs == [{"jar": "${var.wkm_pipe_ingest_jar_jar_path_UNRESOLVED}"}]
     assert new_vars == []
+    assert "wkm_pipe_ingest_jar_jar_path_UNRESOLVED" in reserved
 
 
 def test_concat_with_runtime_activity_ref_warns_and_placeholders() -> None:
     libs = [{"jar": "@concat(activity('x').output.v, '.jar')"}]
     activity = _make_activity(libs, task_key="run_jar")
     with pytest.warns(NotTranslatableWarning) as captured:
-        new_libs, new_vars = lift_concat_jar_libraries(
+        new_libs, new_vars, reserved = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=None,
@@ -100,12 +104,13 @@ def test_concat_with_runtime_activity_ref_warns_and_placeholders() -> None:
     assert any(getattr(w.message, "property_name", None) == "libraries[].jar" for w in captured)
     assert new_libs == [{"jar": "${var.wkm_pipe_run_jar_jar_path_UNRESOLVED}"}]
     assert new_vars == []
+    assert "wkm_pipe_run_jar_jar_path_UNRESOLVED" in reserved
 
 
 def test_collision_suffix_when_variable_name_already_taken() -> None:
     libs = [{"jar": "@concat('dbfs:/a/', 'b.jar')"}]
     activity = _make_activity(libs, task_key="run_jar")
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=None,
@@ -113,6 +118,7 @@ def test_collision_suffix_when_variable_name_already_taken() -> None:
     )
     assert new_libs == [{"jar": "${var.wkm_pipe_run_jar_jar_path_2}"}]
     assert new_vars[0].name == "wkm_pipe_run_jar_jar_path_2"
+    assert reserved == {"wkm_pipe_run_jar_jar_path_2"}
 
 
 def test_non_jar_library_entries_are_untouched() -> None:
@@ -122,7 +128,7 @@ def test_non_jar_library_entries_are_untouched() -> None:
         {"whl": "dbfs:/FileStore/wheels/custom.whl"},
     ]
     activity = _make_activity(libs)
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=None,
@@ -130,6 +136,7 @@ def test_non_jar_library_entries_are_untouched() -> None:
     )
     assert new_libs == libs
     assert new_vars == []
+    assert reserved == frozenset()
 
 
 def test_multiple_jar_entries_get_indexed_suffixes() -> None:
@@ -138,7 +145,7 @@ def test_multiple_jar_entries_get_indexed_suffixes() -> None:
         {"jar": "@concat('dbfs:/c/', 'd.jar')"},
     ]
     activity = _make_activity(libs, task_key="run_jar")
-    new_libs, new_vars = lift_concat_jar_libraries(
+    new_libs, new_vars, reserved = lift_concat_jar_libraries(
         activity,
         pipeline_name="pipe",
         pipeline_parameters=None,
@@ -150,13 +157,14 @@ def test_multiple_jar_entries_get_indexed_suffixes() -> None:
         {"jar": "${var.wkm_pipe_run_jar_jar_path_1}"},
         {"jar": "${var.wkm_pipe_run_jar_jar_path_2}"},
     ]
+    assert reserved == {"wkm_pipe_run_jar_jar_path_1", "wkm_pipe_run_jar_jar_path_2"}
 
 
 def test_non_concat_at_expression_warns_and_passes_through() -> None:
     libs = [{"jar": "@pipeline().parameters.override_jar_path"}]
     activity = _make_activity(libs, task_key="run_jar")
     with pytest.warns(NotTranslatableWarning) as captured:
-        new_libs, new_vars = lift_concat_jar_libraries(
+        new_libs, new_vars, reserved = lift_concat_jar_libraries(
             activity,
             pipeline_name="pipe",
             pipeline_parameters=None,
@@ -166,12 +174,13 @@ def test_non_concat_at_expression_warns_and_passes_through() -> None:
     # Non-@concat expressions: pass through unchanged, no variable emitted.
     assert new_libs == libs
     assert new_vars == []
+    assert reserved == frozenset()
 
 
 def test_task_key_non_alnum_is_sanitized_in_variable_name() -> None:
     libs = [{"jar": "@concat('dbfs:/a/', 'b.jar')"}]
     activity = _make_activity(libs, task_key="My Fancy Task!")
-    _, new_vars = lift_concat_jar_libraries(
+    _, new_vars, _ = lift_concat_jar_libraries(
         activity,
         pipeline_name="My Pipe",
         pipeline_parameters=None,
@@ -198,7 +207,7 @@ def test_placeholder_name_is_tracked_in_used_names() -> None:
 
     # First pass — empty set. Placeholder name should be the base + _UNRESOLVED.
     with pytest.warns(NotTranslatableWarning):
-        new_libs_1, new_vars_1 = lift_concat_jar_libraries(
+        new_libs_1, new_vars_1, reserved_1 = lift_concat_jar_libraries(
             activity1,
             pipeline_name="pipe",
             pipeline_parameters=None,
@@ -207,18 +216,57 @@ def test_placeholder_name_is_tracked_in_used_names() -> None:
     placeholder_1 = new_libs_1[0]["jar"]
     assert placeholder_1 == "${var.wkm_pipe_run_jar_jar_path_UNRESOLVED}"
     assert new_vars_1 == []
+    assert "wkm_pipe_run_jar_jar_path_UNRESOLVED" in reserved_1
 
-    # Second pass — feed placeholder name as already-used. Caller must not
-    # produce the same placeholder; it must append a suffix.
+    # Second pass — feed reserved names from first pass as already-used.
+    # Caller must not produce the same placeholder; it must append a suffix.
     with pytest.warns(NotTranslatableWarning):
-        new_libs_2, new_vars_2 = lift_concat_jar_libraries(
+        new_libs_2, new_vars_2, reserved_2 = lift_concat_jar_libraries(
             activity2,
             pipeline_name="pipe",
             pipeline_parameters=None,
-            existing_var_names=frozenset({"wkm_pipe_run_jar_jar_path_UNRESOLVED"}),
+            existing_var_names=reserved_1,
         )
     placeholder_2 = new_libs_2[0]["jar"]
     assert placeholder_2 != placeholder_1
     assert placeholder_2.startswith("${var.wkm_pipe_run_jar_jar_path")
     assert placeholder_2.endswith("}")
     assert new_vars_2 == []
+
+
+def test_prepare_workflow_tracks_placeholder_names_across_activities() -> None:
+    """Integration test: prepare_workflow should track reserved placeholder names
+    across activities so that two activities with task keys that `_sanitize` to the
+    same string don't produce duplicate placeholder references."""
+    from wkmigrate.models.ir.pipeline import Pipeline
+    from wkmigrate.preparers.preparer import prepare_workflow
+
+    libs = [{"jar": "@concat(activity('x').output.v, '.jar')"}]
+    activity1 = _make_activity(libs, task_key="run-jar")
+    activity2 = _make_activity(libs, task_key="run_jar")
+
+    pipeline = Pipeline(
+        name="pipe",
+        tasks=[activity1, activity2],
+        parameters=None,
+        schedule=None,
+        tags={},
+    )
+
+    with pytest.warns(NotTranslatableWarning):
+        prepared = prepare_workflow(pipeline)
+
+    jars = []
+    for act in prepared.activities:
+        task = act.task
+        if "spark_jar_task" in task:
+            libs_list = task.get("libraries") or []
+            for lib in libs_list:
+                jar_value = lib.get("jar") if hasattr(lib, "get") else getattr(lib, "jar", None)
+                if jar_value:
+                    jars.append(jar_value)
+
+    assert len(jars) == 2
+    assert jars[0] != jars[1], "Placeholder names should be unique across activities"
+    assert jars[0].startswith("${var.wkm_pipe_run_jar_jar_path")
+    assert jars[1].startswith("${var.wkm_pipe_run_jar_jar_path")

@@ -32,7 +32,7 @@ def lift_concat_jar_libraries(
     pipeline_name: str,
     pipeline_parameters: Sequence[Mapping[str, Any]] | None,
     existing_var_names: frozenset[str],
-) -> tuple[list[dict[str, Any]], list[DabVariable]]:
+) -> tuple[list[dict[str, Any]], list[DabVariable], frozenset[str]]:
     """Rewrite ``@concat``-valued ``jar`` library entries as DAB variable references.
 
     INV-5: pure. The input ``activity`` is not mutated. The returned library list
@@ -48,14 +48,17 @@ def lift_concat_jar_libraries(
             new names are suffixed ``_2``, ``_3``, … to avoid collision.
 
     Returns:
-        A 2-tuple of ``(new_libraries, new_variables)``. When the activity has
-        no libraries, or none are ``@concat`` jars, ``new_libraries`` matches
-        the original list byte-identically (INV-4) and ``new_variables`` is
-        empty.
+        A 3-tuple of ``(new_libraries, new_variables, reserved_names)``. When the
+        activity has no libraries, or none are ``@concat`` jars, ``new_libraries``
+        matches the original list byte-identically (INV-4), ``new_variables`` is
+        empty, and ``reserved_names`` is empty. ``reserved_names`` contains any
+        placeholder names that were reserved for unresolved expressions (these
+        do not appear in ``new_variables`` but must be tracked to avoid collisions
+        across activities).
     """
     libraries = activity.libraries or []
     if not libraries:
-        return [] if activity.libraries == [] else list(libraries), []
+        return [] if activity.libraries == [] else list(libraries), [], frozenset()
 
     # Collect the indices of @concat-expression jar entries first so we know
     # whether to apply the _N suffix (only needed when there are >1 in one task).
@@ -67,7 +70,7 @@ def lift_concat_jar_libraries(
 
     if not jar_expression_indices:
         # No expression-valued jar entries — pass libraries through unchanged.
-        return list(libraries), []
+        return list(libraries), [], frozenset()
 
     new_libraries: list[dict[str, Any]] = list(libraries)
     new_variables: list[DabVariable] = []
@@ -101,7 +104,8 @@ def lift_concat_jar_libraries(
             used_names.add(emitted_var.name)
             new_variables.append(emitted_var)
 
-    return new_libraries, new_variables
+    reserved_names = frozenset(used_names) - existing_var_names
+    return new_libraries, new_variables, reserved_names
 
 
 def _extract_expression_jar(library: Any) -> str | None:
