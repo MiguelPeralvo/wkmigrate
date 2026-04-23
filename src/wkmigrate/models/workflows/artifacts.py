@@ -1,10 +1,33 @@
 """This module defines representational classes for Databricks workflow artifacts."""
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from wkmigrate.models.ir.pipeline import Pipeline
 from wkmigrate.models.workflows.instructions import PipelineInstruction, SecretInstruction
+
+
+@dataclass(frozen=True, slots=True)
+class DabVariable:
+    """A Databricks Asset Bundle top-level variable declaration.
+
+    DAB variables hoist static-resolvable expressions out of task-level fields
+    (e.g. ``@concat(...)`` in ``SparkJar.libraries[].jar``) into a
+    ``variables:`` block at the bundle root, so operators can override defaults
+    per environment via ``targets.<env>.variables.<name>.default``.
+
+    Attributes:
+        name: Variable identifier (namespace-prefixed, snake_case). Used both
+            in the ``variables:`` block and at the reference site as
+            ``${var.<name>}``.
+        default: Default value string emitted into the bundle manifest.
+        description: Human-readable description, typically referencing the
+            original ADF expression for operator traceability.
+    """
+
+    name: str
+    default: str
+    description: str
 
 
 @dataclass(slots=True)
@@ -15,10 +38,13 @@ class PreparedWorkflow:
     Attributes:
         pipeline: Pipeline IR that this workflow was prepared from.
         activities: Prepared activities that make up this workflow's tasks.
+        variables: DAB top-level variables emitted while preparing tasks (e.g.
+            lifted from ``@concat`` SparkJar library paths). Empty by default.
     """
 
     pipeline: Pipeline
     activities: list[PreparedActivity]
+    variables: list[DabVariable] = field(default_factory=list)
 
     @property
     def tasks(self) -> list[dict[str, Any]]:
@@ -69,6 +95,28 @@ class PreparedWorkflow:
         return result
 
     @property
+    def all_dab_variables(self) -> list["DabVariable"]:
+        """All DAB variables across this workflow and any nested inner workflows.
+
+        ``self.variables`` already contains every activity's ``dab_variables``
+        (copied up by ``prepare_workflow``), so we only need to union with inner
+        workflows' variables — walking ``activity.dab_variables`` again would
+        double-count.
+        """
+        result: list[DabVariable] = list(self.variables)
+        for activity in self.activities:
+            if activity.inner_workflow:
+                result.extend(activity.inner_workflow.all_dab_variables)
+        seen: set[str] = set()
+        unique: list[DabVariable] = []
+        for var in result:
+            if var.name in seen:
+                continue
+            seen.add(var.name)
+            unique.append(var)
+        return unique
+
+    @property
     def inner_workflows(self) -> list["PreparedWorkflow"]:
         """All inner workflows (recursively) produced by activities in this workflow."""
         result: list[PreparedWorkflow] = []
@@ -90,6 +138,11 @@ class PreparedActivity:
         pipelines: List of ``PipelineInstruction`` objects describing DLT pipelines to create.
         secrets: List of ``SecretInstruction`` objects describing secrets to materialize.
         inner_workflow: Additional workflow settings created for nested ForEach tasks.
+        extra_tasks: Additional sibling tasks (e.g. IfCondition wrapper notebooks)
+            that must be emitted alongside ``task``.
+        dab_variables: DAB top-level variables lifted from task-level fields
+            (e.g. ``@concat`` in SparkJar library paths). Propagated up to
+            ``PreparedWorkflow.variables``.
     """
 
     task: dict[str, Any]
@@ -98,6 +151,7 @@ class PreparedActivity:
     secrets: list[SecretInstruction] | None = None
     inner_workflow: "PreparedWorkflow" | None = None
     extra_tasks: list[dict[str, Any]] | None = None
+    dab_variables: list["DabVariable"] | None = None
 
 
 @dataclass(slots=True)

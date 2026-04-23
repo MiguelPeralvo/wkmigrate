@@ -19,6 +19,9 @@ def prepare_for_each_activity(
     activity: ForEachActivity,
     default_files_to_delta_sinks: bool | None,
     credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+    pipeline_name: str | None = None,
+    pipeline_parameters: list[dict] | None = None,
+    existing_var_names: frozenset[str] = frozenset(),
 ) -> PreparedActivity:
     """
     Builds the task payload for a ForEach activity.
@@ -27,6 +30,9 @@ def prepare_for_each_activity(
         activity: Activity definition emitted by the translators
         default_files_to_delta_sinks: Optional override for DLT generation
         credentials_scope: Name of the Databricks secret scope used for storing credentials.
+        pipeline_name: Forwarded to inner preparers for DAB variable emission.
+        pipeline_parameters: Forwarded to inner preparers for DAB variable emission.
+        existing_var_names: Forwarded to inner preparers for DAB variable emission.
 
     Returns:
         Prepared activity containing the ForEach task configuration.
@@ -36,6 +42,9 @@ def prepare_for_each_activity(
         activity.for_each_task,
         default_files_to_delta_sinks,
         credentials_scope,
+        pipeline_name=pipeline_name,
+        pipeline_parameters=pipeline_parameters,
+        existing_var_names=existing_var_names,
     )
 
     for_each_task = parse_mapping(
@@ -52,4 +61,5 @@ def prepare_for_each_activity(
         pipelines=inner_prepared.pipelines,
         secrets=inner_prepared.secrets,
         inner_workflow=inner_prepared.inner_workflow,
+        dab_variables=inner_prepared.dab_variables,
     )

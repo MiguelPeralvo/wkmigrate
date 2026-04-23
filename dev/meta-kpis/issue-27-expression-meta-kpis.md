@@ -43,10 +43,19 @@ Loaded automatically from `dev/meta-kpis/general-meta-kpis.md` (not yet created 
 | E-TRIG-5 | CRP0001 deploy count unchanged | 32/36 pass (4 blocked by `@concat` — Step 5) | 32/36 still pass (Step 3 does not affect this gap) | full unit suite + manual CRP0001 conversion smoke |
 | E-TRIG-6 | Vista Cliente pipeline deploy rate (projected) | 96.9% (317/327) — 8 blocked by this bug | 100% once the 8 empty-recurrence pipelines convert (manual verification) | run `examples/convert_downld_adf_pipeline.py` against 8 Vista Cliente fixtures; count successes |
 
+### DAB — `@concat` Lift for SparkJar Library Paths (Step 5)
+
+| ID | Meta-KPI | Baseline | Target | Measurement |
+|---|---|---|---|---|
+| E-DAB-1 | CRP0001 deploy rate | 32/36 (4 blocked by `@concat` in `SparkJar.libraries[].jar`) | 36/36 | **External** — run `examples/convert_downld_adf_pipeline.py` against the customer export, then `for d in output/*; do databricks bundle validate --target default -p <profile> --bundle $d/databricks.yml; done`. Count bundles that return 0. |
+| E-DAB-2 | Unaffected pipeline byte-identity | N/A | 100% | `uv run pytest tests/unit/test_spark_jar_passthrough_identity.py -q` — snapshot diff on every non-`@concat` SparkJar fixture must be empty. |
+| E-DAB-3 | `@concat` runtime-ref warning rate | N/A | All runtime refs warn with `property_name="libraries[].jar"` | Count `NotTranslatableWarning(property_name="libraries[].jar")` entries in conversion log; must equal the count of `@concat` jars whose operands reference `activity(...)` / `variables(...)` / undefined pipeline parameters. |
+
 ### Placeholders (future steps — not seeded yet)
 
 - E-CRP12-* — compound `ForEach.items` expressions (Step 2)
 - E-DS-* — dataset/linkedService parametrized expressions (Step 4)
+- E-DAB-4+ — `WorkspaceDefinitionStore.to_asset_bundle` parity (Step 5.1 follow-up)
 
 ## Ratchet rules
 
