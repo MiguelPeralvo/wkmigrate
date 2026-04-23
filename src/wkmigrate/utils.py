@@ -224,8 +224,25 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
     """
     Parses an ADF authentication configuration into an ``Authentication`` object.
 
+    Supported auth types:
+
+    * ``Basic`` — emits ``kwargs["auth"] = (username, secret)`` in the generated
+      notebook.
+    * ``ServicePrincipal`` — OAuth2 client-credentials flow against Azure AD.
+      The secret-scope key passed via ``secret_key`` holds the client secret;
+      ``tenant_id``, ``username`` (client id) and ``resource`` come from the
+      ADF payload.
+    * ``MSI`` — Managed System Identity. Runtime acquisition via the Azure
+      Instance Metadata Service is not performed by the generated notebook;
+      instead the template reads an operator-supplied bearer token from the
+      secret scope at key ``{secret_key}`` (re-used as a bearer-token key).
+      ``NotTranslatableWarning`` is emitted downstream in ``code_generator``
+      so the operator knows to populate the secret.
+
     Args:
-        secret_key: Secret scope key for the password.
+        secret_key: Secret scope key. For Basic, holds the password; for
+            ServicePrincipal, holds the client secret; for MSI, holds the
+            operator-supplied bearer token.
         authentication: Authentication dictionary from the ADF activity, or ``None``.
 
     Returns:
@@ -236,7 +253,8 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
     authentication_type = authentication.get("type")
     if not authentication_type:
         return UnsupportedValue(value=authentication, message="Missing value 'type' for authentication")
-    if authentication_type.lower() == "basic":
+    auth_type_lower = authentication_type.lower()
+    if auth_type_lower == "basic":
         username = authentication.get("username", "")
         if not username:
             return UnsupportedValue(value=authentication, message="Missing value 'username' for basic authentication")
@@ -244,6 +262,32 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
             auth_type=authentication_type,
             username=username,
             password_secret_key=secret_key,
+        )
+    if auth_type_lower == "serviceprincipal":
+        tenant_id = authentication.get("user_tenant") or authentication.get("tenant") or authentication.get("tenant_id")
+        client_id = authentication.get("username") or authentication.get("application_id")
+        if not tenant_id:
+            return UnsupportedValue(
+                value=authentication,
+                message="Missing value 'userTenant' for ServicePrincipal authentication",
+            )
+        if not client_id:
+            return UnsupportedValue(
+                value=authentication,
+                message="Missing value 'username' (client id) for ServicePrincipal authentication",
+            )
+        return Authentication(
+            auth_type=authentication_type,
+            username=client_id,
+            password_secret_key=secret_key,
+            tenant_id=tenant_id,
+            resource=authentication.get("resource"),
+        )
+    if auth_type_lower in ("msi", "userassignedmanagedidentity", "systemassignedmanagedidentity"):
+        return Authentication(
+            auth_type=authentication_type,
+            resource=authentication.get("resource"),
+            msi_token_secret_key=secret_key,
         )
     return UnsupportedValue(value=authentication, message=f"Unsupported authentication type '{authentication_type}'")
 
