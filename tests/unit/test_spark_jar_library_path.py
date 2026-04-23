@@ -184,3 +184,41 @@ def test_dab_variable_is_frozen() -> None:
     var = DabVariable(name="x", default="y", description="z")
     with pytest.raises(Exception):  # FrozenInstanceError subclass of AttributeError
         var.name = "changed"  # type: ignore[misc]
+
+
+def test_placeholder_name_is_tracked_in_used_names() -> None:
+    """Regression for PR #21 cursor finding: a placeholder emission must reserve
+    its name in ``used_names`` so the next call can't produce an identical
+    placeholder. Today the caller only tracks successfully-lifted variables;
+    this test exercises two back-to-back unresolved calls and asserts the
+    second gets a suffixed placeholder (not a raw collision)."""
+    libs = [{"jar": "@concat(activity('x').output.v, '.jar')"}]
+    activity1 = _make_activity(libs, task_key="run_jar")
+    activity2 = _make_activity(libs, task_key="run_jar")  # same name, same pipeline
+
+    # First pass — empty set. Placeholder name should be the base + _UNRESOLVED.
+    with pytest.warns(NotTranslatableWarning):
+        new_libs_1, new_vars_1 = lift_concat_jar_libraries(
+            activity1,
+            pipeline_name="pipe",
+            pipeline_parameters=None,
+            existing_var_names=frozenset(),
+        )
+    placeholder_1 = new_libs_1[0]["jar"]
+    assert placeholder_1 == "${var.wkm_pipe_run_jar_jar_path_UNRESOLVED}"
+    assert new_vars_1 == []
+
+    # Second pass — feed placeholder name as already-used. Caller must not
+    # produce the same placeholder; it must append a suffix.
+    with pytest.warns(NotTranslatableWarning):
+        new_libs_2, new_vars_2 = lift_concat_jar_libraries(
+            activity2,
+            pipeline_name="pipe",
+            pipeline_parameters=None,
+            existing_var_names=frozenset({"wkm_pipe_run_jar_jar_path_UNRESOLVED"}),
+        )
+    placeholder_2 = new_libs_2[0]["jar"]
+    assert placeholder_2 != placeholder_1
+    assert placeholder_2.startswith("${var.wkm_pipe_run_jar_jar_path")
+    assert placeholder_2.endswith("}")
+    assert new_vars_2 == []

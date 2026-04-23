@@ -96,14 +96,25 @@ class PreparedWorkflow:
 
     @property
     def all_dab_variables(self) -> list["DabVariable"]:
-        """All DAB variables across this workflow and any nested inner workflows."""
-        result: list[DabVariable] = []
+        """All DAB variables across this workflow and any nested inner workflows.
+
+        ``self.variables`` already contains every activity's ``dab_variables``
+        (copied up by ``prepare_workflow``), so we only need to union with inner
+        workflows' variables — walking ``activity.dab_variables`` again would
+        double-count.
+        """
+        result: list[DabVariable] = list(self.variables)
         for activity in self.activities:
-            if activity.dab_variables:
-                result.extend(activity.dab_variables)
             if activity.inner_workflow:
                 result.extend(activity.inner_workflow.all_dab_variables)
-        return result
+        seen: set[str] = set()
+        unique: list[DabVariable] = []
+        for var in result:
+            if var.name in seen:
+                continue
+            seen.add(var.name)
+            unique.append(var)
+        return unique
 
     @property
     def inner_workflows(self) -> list["PreparedWorkflow"]:

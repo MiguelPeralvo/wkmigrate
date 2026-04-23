@@ -60,7 +60,7 @@ defaults. Operators override per-environment via
 ## Outputs
 
 - `DabVariable` frozen dataclass: `name`, `default`, `description`.
-- `PreparedWorkflow.variables: tuple[DabVariable, ...]` (default `()`).
+- `PreparedWorkflow.variables: list[DabVariable]` (default `[]`; matches the existing `activities: list[...]` pattern — `field(default_factory=list)` for the propagation loop in `prepare_workflow`).
 - Rewritten library entries: `{"jar": "${var.<name>}"}`.
 - Bundle manifest emits a top-level `variables:` block.
 

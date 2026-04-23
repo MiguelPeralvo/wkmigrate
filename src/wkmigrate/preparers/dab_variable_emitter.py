@@ -165,8 +165,9 @@ def _resolve_jar_expression(
         warnings.warn(
             NotTranslatableWarning(
                 "libraries[].jar",
-                f"Jar expression is not a lift-eligible @concat(...) call and " f"will embed as-is: {expression}",
-            )
+                f"Jar expression is not a lift-eligible @concat(...) call and will embed as-is: {expression}",
+            ),
+            stacklevel=2,
         )
         return None, None
 
@@ -184,9 +185,13 @@ def _resolve_jar_expression(
             f"references pipeline parameters without defaults "
             f"({', '.join(resolution.unresolved_params)}): {resolution.original}"
         )
-    warnings.warn(NotTranslatableWarning("libraries[].jar", detail))
+    warnings.warn(NotTranslatableWarning("libraries[].jar", detail), stacklevel=2)
 
-    unique_base = _unique_name(base_var_name, used_names)
-    used_names.add(unique_base)
-    placeholder_name = unique_base + _UNRESOLVED_SUFFIX
+    # Reserve both the unique base AND the `_UNRESOLVED` placeholder in ``used_names``
+    # so a later call can't produce the same placeholder by choosing the same base
+    # (the caller's ``if emitted_var is not None`` guard skips this branch otherwise).
+    placeholder_base = _unique_name(base_var_name, used_names)
+    placeholder_name = _unique_name(placeholder_base + _UNRESOLVED_SUFFIX, used_names)
+    used_names.add(placeholder_base)
+    used_names.add(placeholder_name)
     return f"${{var.{placeholder_name}}}", None
