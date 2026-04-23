@@ -186,5 +186,7 @@ def _resolve_jar_expression(
         )
     warnings.warn(NotTranslatableWarning("libraries[].jar", detail))
 
-    placeholder_name = _unique_name(base_var_name, used_names) + _UNRESOLVED_SUFFIX
+    unique_base = _unique_name(base_var_name, used_names)
+    used_names.add(unique_base)
+    placeholder_name = unique_base + _UNRESOLVED_SUFFIX
     return f"${{var.{placeholder_name}}}", None

@@ -97,21 +97,13 @@ class PreparedWorkflow:
     @property
     def all_dab_variables(self) -> list["DabVariable"]:
         """All DAB variables across this workflow and any nested inner workflows."""
-        result: list[DabVariable] = list(self.variables)
+        result: list[DabVariable] = []
         for activity in self.activities:
             if activity.dab_variables:
                 result.extend(activity.dab_variables)
             if activity.inner_workflow:
                 result.extend(activity.inner_workflow.all_dab_variables)
-        # De-duplicate while preserving order.
-        seen: set[str] = set()
-        unique: list[DabVariable] = []
-        for var in result:
-            if var.name in seen:
-                continue
-            seen.add(var.name)
-            unique.append(var)
-        return unique
+        return result
 
     @property
     def inner_workflows(self) -> list["PreparedWorkflow"]:
