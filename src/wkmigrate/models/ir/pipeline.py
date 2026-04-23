@@ -301,11 +301,24 @@ class Authentication:
     Authentication configuration for an HTTP request.
 
     Attributes:
-        auth_type: Authentication type (e.g. 'basic').
-        username: Optional username for Basic authentication.
-        password_secret_key: Optional secret scope key that holds the password.
+        auth_type: Authentication type (e.g. 'Basic', 'ServicePrincipal', 'MSI').
+        username: Optional username for Basic authentication, or the service
+            principal's application (client) id for ServicePrincipal auth.
+        password_secret_key: Secret-scope key that holds the password (Basic)
+            or the client secret (ServicePrincipal). MSI does not populate
+            this field.
+        tenant_id: Azure AD tenant GUID for ServicePrincipal auth.
+        resource: OAuth2 resource/audience for ServicePrincipal or MSI
+            (e.g. ``https://management.azure.com/``).
+        msi_token_secret_key: For MSI phase-1 emission, the secret-scope key
+            from which the operator-supplied bearer token will be read at
+            runtime. Runtime acquisition via the Azure Instance Metadata
+            Service is out of scope and left to the operator.
     """
 
     auth_type: str
     username: str | None = None
     password_secret_key: str | None = None
+    tenant_id: str | None = None
+    resource: str | None = None
+    msi_token_secret_key: str | None = None

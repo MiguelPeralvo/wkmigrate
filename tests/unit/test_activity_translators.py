@@ -1183,6 +1183,54 @@ def test_web_activity_unsupported_auth_type_returns_unsupported(web_activity_fix
     assert fixture["expected_message"] in result.message
 
 
+def test_web_activity_service_principal_auth_is_translated(web_activity_fixtures: list[dict]) -> None:
+    """ServicePrincipal auth translates — tenant, client id and resource are populated."""
+    fixture = get_fixture(web_activity_fixtures, "service_principal_auth")
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_web_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert isinstance(result.authentication, Authentication)
+    assert result.authentication.auth_type == "ServicePrincipal"
+    assert result.authentication.tenant_id == "0a25214f-ee52-483c-b96b-dc79f3227a6f"
+    assert result.authentication.username == "11111111-2222-3333-4444-555555555555"
+    assert result.authentication.resource == "api://target-app"
+    assert result.authentication.password_secret_key == "sp_post_auth_password"
+
+
+def test_web_activity_msi_auth_is_translated(web_activity_fixtures: list[dict]) -> None:
+    """MSI auth translates — a placeholder token-secret key is populated."""
+    fixture = get_fixture(web_activity_fixtures, "msi_auth")
+    base_kwargs = get_base_kwargs(fixture["input"])
+    result = translate_web_activity(fixture["input"], base_kwargs)
+
+    assert isinstance(result, WebActivity)
+    assert isinstance(result.authentication, Authentication)
+    assert result.authentication.auth_type == "MSI"
+    assert result.authentication.resource == "https://management.azure.com/"
+    assert result.authentication.msi_token_secret_key == "msi_post_auth_password"
+
+
+def test_web_activity_service_principal_missing_tenant_returns_unsupported() -> None:
+    """ServicePrincipal missing userTenant should surface as UnsupportedValue."""
+    activity = {
+        "name": "sp_no_tenant",
+        "type": "WebActivity",
+        "url": "https://api.example.com/",
+        "method": "GET",
+        "authentication": {
+            "type": "ServicePrincipal",
+            "username": "11111111-2222-3333-4444-555555555555",
+            "password": {"type": "SecureString", "value": "x"},
+        },
+    }
+    base_kwargs = get_base_kwargs(activity)
+    result = translate_web_activity(activity, base_kwargs)
+
+    assert isinstance(result, UnsupportedValue)
+    assert "userTenant" in result.message
+
+
 def test_web_activity_missing_auth_type_returns_unsupported(web_activity_fixtures: list[dict]) -> None:
     """Test that a missing authentication type returns UnsupportedValue."""
     fixture = get_fixture(web_activity_fixtures, "missing_auth_type")

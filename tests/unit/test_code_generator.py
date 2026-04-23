@@ -57,6 +57,64 @@ def test_web_activity_notebook_with_auth_and_cert_validation() -> None:
     assert "synchronously" in content
 
 
+def test_web_activity_notebook_service_principal_emits_token_acquisition() -> None:
+    """ServicePrincipal auth emits OAuth2 client-credentials token call + Authorization header."""
+    content = get_web_activity_notebook_content(
+        activity_name="sp_post",
+        activity_type="WebActivity",
+        url="https://api.example.com/secure",
+        method="POST",
+        body=None,
+        headers=None,
+        authentication=Authentication(
+            auth_type="ServicePrincipal",
+            username="11111111-2222-3333-4444-555555555555",
+            password_secret_key="sp_post_auth_password",
+            tenant_id="0a25214f-ee52-483c-b96b-dc79f3227a6f",
+            resource="api://target-app",
+        ),
+    )
+    # Token-endpoint acquisition
+    assert "login.microsoftonline.com" in content
+    assert "client_credentials" in content
+    assert "0a25214f-ee52-483c-b96b-dc79f3227a6f" in content
+    assert "11111111-2222-3333-4444-555555555555" in content
+    # Resource gets the v2.0 /.default scope appended
+    assert "api://target-app/.default" in content
+    # Client secret is read from the secret scope, never inlined (autopep8 may split the call across lines)
+    assert "dbutils.secrets.get(" in content
+    assert f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
+    assert 'key="sp_post_auth_password"' in content
+    # Bearer header is attached
+    assert '"Authorization"' in content
+    assert "Bearer " in content
+
+
+def test_web_activity_notebook_msi_emits_placeholder_with_warning() -> None:
+    """MSI auth emits a placeholder bearer-token read and raises NotTranslatableWarning."""
+    with pytest.warns(NotTranslatableWarning, match="MSI authentication is emitted as a placeholder"):
+        content = get_web_activity_notebook_content(
+            activity_name="msi_post",
+            activity_type="WebActivity",
+            url="https://api.example.com/secure",
+            method="POST",
+            body=None,
+            headers=None,
+            authentication=Authentication(
+                auth_type="MSI",
+                resource="https://management.azure.com/",
+                msi_token_secret_key="msi_post_auth_password",
+            ),
+        )
+    assert "dbutils.secrets.get(" in content
+    assert f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
+    assert 'key="msi_post_auth_password"' in content
+    assert "Bearer " in content
+    assert '"Authorization"' in content
+    # TODO comment is present so operators know to swap in a runtime probe
+    assert "# MSI authentication" in content
+
+
 def test_web_activity_notebook_contains_request_call() -> None:
     """get_web_activity_notebook_content produces valid notebook content."""
     content = get_web_activity_notebook_content(

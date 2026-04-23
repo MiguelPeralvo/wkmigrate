@@ -51,9 +51,19 @@ Loaded automatically from `dev/meta-kpis/general-meta-kpis.md` (not yet created 
 | E-DAB-2 | Unaffected pipeline byte-identity | N/A | 100% | `uv run pytest tests/unit/test_spark_jar_passthrough_identity.py -q` — snapshot diff on every non-`@concat` SparkJar fixture must be empty. |
 | E-DAB-3 | `@concat` runtime-ref warning rate | N/A | All runtime refs warn with `property_name="libraries[].jar"` | Count `NotTranslatableWarning(property_name="libraries[].jar")` entries in conversion log; must equal the count of `@concat` jars whose operands reference `activity(...)` / `variables(...)` / undefined pipeline parameters. |
 
+### E-WEB-* — WebActivity auth-type coverage (Step 2, seeded 2026-04-23)
+
+| ID | Description | Baseline | Target | Measurement |
+|----|-------------|----------|--------|-------------|
+| E-WEB-1 | Vista Cliente WebActivity translator coverage (not `/UNSUPPORTED_ADF_ACTIVITY`) | 0/14 | >= 8/14 via auth-types fix (rest blocked by orthogonal nested-flatten + body-expression gaps) | count `web_activity_notebooks/*` notebooks materialized by `examples/convert_downld_adf_pipeline.py` on the 5 VC pipelines containing WebActivity |
+| E-WEB-2 | `parse_authentication()` accepts `ServicePrincipal` + `MSI` + `UserAssignedManagedIdentity` + `SystemAssignedManagedIdentity` | returns `UnsupportedValue` | returns `Authentication` with populated fields | `tests/unit/test_utils.py::test_parse_authentication_service_principal_*` + `..._msi_*` |
+| E-WEB-3 | SP notebook contains OAuth2 client-credentials token acquisition | N/A | emits `login.microsoftonline.com`, `grant_type=client_credentials`, `scope` ending `/.default`, `Bearer` header | `tests/unit/test_code_generator.py::test_web_activity_notebook_service_principal_emits_token_acquisition` |
+| E-WEB-4 | MSI notebook emits placeholder bearer-token read + `NotTranslatableWarning` | N/A | `dbutils.secrets.get(...)` for token + `pytest.warns(NotTranslatableWarning, match="phase-1")` | `tests/unit/test_code_generator.py::test_web_activity_notebook_msi_emits_placeholder_with_warning` |
+| E-WEB-5 | Basic-auth path byte-identical to pre-change output | existing | existing | `test_web_activity_notebook_with_auth_and_cert_validation` unchanged |
+
 ### Placeholders (future steps — not seeded yet)
 
-- E-CRP12-* — compound `ForEach.items` expressions (Step 2)
+- E-CRP12-* — compound `ForEach.items` expressions
 - E-DS-* — dataset/linkedService parametrized expressions (Step 4)
 - E-DAB-4+ — `WorkspaceDefinitionStore.to_asset_bundle` parity (Step 5.1 follow-up)
 

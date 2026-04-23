@@ -121,10 +121,38 @@
     }
   },
   {
-    "id": "unsupported_auth_type",
-    "description": "Web activity - unsupported authentication type returns UnsupportedValue",
+    "id": "service_principal_auth",
+    "description": "Web activity - ServicePrincipal OAuth2 client credentials",
     "input": {
-      "name": "msi_auth_post",
+      "name": "sp_post",
+      "type": "WebActivity",
+      "url": "https://api.example.com/secure",
+      "method": "POST",
+      "authentication": {
+        "type": "ServicePrincipal",
+        "user_tenant": "0a25214f-ee52-483c-b96b-dc79f3227a6f",
+        "username": "11111111-2222-3333-4444-555555555555",
+        "password": {
+          "type": "SecureString",
+          "value": "**********"
+        },
+        "resource": "api://target-app"
+      }
+    },
+    "expected": {
+      "name": "sp_post",
+      "task_key": "sp_post",
+      "activity_type": "WebActivity",
+      "url": "https://api.example.com/secure",
+      "method": "POST",
+      "authentication_type": "ServicePrincipal"
+    }
+  },
+  {
+    "id": "msi_auth",
+    "description": "Web activity - MSI (phase-1 placeholder with operator-supplied token)",
+    "input": {
+      "name": "msi_post",
       "type": "WebActivity",
       "url": "https://api.example.com/secure",
       "method": "POST",
@@ -133,8 +161,31 @@
         "resource": "https://management.azure.com/"
       }
     },
+    "expected": {
+      "name": "msi_post",
+      "task_key": "msi_post",
+      "activity_type": "WebActivity",
+      "url": "https://api.example.com/secure",
+      "method": "POST",
+      "authentication_type": "MSI"
+    }
+  },
+  {
+    "id": "unsupported_auth_type",
+    "description": "Web activity - truly unknown authentication type returns UnsupportedValue",
+    "input": {
+      "name": "ntlm_post",
+      "type": "WebActivity",
+      "url": "https://api.example.com/secure",
+      "method": "POST",
+      "authentication": {
+        "type": "NTLM",
+        "username": "user",
+        "password": {"type": "SecureString", "value": "x"}
+      }
+    },
     "expected_unsupported": true,
-    "expected_message": "Unsupported authentication type 'MSI'"
+    "expected_message": "Unsupported authentication type 'NTLM'"
   },
   {
     "id": "missing_auth_type",
