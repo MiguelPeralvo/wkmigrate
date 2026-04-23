@@ -27,13 +27,16 @@ In scope:
 2. **Parser** — `parse_authentication()` accepts `ServicePrincipal` and `MSI`
    (case-insensitive); returns populated `Authentication` for both.
 3. **Code generator** — `_get_authentication_lines()` gains two new branches
-   that emit `requests`-compatible `kwargs["auth"]` (or equivalent) snippets:
-   - ServicePrincipal: acquire OAuth2 token via `msal` or raw token endpoint
-     call using tenant/client-id/secret, then set `kwargs["headers"]
-     ["Authorization"] = f"Bearer {token}"`.
-   - MSI: call the Databricks-hosted managed-identity token endpoint (in
-     Azure Databricks) or emit `NotTranslatableWarning` + static fallback on
-     non-Azure targets. Phase 1: warn-and-emit-placeholder (documented).
+   that emit `requests`-compatible `kwargs` snippets (via
+   `_get_service_principal_authentication_lines` and
+   `_get_msi_authentication_lines`):
+   - ServicePrincipal: acquire OAuth2 token via a raw token-endpoint call
+     using `tenant_id`/`username` (client id)/secret-scope lookup, then
+     set `kwargs["headers"]["Authorization"] = f"Bearer {token}"`.
+   - MSI / UserAssignedManagedIdentity / SystemAssignedManagedIdentity:
+     phase 1 reads an operator-supplied bearer token from the secret
+     scope (`msi_token_secret_key`) and emits `NotTranslatableWarning`.
+     Runtime IMDS probe is deferred (phase 2).
 4. **Tests** — fixture-based unit tests for both auth types through the
    translator + code generator, plus a byte-identity snapshot on a synthetic
    bundle emission.

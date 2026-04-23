@@ -26,8 +26,8 @@
 | ADF type | IR fields populated | Notebook emission |
 |---|---|---|
 | `Basic` (existing) | `username`, `password_secret_key` | `kwargs["auth"] = (username, dbutils.secrets.get(...))` |
-| `ServicePrincipal` | `tenant_id`, `client_id`, `resource`, `password_secret_key` (= client secret) | Acquire token from `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token` via client-credentials grant; set `kwargs["headers"]["Authorization"] = f"Bearer {token}"` |
-| `MSI` | `resource` (optional) | Phase 1: emit a `NotTranslatableWarning` + a TODO-marked block that reads an operator-supplied token from the secret scope (e.g. `{activity_name}_msi_bearer_token`). Document in plan that runtime-acquired MSI requires deploy-environment probe. |
+| `ServicePrincipal` | `username` (= client id), `password_secret_key` (= client secret scope key), `tenant_id`, `resource` | Acquire token from `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token` via client-credentials grant; set `kwargs["headers"]["Authorization"] = f"Bearer {token}"` |
+| `MSI` / `UserAssignedManagedIdentity` / `SystemAssignedManagedIdentity` | `resource` (optional), `msi_token_secret_key` (defaulted to `{activity_name}_auth_password` by `translate_web_activity` when unset) | Phase 1: emit a `NotTranslatableWarning` + a TODO-marked block that reads an operator-supplied bearer token from the secret scope at `msi_token_secret_key`. Runtime IMDS probe deferred. |
 | other | — | `UnsupportedValue` (unchanged) |
 
 ## Fixture list
@@ -56,10 +56,11 @@ The SP fixture mirrors the Vista Cliente `PostLogApi` activity's
 
 - `Authentication` remains `@dataclass(slots=True)`. New fields:
   - `tenant_id: str | None = None`
-  - `client_id: str | None = None`
   - `resource: str | None = None`
-  - `client_secret_key: str | None = None` (distinct from
-    `password_secret_key` so Basic-path tests stay byte-identical)
+  - `msi_token_secret_key: str | None = None`
+  Existing `username` and `password_secret_key` fields are reused by the
+  ServicePrincipal path (client id and client-secret scope key); no new
+  field is minted for the client secret.
 - `parse_authentication()` signature unchanged: `(secret_key, authentication)`.
   For SP, the returned `Authentication.client_secret_key = secret_key` (the
   caller can mint an SP-specific key by passing a different string, as

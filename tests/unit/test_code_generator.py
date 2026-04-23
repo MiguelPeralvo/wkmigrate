@@ -83,8 +83,8 @@ def test_web_activity_notebook_service_principal_emits_token_acquisition() -> No
     assert "api://target-app/.default" in content
     # Client secret is read from the secret scope, never inlined (autopep8 may split the call across lines)
     assert "dbutils.secrets.get(" in content
-    assert f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
-    assert 'key="sp_post_auth_password"' in content
+    assert f"scope='{DEFAULT_CREDENTIALS_SCOPE}'" in content or f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
+    assert "key='sp_post_auth_password'" in content or 'key="sp_post_auth_password"' in content
     # Bearer header is attached
     assert '"Authorization"' in content
     assert "Bearer " in content
@@ -107,8 +107,8 @@ def test_web_activity_notebook_msi_emits_placeholder_with_warning() -> None:
             ),
         )
     assert "dbutils.secrets.get(" in content
-    assert f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
-    assert 'key="msi_post_auth_password"' in content
+    assert f"scope='{DEFAULT_CREDENTIALS_SCOPE}'" in content or f'scope="{DEFAULT_CREDENTIALS_SCOPE}"' in content
+    assert "key='msi_post_auth_password'" in content or 'key="msi_post_auth_password"' in content
     assert "Bearer " in content
     assert '"Authorization"' in content
     # TODO comment is present so operators know to swap in a runtime probe

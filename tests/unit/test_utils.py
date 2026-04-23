@@ -97,6 +97,40 @@ def test_parse_authentication_msi_populates_placeholder_token_key() -> None:
     assert result.msi_token_secret_key == "msi_activity_auth_password"
 
 
+def test_parse_authentication_non_string_type_returns_unsupported() -> None:
+    """Malformed payloads with a non-string ``type`` return UnsupportedValue instead of crashing."""
+    result = parse_authentication("k", {"type": {"value": "@something"}, "username": "u"})
+
+    assert isinstance(result, UnsupportedValue)
+    assert "expected string" in result.message
+
+
+def test_parse_authentication_service_principal_expression_resource_returns_unsupported() -> None:
+    """Expression-valued resource URI on SP returns UnsupportedValue (rather than crashing in code_generator)."""
+    result = parse_authentication(
+        "k",
+        {
+            "type": "ServicePrincipal",
+            "user_tenant": "t",
+            "username": "c",
+            "resource": {"type": "Expression", "value": "@something"},
+        },
+    )
+
+    assert isinstance(result, UnsupportedValue)
+    assert "resource" in result.message
+
+
+def test_parse_authentication_msi_expression_resource_returns_unsupported() -> None:
+    result = parse_authentication(
+        "k",
+        {"type": "MSI", "resource": {"type": "Expression", "value": "@something"}},
+    )
+
+    assert isinstance(result, UnsupportedValue)
+    assert "resource" in result.message
+
+
 def test_parse_authentication_missing_username_returns_unsupported() -> None:
     """Basic auth without a username returns UnsupportedValue."""
     result = parse_authentication("test_secret_key", {"type": "Basic"})

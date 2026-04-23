@@ -253,6 +253,11 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
     authentication_type = authentication.get("type")
     if not authentication_type:
         return UnsupportedValue(value=authentication, message="Missing value 'type' for authentication")
+    if not isinstance(authentication_type, str):
+        return UnsupportedValue(
+            value=authentication,
+            message="Invalid value for 'type' in authentication (expected string)",
+        )
     auth_type_lower = authentication_type.lower()
     if auth_type_lower == "basic":
         username = authentication.get("username", "")
@@ -271,22 +276,44 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
                 value=authentication,
                 message="Missing value 'userTenant' for ServicePrincipal authentication",
             )
+        if not isinstance(tenant_id, str):
+            return UnsupportedValue(
+                value=authentication,
+                message="Invalid 'userTenant' for ServicePrincipal authentication (expected string; expression tenants are not supported)",
+            )
         if not client_id:
             return UnsupportedValue(
                 value=authentication,
                 message="Missing value 'username' (client id) for ServicePrincipal authentication",
+            )
+        if not isinstance(client_id, str):
+            return UnsupportedValue(
+                value=authentication,
+                message="Invalid 'username' for ServicePrincipal authentication (expected string; expression client ids are not supported)",
+            )
+        resource = authentication.get("resource")
+        if resource is not None and not isinstance(resource, str):
+            return UnsupportedValue(
+                value=authentication,
+                message="Invalid 'resource' for ServicePrincipal authentication (expected string)",
             )
         return Authentication(
             auth_type=authentication_type,
             username=client_id,
             password_secret_key=secret_key,
             tenant_id=tenant_id,
-            resource=authentication.get("resource"),
+            resource=resource,
         )
     if auth_type_lower in ("msi", "userassignedmanagedidentity", "systemassignedmanagedidentity"):
+        resource = authentication.get("resource")
+        if resource is not None and not isinstance(resource, str):
+            return UnsupportedValue(
+                value=authentication,
+                message=f"Invalid 'resource' for {authentication_type} authentication (expected string)",
+            )
         return Authentication(
             auth_type=authentication_type,
-            resource=authentication.get("resource"),
+            resource=resource,
             msi_token_secret_key=secret_key,
         )
     return UnsupportedValue(value=authentication, message=f"Unsupported authentication type '{authentication_type}'")
