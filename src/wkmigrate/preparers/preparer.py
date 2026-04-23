@@ -24,7 +24,7 @@ from wkmigrate.models.ir.pipeline import (
     SparkPythonActivity,
     WebActivity,
 )
-from wkmigrate.models.workflows.artifacts import PreparedActivity, PreparedWorkflow
+from wkmigrate.models.workflows.artifacts import DabVariable, PreparedActivity, PreparedWorkflow
 from wkmigrate.preparers.utils import sanitize_task_key
 from wkmigrate.preparers.copy_activity_preparer import prepare_copy_activity
 from wkmigrate.preparers.for_each_activity_preparer import prepare_for_each_activity
@@ -55,8 +55,26 @@ def prepare_workflow(
         Prepared workflow containing the Databricks job payload and supporting artifacts for the pipeline.
     """
     _check_task_key_collisions(pipeline.tasks)
-    activities = [prepare_activity(task, files_to_delta_sinks, credentials_scope) for task in pipeline.tasks]
-    return PreparedWorkflow(pipeline=pipeline, activities=activities)
+    emitted_variables: list[DabVariable] = []
+    used_names: set[str] = set()
+    activities: list[PreparedActivity] = []
+    for task in pipeline.tasks:
+        prepared = prepare_activity(
+            task,
+            files_to_delta_sinks,
+            credentials_scope,
+            pipeline_name=pipeline.name,
+            pipeline_parameters=pipeline.parameters,
+            existing_var_names=frozenset(used_names),
+        )
+        activities.append(prepared)
+        if prepared.dab_variables:
+            for var in prepared.dab_variables:
+                if var.name in used_names:
+                    continue
+                used_names.add(var.name)
+                emitted_variables.append(var)
+    return PreparedWorkflow(pipeline=pipeline, activities=activities, variables=emitted_variables)
 
 
 def _check_task_key_collisions(tasks: list[Activity]) -> None:
@@ -76,6 +94,9 @@ def prepare_activity(
     activity: Activity,
     default_files_to_delta_sinks: bool | None,
     credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+    pipeline_name: str | None = None,
+    pipeline_parameters: list[dict] | None = None,
+    existing_var_names: frozenset[str] = frozenset(),
 ) -> PreparedActivity:
     """
     Prepares an activity internal representation for creation as a Databricks Lakeflow job task.
@@ -84,6 +105,13 @@ def prepare_activity(
         activity: Activity internal representation to prepare.
         default_files_to_delta_sinks: Whether to use the default files-to-delta sinks behavior.
         credentials_scope: Name of the Databricks secret scope used for storing credentials.
+        pipeline_name: Enclosing pipeline name, forwarded to preparers that emit
+            DAB variables (currently SparkJar).
+        pipeline_parameters: Pipeline parameter definitions forwarded to DAB
+            variable emitters so ``@concat(pipeline().parameters.X)`` references
+            can resolve to a default.
+        existing_var_names: Variable names already minted by the enclosing
+            workflow; used to avoid collisions.
 
     Returns:
         Prepared activity containing the task configuration and any associated artifacts.
@@ -91,13 +119,25 @@ def prepare_activity(
     if isinstance(activity, DatabricksNotebookActivity):
         return prepare_notebook_activity(activity)
     if isinstance(activity, SparkJarActivity):
-        return prepare_spark_jar_activity(activity)
+        return prepare_spark_jar_activity(
+            activity,
+            pipeline_name=pipeline_name,
+            pipeline_parameters=pipeline_parameters,
+            existing_var_names=existing_var_names,
+        )
     if isinstance(activity, SparkPythonActivity):
         return prepare_spark_python_activity(activity)
     if isinstance(activity, IfConditionActivity):
         return prepare_if_condition_activity(activity)
     if isinstance(activity, ForEachActivity):
-        return prepare_for_each_activity(activity, default_files_to_delta_sinks, credentials_scope)
+        return prepare_for_each_activity(
+            activity,
+            default_files_to_delta_sinks,
+            credentials_scope,
+            pipeline_name=pipeline_name,
+            pipeline_parameters=pipeline_parameters,
+            existing_var_names=existing_var_names,
+        )
     if isinstance(activity, RunJobActivity):
         return prepare_run_job_activity(activity, default_files_to_delta_sinks, credentials_scope)
     if isinstance(activity, CopyActivity):

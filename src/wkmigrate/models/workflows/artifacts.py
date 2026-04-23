@@ -95,6 +95,25 @@ class PreparedWorkflow:
         return result
 
     @property
+    def all_dab_variables(self) -> list["DabVariable"]:
+        """All DAB variables across this workflow and any nested inner workflows."""
+        result: list[DabVariable] = list(self.variables)
+        for activity in self.activities:
+            if activity.dab_variables:
+                result.extend(activity.dab_variables)
+            if activity.inner_workflow:
+                result.extend(activity.inner_workflow.all_dab_variables)
+        # De-duplicate while preserving order.
+        seen: set[str] = set()
+        unique: list[DabVariable] = []
+        for var in result:
+            if var.name in seen:
+                continue
+            seen.add(var.name)
+            unique.append(var)
+        return unique
+
+    @property
     def inner_workflows(self) -> list["PreparedWorkflow"]:
         """All inner workflows (recursively) produced by activities in this workflow."""
         result: list[PreparedWorkflow] = []
@@ -116,6 +135,11 @@ class PreparedActivity:
         pipelines: List of ``PipelineInstruction`` objects describing DLT pipelines to create.
         secrets: List of ``SecretInstruction`` objects describing secrets to materialize.
         inner_workflow: Additional workflow settings created for nested ForEach tasks.
+        extra_tasks: Additional sibling tasks (e.g. IfCondition wrapper notebooks)
+            that must be emitted alongside ``task``.
+        dab_variables: DAB top-level variables lifted from task-level fields
+            (e.g. ``@concat`` in SparkJar library paths). Propagated up to
+            ``PreparedWorkflow.variables``.
     """
 
     task: dict[str, Any]
@@ -124,6 +148,7 @@ class PreparedActivity:
     secrets: list[SecretInstruction] | None = None
     inner_workflow: "PreparedWorkflow" | None = None
     extra_tasks: list[dict[str, Any]] | None = None
+    dab_variables: list["DabVariable"] | None = None
 
 
 @dataclass(slots=True)
