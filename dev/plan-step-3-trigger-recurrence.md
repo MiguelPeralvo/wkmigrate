@@ -13,15 +13,15 @@ Trivial fix: treat empty/missing recurrence as "no schedule" → emit NotTransla
 
 Same as Step 1. Rebase pr/27-4-integration-tests onto upstream/main before starting and before PR merge. If upstream main touches schedule_trigger_translator.py, re-run Phase 1.
 
-cd /Users/miguel.peralvo/Code/wkmigrate
+cd ${WKMIGRATE_REPO}
 
-git fetch upstream main && git fetch origin && git fetch lorenzo
+git fetch --multiple upstream origin lorenzo
 
 git checkout pr/27-4-integration-tests
 
 git rebase upstream/main
 
-poetry run pytest tests/unit -q
+uv run pytest tests/unit -q
 
 git push origin pr/27-4-integration-tests --force-with-lease
 
@@ -37,7 +37,7 @@ INV-1 (no hard failure on empty recurrence): Missing or empty recurrence block i
 
 INV-2 (fidelity for non-empty): Valid recurrence blocks (frequency, interval, startTime, optionally timeZone, schedule) convert as today. No behavior change for these cases.
 
-INV-3 (warning traceability): The warning message identifies the trigger name and pipeline so operators can add a schedule manually.
+INV-3 (warning traceability): The warning message identifies the trigger name so operators can locate which pipeline to schedule manually.
 
 INV-4 (no silent enablement): If a trigger has runtimeState = "Started" but empty recurrence, emit a stronger warning "Trigger <N> was ENABLED in ADF but has no recurrence — pipeline will NOT be scheduled in Databricks".
 
@@ -63,7 +63,7 @@ None beyond warnings.
 
 4. TDD test plan
 
-4.1 Unit tests (new) — tests/unit/test_schedule_trigger_translator.py
+4.1 Unit tests (extend existing file) — tests/unit/test_trigger_translator.py
 
 
 
@@ -117,9 +117,9 @@ Safe candidate for upstream PR to ghanse/wkmigrate since it's isolated and defen
 
 10. Autodev invocation
 
-cp /tmp/plan-step-3-trigger-recurrence.md /Users/miguel.peralvo/Code/wkmigrate/dev/plan-step-3-trigger-recurrence.md
+cp /tmp/plan-step-3-trigger-recurrence.md ${WKMIGRATE_REPO}/dev/plan-step-3-trigger-recurrence.md
 
-cd /Users/miguel.peralvo/Code/wkmigrate
+cd ${WKMIGRATE_REPO}
 
 git add dev/plan-step-3-trigger-recurrence.md
 
@@ -137,7 +137,7 @@ Master analysis (Vista Cliente conversion errors): https://docs.google.com/docum
 
 wkmigrate file: src/wkmigrate/translators/trigger_translators/schedule_trigger_translator.py
 
-Vista Cliente fixtures: /Users/miguel.peralvo/Downloads/DataFactory/trigger/
+Vista Cliente fixtures: ${VISTA_CLIENTE_EXPORT}/trigger/ (not committed to repo; local ADF export dir)
 
 Lorenzo fork: https://github.com/lorenzorubi-db/wkmigrate
 

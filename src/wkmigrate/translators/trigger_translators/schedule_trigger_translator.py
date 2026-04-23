@@ -8,13 +8,30 @@ from wkmigrate.translators.trigger_translators.parsers import parse_cron_express
 _DEFAULT_TIMEZONE = "UTC"
 
 
+def _warn_recurrence_unschedulable(trigger_name: str, detail: str, started: bool) -> None:
+    """Emit a ``NotTranslatableWarning`` for a recurrence that cannot become a Databricks schedule.
+
+    When ``started`` is ``True`` the message flags the ENABLED-but-unscheduled state so operators
+    notice that the ADF trigger was firing but the Databricks job will not run on its own.
+    """
+    if started:
+        message = (
+            f'Trigger "{trigger_name}" was ENABLED in ADF but {detail} — '
+            "pipeline will NOT be scheduled in Databricks"
+        )
+    else:
+        message = f'Trigger "{trigger_name}" {detail}; skipping schedule'
+    warnings.warn(NotTranslatableWarning("recurrence", message), stacklevel=3)
+
+
 def translate_schedule_trigger(trigger_definition: dict) -> dict | None:
     """
     Translates a schedule trigger definition in Data Factory's object model to the Databricks SDK cron schedule format.
 
-    Missing or empty ``recurrence`` blocks emit a ``NotTranslatableWarning`` and return ``None`` so the rest of the
-    pipeline can still convert; operators must add a schedule manually in Databricks. When ``runtimeState`` is
-    ``"Started"`` but ``recurrence`` is absent, a stronger warning is emitted to flag the enabled-but-unscheduled state.
+    Missing, empty, or unparseable ``recurrence`` blocks emit a ``NotTranslatableWarning`` and return ``None`` so the
+    rest of the pipeline can still convert; operators must add a schedule manually in Databricks. When
+    ``runtimeState`` is ``"Started"`` the warning text additionally flags the enabled-but-unscheduled state so
+    operators do not silently lose a recurring run.
 
     Args:
         trigger_definition: Schedule trigger definition as a ``dict``.
@@ -24,54 +41,25 @@ def translate_schedule_trigger(trigger_definition: dict) -> dict | None:
         or unparseable.
 
     Raises:
-        ValueError: If the trigger definition has no ``properties`` block.
+        ValueError: If the trigger definition has no ``properties`` block or ``properties`` is not a mapping.
     """
     properties = trigger_definition.get("properties")
     if properties is None:
         raise ValueError('No value for "properties" with trigger')
+    if not isinstance(properties, dict):
+        raise ValueError('Invalid value for "properties" with trigger (expected object)')
 
     trigger_name = trigger_definition.get("name", "<unknown>")
     recurrence = properties.get("recurrence")
+    started = properties.get("runtimeState") == "Started"
 
     if not recurrence:
-        if properties.get("runtimeState") == "Started":
-            warnings.warn(
-                NotTranslatableWarning(
-                    "recurrence",
-                    f'Trigger "{trigger_name}" was ENABLED in ADF but has no recurrence — '
-                    "pipeline will NOT be scheduled in Databricks",
-                ),
-                stacklevel=2,
-            )
-        else:
-            warnings.warn(
-                NotTranslatableWarning(
-                    "recurrence",
-                    f'Trigger "{trigger_name}" has missing or empty recurrence; skipping schedule',
-                ),
-                stacklevel=2,
-            )
+        _warn_recurrence_unschedulable(trigger_name, "has no recurrence", started)
         return None
 
     cron = parse_cron_expression(recurrence)
     if cron is None:
-        if properties.get("runtimeState") == "Started":
-            warnings.warn(
-                NotTranslatableWarning(
-                    "recurrence",
-                    f'Trigger "{trigger_name}" was ENABLED in ADF but recurrence could not be parsed — '
-                    "pipeline will NOT be scheduled in Databricks",
-                ),
-                stacklevel=2,
-            )
-        else:
-            warnings.warn(
-                NotTranslatableWarning(
-                    "recurrence",
-                    f'Trigger "{trigger_name}" recurrence could not be parsed; skipping schedule',
-                ),
-                stacklevel=2,
-            )
+        _warn_recurrence_unschedulable(trigger_name, "recurrence could not be parsed", started)
         return None
 
     return {
