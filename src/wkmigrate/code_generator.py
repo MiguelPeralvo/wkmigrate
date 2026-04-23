@@ -862,12 +862,15 @@ def _get_service_principal_authentication_lines(
     # ADF ``resource`` is an OAuth2 resource URI; Azure AD v2.0 endpoint expects
     # a ``scope`` that ends in ``/.default``. Append it if the operator didn't.
     scope_value = resource if resource.endswith("/.default") else f"{resource.rstrip('/')}/.default"
+    # All operator-supplied literals flow through ``repr()`` so quotes, backslashes
+    # and non-ASCII characters in tenant ids, client ids, secret keys or resource
+    # URIs cannot produce malformed (or injectable) generated Python.
     return [
         "",
         f"_wk_sp_tenant = {authentication.tenant_id!r}",
         f"_wk_sp_client_id = {authentication.username!r}",
-        f'_wk_sp_client_secret = dbutils.secrets.get(scope="{credentials_scope}", '
-        f'key="{authentication.password_secret_key}")',
+        f"_wk_sp_client_secret = dbutils.secrets.get(scope={credentials_scope!r}, "
+        f"key={authentication.password_secret_key!r})",
         f"_wk_sp_scope = {scope_value!r}",
         "_wk_sp_token_response = requests.post(",
         '    f"https://login.microsoftonline.com/{_wk_sp_tenant}/oauth2/v2.0/token",',
@@ -919,7 +922,7 @@ def _get_msi_authentication_lines(
         "# MSI authentication: phase-1 emission reads a pre-provisioned bearer",
         "# token from the Databricks secret scope. Replace with a runtime MSI",
         "# probe (Azure Instance Metadata Service) if your workspace supports it.",
-        f'_wk_msi_bearer_token = dbutils.secrets.get(scope="{credentials_scope}", ' f'key="{token_key}")',
+        f"_wk_msi_bearer_token = dbutils.secrets.get(scope={credentials_scope!r}, " f"key={token_key!r})",
         'kwargs.setdefault("headers", {})',
         'kwargs["headers"]["Authorization"] = f"Bearer {_wk_msi_bearer_token}"',
     ]
