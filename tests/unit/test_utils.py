@@ -46,11 +46,89 @@ def test_parse_authentication_missing_type_returns_unsupported() -> None:
 
 
 def test_parse_authentication_unsupported_type_returns_unsupported() -> None:
-    """Non-Basic auth types return UnsupportedValue."""
-    result = parse_authentication("test_secret_key", {"type": "MSI", "resource": "https://management.azure.com/"})
+    """Truly unknown auth types (not Basic/ServicePrincipal/MSI) return UnsupportedValue."""
+    result = parse_authentication("test_secret_key", {"type": "NTLM", "username": "u"})
 
     assert isinstance(result, UnsupportedValue)
-    assert "Unsupported authentication type 'MSI'" in result.message
+    assert "Unsupported authentication type 'NTLM'" in result.message
+
+
+def test_parse_authentication_service_principal_populates_oauth_fields() -> None:
+    """ServicePrincipal auth parses tenant, client id, resource; client secret key = passed secret_key."""
+    result = parse_authentication(
+        "sp_activity_auth_password",
+        {
+            "type": "ServicePrincipal",
+            "user_tenant": "0a25214f-ee52-483c-b96b-dc79f3227a6f",
+            "username": "11111111-2222-3333-4444-555555555555",
+            "password": {"type": "SecureString", "value": "x"},
+            "resource": "api://target",
+        },
+    )
+
+    assert isinstance(result, Authentication)
+    assert result.auth_type == "ServicePrincipal"
+    assert result.tenant_id == "0a25214f-ee52-483c-b96b-dc79f3227a6f"
+    assert result.username == "11111111-2222-3333-4444-555555555555"
+    assert result.resource == "api://target"
+    assert result.password_secret_key == "sp_activity_auth_password"
+
+
+def test_parse_authentication_service_principal_missing_tenant_is_unsupported() -> None:
+    result = parse_authentication(
+        "secret_key",
+        {"type": "ServicePrincipal", "username": "client-id", "password": {"value": "x"}},
+    )
+
+    assert isinstance(result, UnsupportedValue)
+    assert "userTenant" in result.message
+
+
+def test_parse_authentication_msi_populates_placeholder_token_key() -> None:
+    """MSI auth parses resource and records the token secret-scope key."""
+    result = parse_authentication(
+        "msi_activity_auth_password",
+        {"type": "MSI", "resource": "https://management.azure.com/"},
+    )
+
+    assert isinstance(result, Authentication)
+    assert result.auth_type == "MSI"
+    assert result.resource == "https://management.azure.com/"
+    assert result.msi_token_secret_key == "msi_activity_auth_password"
+
+
+def test_parse_authentication_non_string_type_returns_unsupported() -> None:
+    """Malformed payloads with a non-string ``type`` return UnsupportedValue instead of crashing."""
+    result = parse_authentication("k", {"type": {"value": "@something"}, "username": "u"})
+
+    assert isinstance(result, UnsupportedValue)
+    assert "expected string" in result.message
+
+
+def test_parse_authentication_service_principal_expression_resource_returns_unsupported() -> None:
+    """Expression-valued resource URI on SP returns UnsupportedValue (rather than crashing in code_generator)."""
+    result = parse_authentication(
+        "k",
+        {
+            "type": "ServicePrincipal",
+            "user_tenant": "t",
+            "username": "c",
+            "resource": {"type": "Expression", "value": "@something"},
+        },
+    )
+
+    assert isinstance(result, UnsupportedValue)
+    assert "resource" in result.message
+
+
+def test_parse_authentication_msi_expression_resource_returns_unsupported() -> None:
+    result = parse_authentication(
+        "k",
+        {"type": "MSI", "resource": {"type": "Expression", "value": "@something"}},
+    )
+
+    assert isinstance(result, UnsupportedValue)
+    assert "resource" in result.message
 
 
 def test_parse_authentication_missing_username_returns_unsupported() -> None:

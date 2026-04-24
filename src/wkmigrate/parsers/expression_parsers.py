@@ -43,7 +43,14 @@ def get_literal_or_expression(
         if expression is None or expression == "":
             return UnsupportedValue(value=value, message="Missing property 'value' of expression")
         expression_string = str(expression)
-        if not expression_string.startswith("@"):
+        # ADF Expression values come in three shapes:
+        #   1. "@funcCall(...)"              — already prefixed, parse as-is
+        #   2. "funcCall(...)"               — needs @ prefix to parse as expression
+        #   3. "literal text @{funcCall()}…" — string template with @{...} interpolations;
+        #      the outer value is already in template form and MUST NOT be wrapped with an
+        #      extra @ (that would trip `_is_wrapped_single_interpolation` and make the
+        #      parser strip the outer braces, feeding the inner literal to the tokenizer).
+        if not expression_string.startswith("@") and "@{" not in expression_string:
             expression_string = f"@{expression_string}"
         return _resolve_expression_string(expression_string, context, expression_context, emission_config)
 
@@ -121,9 +128,16 @@ def _resolve_expression_string(
     expression_context: ExpressionContext = ExpressionContext.GENERIC,
     emission_config: EmissionConfig | None = None,
 ) -> ResolvedExpression | UnsupportedValue:
-    """Parse an expression string and route through the configured strategy."""
+    """Parse an expression string and route through the configured strategy.
 
-    if not expression.startswith("@"):
+    A value counts as an expression when it either starts with ``@`` (the
+    whole-expression form) OR contains at least one ``@{...}`` interpolation
+    segment (the string-template form — common in JSON request bodies and
+    other templated strings). Plain literals with no ``@`` marker resolve to
+    a static ``ResolvedExpression``.
+    """
+
+    if not expression.startswith("@") and "@{" not in expression:
         return ResolvedExpression(code=repr(expression), is_dynamic=False, required_imports=frozenset())
 
     parsed = parse_expression(expression)

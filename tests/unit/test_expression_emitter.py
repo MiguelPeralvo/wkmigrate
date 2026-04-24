@@ -138,6 +138,27 @@ def test_get_literal_or_expression_context_free_variables_reference_resolves() -
     assert "set_variable_x" in resolved.code
 
 
+def test_get_literal_or_expression_json_template_with_interpolations_resolves() -> None:
+    """Expression objects whose value is a JSON-shaped template with @{...}
+    interpolations resolve via the string-interpolation path, not by being
+    mis-wrapped as a single @{...} expression.
+
+    Regression for Gap 2.2: grant_permission WebActivities with bodies shaped
+    like '{"key": "@{pipeline().parameters.x}"}' previously failed to resolve
+    because ``get_literal_or_expression`` prepended an extra ``@`` to the
+    already-templated value, tripping ``_is_wrapped_single_interpolation`` and
+    feeding the inner JSON literal to the expression tokenizer."""
+    json_template_body = '{"access_control_list": [{"user_name": "@{pipeline().parameters.owner}"}]}'
+    resolved = get_literal_or_expression({"type": "Expression", "value": json_template_body})
+
+    assert not isinstance(resolved, UnsupportedValue)
+    assert resolved.is_dynamic is True
+    # Interpolation path emits string concatenation of literal segments + parameter lookup.
+    assert "dbutils.widgets.get('owner')" in resolved.code
+    # The literal prefix is preserved (proves the template wasn't stripped).
+    assert "access_control_list" in resolved.code
+
+
 def test_get_literal_or_expression_context_free_activity_reference_resolves() -> None:
     """Activity references resolve to taskValues.get even without TranslationContext."""
     resolved = get_literal_or_expression("@activity('Lookup').output.firstRow")

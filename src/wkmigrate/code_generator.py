@@ -7,6 +7,7 @@ activity preparers to build Databricks notebooks.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import autopep8  # type: ignore
@@ -617,6 +618,12 @@ def get_web_activity_notebook_content(
         | _collect_required_imports(headers)
         | _collect_required_imports(body)
     )
+    if authentication is not None:
+        # Authentication fields may carry ResolvedExpression values with their
+        # own required_imports (e.g. ``json``, datetime helpers). Without this
+        # union the emitted notebook would reference undefined symbols.
+        for auth_field in (authentication.username, authentication.tenant_id, authentication.resource):
+            required_imports |= _collect_required_imports(auth_field)
     include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
     required_imports.discard("wkmigrate_datetime_helpers")
 
@@ -817,6 +824,10 @@ def _get_authentication_lines(
         match authentication.auth_type.lower():
             case "basic":
                 return _get_basic_authentication_lines(authentication, credentials_scope)
+            case "serviceprincipal":
+                return _get_service_principal_authentication_lines(authentication, credentials_scope)
+            case "msi" | "userassignedmanagedidentity" | "systemassignedmanagedidentity":
+                return _get_msi_authentication_lines(activity_name, authentication, credentials_scope)
             case _:
                 raise NotTranslatableWarning(
                     "authentication_type", f"Unsupported authentication type '{authentication.auth_type}'"
@@ -839,4 +850,107 @@ def _get_basic_authentication_lines(
     return [
         f'kwargs["auth"] = ({authentication.username!r}, '
         f'dbutils.secrets.get(scope="{credentials_scope}", key="{authentication.password_secret_key}"))'
+    ]
+
+
+def _get_service_principal_authentication_lines(
+    authentication: Authentication, credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE
+) -> list[str]:
+    """
+    Generates notebook source lines for ServicePrincipal (OAuth2 client-credentials) auth.
+
+    Acquires a bearer token from the Azure AD token endpoint for the tenant,
+    then attaches it as ``Authorization: Bearer ...`` on the outbound request.
+    The client secret is read from the Databricks secret scope; tenant id,
+    client id and resource/scope are inlined as literals.
+    """
+    # Fields may be plain strings (literal credentials) or ResolvedExpression
+    # values (dynamic credentials, e.g. a client id produced by a prior
+    # activity's output). ``_as_python_expression`` picks the right
+    # representation — ``repr()`` for literals (safe against injection),
+    # ``.code`` for ResolvedExpression (so the emitted notebook computes the
+    # value at runtime).
+    tenant_code = _as_python_expression(authentication.tenant_id)
+    client_id_code = _as_python_expression(authentication.username)
+    resource_raw = authentication.resource
+    scope_lines: list[str] = []
+    if isinstance(resource_raw, ResolvedExpression):
+        # Dynamic resource URI: normalize at runtime. If the resolved value
+        # already ends with ``/.default`` use it verbatim; otherwise strip
+        # trailing slashes and append ``/.default``. This mirrors the literal
+        # branch so a dynamic value like ``https://management.azure.com/`` or
+        # an already-scoped audience doesn't become ``//.default`` or
+        # ``/.default/.default``.
+        scope_lines.append(f"_wk_sp_resource = {resource_raw.code}")
+        scope_lines.append(
+            '_wk_sp_scope = _wk_sp_resource if _wk_sp_resource.endswith("/.default") '
+            'else _wk_sp_resource.rstrip("/") + "/.default"'
+        )
+    else:
+        resource = resource_raw or "https://management.azure.com/"
+        # ADF ``resource`` is an OAuth2 resource URI; Azure AD v2.0 endpoint
+        # expects a ``scope`` that ends in ``/.default``. Append it if the
+        # operator didn't.
+        scope_value = resource if resource.endswith("/.default") else f"{resource.rstrip('/')}/.default"
+        scope_lines.append(f"_wk_sp_scope = {scope_value!r}")
+    return [
+        "",
+        f"_wk_sp_tenant = {tenant_code}",
+        f"_wk_sp_client_id = {client_id_code}",
+        f"_wk_sp_client_secret = dbutils.secrets.get(scope={credentials_scope!r}, "
+        f"key={authentication.password_secret_key!r})",
+        *scope_lines,
+        "_wk_sp_token_response = requests.post(",
+        '    f"https://login.microsoftonline.com/{_wk_sp_tenant}/oauth2/v2.0/token",',
+        "    data={",
+        '        "grant_type": "client_credentials",',
+        '        "client_id": _wk_sp_client_id,',
+        '        "client_secret": _wk_sp_client_secret,',
+        '        "scope": _wk_sp_scope,',
+        "    },",
+        "    timeout=30,",
+        ")",
+        "_wk_sp_token_response.raise_for_status()",
+        '_wk_sp_access_token = _wk_sp_token_response.json()["access_token"]',
+        'kwargs.setdefault("headers", {})',
+        'kwargs["headers"]["Authorization"] = f"Bearer {_wk_sp_access_token}"',
+    ]
+
+
+def _get_msi_authentication_lines(
+    activity_name: str,
+    authentication: Authentication,
+    credentials_scope: str = DEFAULT_CREDENTIALS_SCOPE,
+) -> list[str]:
+    """
+    Generates notebook source lines for MSI (Managed System Identity) auth.
+
+    Runtime MSI token acquisition via the Azure Instance Metadata Service is
+    out of scope for phase 1 — the emitted template reads an operator-
+    supplied bearer token from the Databricks secret scope. A
+    ``NotTranslatableWarning`` is emitted so ``unsupported.json`` carries a
+    record the operator can act on.
+    """
+    token_key = authentication.msi_token_secret_key or f"{activity_name}_auth_password"
+    warnings.warn(
+        NotTranslatableWarning(
+            "authentication",
+            (
+                "MSI authentication is emitted as a placeholder: the generated "
+                f"notebook reads a pre-provisioned bearer token from secret "
+                f"scope '{credentials_scope}' key '{token_key}'. "
+                "Populate this secret (or replace the emitted block with a "
+                "runtime MSI probe) before deploying."
+            ),
+        ),
+        stacklevel=2,
+    )
+    return [
+        "",
+        "# MSI authentication: phase-1 emission reads a pre-provisioned bearer",
+        "# token from the Databricks secret scope. Replace with a runtime MSI",
+        "# probe (Azure Instance Metadata Service) if your workspace supports it.",
+        f"_wk_msi_bearer_token = dbutils.secrets.get(scope={credentials_scope!r}, " f"key={token_key!r})",
+        'kwargs.setdefault("headers", {})',
+        'kwargs["headers"]["Authorization"] = f"Bearer {_wk_msi_bearer_token}"',
     ]
