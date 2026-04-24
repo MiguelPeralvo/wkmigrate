@@ -54,17 +54,33 @@ The SP fixture mirrors the Vista Cliente `PostLogApi` activity's
 
 ## Public-API compatibility
 
-- `Authentication` remains `@dataclass(slots=True)`. New fields:
-  - `tenant_id: str | None = None`
-  - `resource: str | None = None`
-  - `msi_token_secret_key: str | None = None`
-  Existing `username` and `password_secret_key` fields are reused by the
-  ServicePrincipal path (client id and client-secret scope key); no new
-  field is minted for the client secret.
-- `parse_authentication()` signature unchanged: `(secret_key, authentication)`.
-  For SP, the returned `Authentication.client_secret_key = secret_key` (the
-  caller can mint an SP-specific key by passing a different string, as
-  `web_activity_translator.py` does for Basic today).
+- `Authentication` remains `@dataclass(slots=True)`. Fields (Step 2 +
+  Step 2.1/2.2):
+  - `auth_type: str`
+  - `username: str | ResolvedExpression | None = None` — Basic username or
+    SP client id; `ResolvedExpression` when the client id is Expression-
+    valued (e.g. `@activity('GetAppId').output.value`, common in VC).
+  - `password_secret_key: str | None = None` — reused by SP for the client-
+    secret scope key.
+  - `tenant_id: str | ResolvedExpression | None = None` — AAD tenant; may be
+    dynamic in rare cases.
+  - `resource: str | ResolvedExpression | None = None` — OAuth2 resource /
+    audience; may be dynamic.
+  - `msi_token_secret_key: str | None = None` — operator-supplied bearer-
+    token scope key for MSI / UAMI / SAMI.
+- `parse_authentication(secret_key, authentication, context=None,
+  emission_config=None)`. The optional `context` + `emission_config`
+  parameters are threaded from `translate_web_activity` so Expression-
+  valued SP fields resolve via `get_literal_or_expression`.
+- `_get_service_principal_authentication_lines` in `code_generator` picks
+  `repr()` for literals (safe against injection) and `.code` for
+  `ResolvedExpression` (runtime Python) via `_as_python_expression`.
+  Dynamic `resource` values are normalized at runtime (trailing-slash
+  stripping + `/.default` suffix) to match the literal branch.
+- `get_web_activity_notebook_content` unions `required_imports` from the
+  three expression-capable authentication fields (`username`, `tenant_id`,
+  `resource`) so notebooks include any helper imports their auth
+  expressions rely on.
 
 ## Out of scope
 

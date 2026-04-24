@@ -361,7 +361,12 @@ def _resolve_auth_field(
     """
     if value is None:
         return None
-    if isinstance(value, str) and not value.startswith("@"):
+    # Plain literal fast-path: strings that neither start with ``@`` (whole-
+    # expression form) nor contain ``@{...}`` (string-template form) cannot
+    # be dynamic. Anything with either marker flows through
+    # ``get_literal_or_expression`` so templated values like
+    # ``"api://@{activity('X').output.value}"`` still resolve.
+    if isinstance(value, str) and not value.startswith("@") and "@{" not in value:
         return value
     if isinstance(value, (int, float, bool)):
         return str(value)

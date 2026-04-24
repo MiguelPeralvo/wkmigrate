@@ -618,10 +618,12 @@ def get_web_activity_notebook_content(
         | _collect_required_imports(headers)
         | _collect_required_imports(body)
     )
-    if authentication:
-        required_imports |= _collect_required_imports(authentication.tenant_id)
-        required_imports |= _collect_required_imports(authentication.username)
-        required_imports |= _collect_required_imports(authentication.resource)
+    if authentication is not None:
+        # Authentication fields may carry ResolvedExpression values with their
+        # own required_imports (e.g. ``json``, datetime helpers). Without this
+        # union the emitted notebook would reference undefined symbols.
+        for auth_field in (authentication.username, authentication.tenant_id, authentication.resource):
+            required_imports |= _collect_required_imports(auth_field)
     include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
     required_imports.discard("wkmigrate_datetime_helpers")
 
@@ -871,23 +873,33 @@ def _get_service_principal_authentication_lines(
     tenant_code = _as_python_expression(authentication.tenant_id)
     client_id_code = _as_python_expression(authentication.username)
     resource_raw = authentication.resource
+    scope_lines: list[str] = []
     if isinstance(resource_raw, ResolvedExpression):
-        # Dynamic resource URI: concatenate ``/.default`` at runtime.
-        scope_code = f'({resource_raw.code}) + "/.default"'
+        # Dynamic resource URI: normalize at runtime. If the resolved value
+        # already ends with ``/.default`` use it verbatim; otherwise strip
+        # trailing slashes and append ``/.default``. This mirrors the literal
+        # branch so a dynamic value like ``https://management.azure.com/`` or
+        # an already-scoped audience doesn't become ``//.default`` or
+        # ``/.default/.default``.
+        scope_lines.append(f"_wk_sp_resource = {resource_raw.code}")
+        scope_lines.append(
+            '_wk_sp_scope = _wk_sp_resource if _wk_sp_resource.endswith("/.default") '
+            'else _wk_sp_resource.rstrip("/") + "/.default"'
+        )
     else:
         resource = resource_raw or "https://management.azure.com/"
         # ADF ``resource`` is an OAuth2 resource URI; Azure AD v2.0 endpoint
         # expects a ``scope`` that ends in ``/.default``. Append it if the
         # operator didn't.
         scope_value = resource if resource.endswith("/.default") else f"{resource.rstrip('/')}/.default"
-        scope_code = repr(scope_value)
+        scope_lines.append(f"_wk_sp_scope = {scope_value!r}")
     return [
         "",
         f"_wk_sp_tenant = {tenant_code}",
         f"_wk_sp_client_id = {client_id_code}",
         f"_wk_sp_client_secret = dbutils.secrets.get(scope={credentials_scope!r}, "
         f"key={authentication.password_secret_key!r})",
-        f"_wk_sp_scope = {scope_code}",
+        *scope_lines,
         "_wk_sp_token_response = requests.post(",
         '    f"https://login.microsoftonline.com/{_wk_sp_tenant}/oauth2/v2.0/token",',
         "    data={",
