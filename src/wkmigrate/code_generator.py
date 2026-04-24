@@ -618,6 +618,10 @@ def get_web_activity_notebook_content(
         | _collect_required_imports(headers)
         | _collect_required_imports(body)
     )
+    if authentication:
+        required_imports |= _collect_required_imports(authentication.tenant_id)
+        required_imports |= _collect_required_imports(authentication.username)
+        required_imports |= _collect_required_imports(authentication.resource)
     include_datetime_helpers = "wkmigrate_datetime_helpers" in required_imports
     required_imports.discard("wkmigrate_datetime_helpers")
 
