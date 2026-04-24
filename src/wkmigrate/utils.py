@@ -106,7 +106,7 @@ def normalize_arm_pipeline(pipeline: dict) -> dict:
             normalized_activities.append(activity)
             continue
         activity_definition = dict(activity)
-        normalized_activity_definition = _normalize_activity_type_properties(activity_definition)
+        normalized_activity_definition = normalize_activity_type_properties(activity_definition)
         normalized_activities.append(normalized_activity_definition)
     pipeline_definition["activities"] = normalized_activities
     return pipeline_definition
@@ -551,7 +551,7 @@ def normalize_translated_result(result: Activity | UnsupportedValue, base_kwargs
     return result
 
 
-def _normalize_activity_type_properties(activity: dict) -> dict:
+def normalize_activity_type_properties(activity: dict) -> dict:
     type_properties = activity.pop("type_properties", None) or activity.pop("typeProperties", None)
     if isinstance(type_properties, dict):
         for original_key, original_value in type_properties.items():

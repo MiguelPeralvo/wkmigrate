@@ -69,8 +69,8 @@ from wkmigrate.translators.activity_translators.spark_python_activity_translator
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
 from wkmigrate.utils import (
-    _normalize_activity_type_properties,
     get_placeholder_activity,
+    normalize_activity_type_properties,
     normalize_translated_result,
     parse_timeout_string,
 )
@@ -455,7 +455,7 @@ def _normalize_activity(activity: dict) -> dict:
     """
     if "typeProperties" not in activity and "type_properties" not in activity:
         return activity
-    return _normalize_activity_type_properties(dict(activity))
+    return normalize_activity_type_properties(dict(activity))
 
 
 def _parse_policy(policy: dict | None) -> dict:

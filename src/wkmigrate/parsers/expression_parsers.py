@@ -57,7 +57,7 @@ def get_literal_or_expression(
     if not isinstance(value, str):
         return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
 
-    if not value.startswith("@"):
+    if not value.startswith("@") and "@{" not in value:
         return ResolvedExpression(code=repr(value), is_dynamic=False, required_imports=frozenset())
 
     return _resolve_expression_string(value, context, expression_context, emission_config)
