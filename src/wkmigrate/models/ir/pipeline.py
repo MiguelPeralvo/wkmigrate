@@ -304,12 +304,17 @@ class Authentication:
         auth_type: Authentication type (e.g. 'Basic', 'ServicePrincipal', 'MSI').
         username: Optional username for Basic authentication, or the service
             principal's application (client) id for ServicePrincipal auth.
+            May be a ``ResolvedExpression`` when the client id is dynamic
+            (e.g. resolved from another activity's output via
+            ``@activity('X').output.value``).
         password_secret_key: Secret-scope key that holds the password (Basic)
             or the client secret (ServicePrincipal). MSI does not populate
             this field.
-        tenant_id: Azure AD tenant GUID for ServicePrincipal auth.
+        tenant_id: Azure AD tenant GUID for ServicePrincipal auth. May be a
+            ``ResolvedExpression`` for dynamic tenant ids (rare).
         resource: OAuth2 resource/audience for ServicePrincipal or MSI
-            (e.g. ``https://management.azure.com/``).
+            (e.g. ``https://management.azure.com/``). May be a
+            ``ResolvedExpression`` for dynamic resources.
         msi_token_secret_key: For MSI phase-1 emission, the secret-scope key
             from which the operator-supplied bearer token will be read at
             runtime. Runtime acquisition via the Azure Instance Metadata
@@ -317,8 +322,8 @@ class Authentication:
     """
 
     auth_type: str
-    username: str | None = None
+    username: "str | ResolvedExpression | None" = None
     password_secret_key: str | None = None
-    tenant_id: str | None = None
-    resource: str | None = None
+    tenant_id: "str | ResolvedExpression | None" = None
+    resource: "str | ResolvedExpression | None" = None
     msi_token_secret_key: str | None = None

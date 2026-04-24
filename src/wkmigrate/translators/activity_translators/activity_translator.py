@@ -68,7 +68,12 @@ from wkmigrate.translators.activity_translators.fail_activity_translator import 
 from wkmigrate.translators.activity_translators.spark_python_activity_translator import translate_spark_python_activity
 from wkmigrate.translators.activity_translators.web_activity_translator import translate_web_activity
 from wkmigrate.translators.linked_service_translators import translate_databricks_cluster_spec
-from wkmigrate.utils import get_placeholder_activity, normalize_translated_result, parse_timeout_string
+from wkmigrate.utils import (
+    _normalize_activity_type_properties,
+    get_placeholder_activity,
+    normalize_translated_result,
+    parse_timeout_string,
+)
 
 TypeTranslator = Callable[[dict, dict], TranslationResult]
 
@@ -433,20 +438,24 @@ def _get_base_properties(activity: dict, is_conditional_task: bool = False) -> d
 
 
 def _normalize_activity(activity: dict) -> dict:
-    """Flatten ``typeProperties`` into the activity root, matching SDK format.
+    """Flatten ``typeProperties`` / ``type_properties`` into the activity root.
 
     The Azure REST API wraps activity-specific properties inside a
     ``typeProperties`` key, while the SDK client returns them flattened at the
-    activity level. Translators expect the flattened form. This normalizer
-    ensures both shapes are handled.
+    activity level. Translators expect the flattened form.
+
+    Top-level activities are already flattened upstream in
+    ``normalize_arm_pipeline``, but nested activities inside control-flow
+    translators (IfCondition ``if_true_activities`` / ``if_false_activities``,
+    ForEach, Switch, Until) bypass that pass and arrive here with the key
+    still present — sometimes as camelCase ``typeProperties`` (REST payloads),
+    sometimes as snake_case ``type_properties`` (after
+    ``recursive_camel_to_snake``). Delegate to the shared helper so both
+    casings are handled without duplicating logic.
     """
-    if "typeProperties" not in activity:
+    if "typeProperties" not in activity and "type_properties" not in activity:
         return activity
-    normalized = {k: v for k, v in activity.items() if k != "typeProperties"}
-    type_props = activity["typeProperties"]
-    if isinstance(type_props, dict):
-        normalized.update(type_props)
-    return normalized
+    return _normalize_activity_type_properties(dict(activity))
 
 
 def _parse_policy(policy: dict | None) -> dict:

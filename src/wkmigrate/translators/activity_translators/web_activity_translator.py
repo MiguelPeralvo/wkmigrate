@@ -114,7 +114,9 @@ def translate_web_activity(
     if not activity_name:
         return UnsupportedValue(activity, "Missing value 'name' for Web activity")
     secret_key = f"{activity_name}_auth_password"
-    authentication = parse_authentication(secret_key, activity.get("authentication"))
+    authentication = parse_authentication(
+        secret_key, activity.get("authentication"), context=context, emission_config=emission_config
+    )
 
     if isinstance(authentication, UnsupportedValue):
         return UnsupportedValue(activity, authentication.message)

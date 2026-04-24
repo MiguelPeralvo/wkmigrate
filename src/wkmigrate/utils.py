@@ -9,12 +9,17 @@ import re
 import warnings
 from collections.abc import Callable
 from importlib import import_module
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from wkmigrate.models.ir.datasets import Dataset
 from wkmigrate.models.ir.pipeline import Activity, Authentication, DatabricksNotebookActivity
 from wkmigrate.models.ir.unsupported import UnsupportedValue
 from wkmigrate.not_translatable import NotTranslatableWarning
+
+if TYPE_CHECKING:  # pragma: no cover - hint-only imports
+    from wkmigrate.models.ir.translation_context import TranslationContext
+    from wkmigrate.parsers.emission_config import EmissionConfig
+    from wkmigrate.parsers.expression_parsers import ResolvedExpression
 
 DEFAULT_TIMEOUT_SECONDS = 43200
 
@@ -220,7 +225,12 @@ def parse_timeout_string(timeout_string: str, prefix: str = "") -> int:
     return total
 
 
-def parse_authentication(secret_key: str, authentication: dict | None) -> Authentication | UnsupportedValue | None:
+def parse_authentication(
+    secret_key: str,
+    authentication: dict | None,
+    context: "TranslationContext | None" = None,
+    emission_config: "EmissionConfig | None" = None,
+) -> Authentication | UnsupportedValue | None:
     """
     Parses an ADF authentication configuration into an ``Authentication`` object.
 
@@ -231,19 +241,28 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
     * ``ServicePrincipal`` — OAuth2 client-credentials flow against Azure AD.
       The secret-scope key passed via ``secret_key`` holds the client secret;
       ``tenant_id``, ``username`` (client id) and ``resource`` come from the
-      ADF payload.
-    * ``MSI`` — Managed System Identity. Runtime acquisition via the Azure
-      Instance Metadata Service is not performed by the generated notebook;
-      instead the template reads an operator-supplied bearer token from the
-      secret scope at key ``{secret_key}`` (re-used as a bearer-token key).
-      ``NotTranslatableWarning`` is emitted downstream in ``code_generator``
-      so the operator knows to populate the secret.
+      ADF payload. Expression-valued fields (common in VC pipelines where the
+      client id is piped from another activity's output, e.g.
+      ``@activity('GetAppId').output.value``) resolve to ``ResolvedExpression``
+      so the generated notebook can embed the runtime Python.
+    * ``MSI`` / ``UserAssignedManagedIdentity`` / ``SystemAssignedManagedIdentity``
+      — runtime acquisition via the Azure Instance Metadata Service is not
+      performed by the generated notebook; instead the template reads an
+      operator-supplied bearer token from the secret scope at key
+      ``{secret_key}`` (re-used as a bearer-token key). A
+      ``NotTranslatableWarning`` is emitted downstream in ``code_generator`` so
+      the operator knows to populate the secret.
 
     Args:
         secret_key: Secret scope key. For Basic, holds the password; for
             ServicePrincipal, holds the client secret; for MSI, holds the
             operator-supplied bearer token.
         authentication: Authentication dictionary from the ADF activity, or ``None``.
+        context: Optional translation context used to resolve Expression-valued
+            ServicePrincipal fields. When ``None``, context-free resolution is
+            attempted; expressions that require context (e.g. ``variables()``)
+            will surface as ``UnsupportedValue``.
+        emission_config: Optional emission config threaded alongside ``context``.
 
     Returns:
         Parsed ``Authentication`` or ``None`` when no auth is configured.
@@ -263,53 +282,62 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
         username = authentication.get("username", "")
         if not username:
             return UnsupportedValue(value=authentication, message="Missing value 'username' for basic authentication")
+        if not isinstance(username, str):
+            return UnsupportedValue(
+                value=authentication,
+                message="Invalid 'username' for Basic authentication (expected string)",
+            )
         return Authentication(
             auth_type=authentication_type,
             username=username,
             password_secret_key=secret_key,
         )
     if auth_type_lower == "serviceprincipal":
-        tenant_id = authentication.get("user_tenant") or authentication.get("tenant") or authentication.get("tenant_id")
-        client_id = authentication.get("username") or authentication.get("application_id")
-        if not tenant_id:
+        tenant_raw = (
+            authentication.get("user_tenant") or authentication.get("tenant") or authentication.get("tenant_id")
+        )
+        client_raw = authentication.get("username") or authentication.get("application_id")
+        if not tenant_raw:
             return UnsupportedValue(
                 value=authentication,
                 message="Missing value 'userTenant' for ServicePrincipal authentication",
             )
-        if not isinstance(tenant_id, str):
-            return UnsupportedValue(
-                value=authentication,
-                message="Invalid 'userTenant' for ServicePrincipal authentication (expected string; expression tenants are not supported)",
-            )
-        if not client_id:
+        if not client_raw:
             return UnsupportedValue(
                 value=authentication,
                 message="Missing value 'username' (client id) for ServicePrincipal authentication",
             )
-        if not isinstance(client_id, str):
+        tenant = _resolve_auth_field(tenant_raw, context, emission_config)
+        if isinstance(tenant, UnsupportedValue):
             return UnsupportedValue(
                 value=authentication,
-                message="Invalid 'username' for ServicePrincipal authentication (expected string; expression client ids are not supported)",
+                message=f"Could not resolve 'userTenant' for ServicePrincipal authentication. {tenant.message}",
             )
-        resource = authentication.get("resource")
-        if resource is not None and not isinstance(resource, str):
+        client_id = _resolve_auth_field(client_raw, context, emission_config)
+        if isinstance(client_id, UnsupportedValue):
             return UnsupportedValue(
                 value=authentication,
-                message="Invalid 'resource' for ServicePrincipal authentication (expected string)",
+                message=f"Could not resolve 'username' for ServicePrincipal authentication. {client_id.message}",
+            )
+        resource = _resolve_auth_field(authentication.get("resource"), context, emission_config)
+        if isinstance(resource, UnsupportedValue):
+            return UnsupportedValue(
+                value=authentication,
+                message=f"Could not resolve 'resource' for ServicePrincipal authentication. {resource.message}",
             )
         return Authentication(
             auth_type=authentication_type,
             username=client_id,
             password_secret_key=secret_key,
-            tenant_id=tenant_id,
+            tenant_id=tenant,
             resource=resource,
         )
     if auth_type_lower in ("msi", "userassignedmanagedidentity", "systemassignedmanagedidentity"):
-        resource = authentication.get("resource")
-        if resource is not None and not isinstance(resource, str):
+        resource = _resolve_auth_field(authentication.get("resource"), context, emission_config)
+        if isinstance(resource, UnsupportedValue):
             return UnsupportedValue(
                 value=authentication,
-                message=f"Invalid 'resource' for {authentication_type} authentication (expected string)",
+                message=f"Could not resolve 'resource' for {authentication_type} authentication. {resource.message}",
             )
         return Authentication(
             auth_type=authentication_type,
@@ -317,6 +345,38 @@ def parse_authentication(secret_key: str, authentication: dict | None) -> Authen
             msi_token_secret_key=secret_key,
         )
     return UnsupportedValue(value=authentication, message=f"Unsupported authentication type '{authentication_type}'")
+
+
+def _resolve_auth_field(
+    value: "Any",
+    context: "TranslationContext | None",
+    emission_config: "EmissionConfig | None",
+) -> "str | ResolvedExpression | None | UnsupportedValue":
+    """Resolve an Authentication field that may be a plain string or an ADF Expression.
+
+    Returns ``None`` unchanged; resolves Expression dicts and @-prefixed strings
+    via ``get_literal_or_expression`` (lazy-imported to avoid a circular import
+    between ``utils`` and ``parsers.expression_parsers``); returns plain
+    strings as-is.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.startswith("@"):
+        return value
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    # pylint: disable=import-outside-toplevel
+    from wkmigrate.parsers.expression_parsers import get_literal_or_expression
+
+    resolved = get_literal_or_expression(value, context, emission_config=emission_config)
+    if isinstance(resolved, UnsupportedValue):
+        return resolved
+    if resolved.is_dynamic:
+        return resolved
+    # Static resolution (rare): drop back to the literal string if available.
+    if isinstance(value, str):
+        return value
+    return resolved
 
 
 def extract_group(input_string: str, regex: str) -> str | UnsupportedValue:
@@ -474,6 +534,13 @@ def normalize_translated_result(result: Activity | UnsupportedValue, base_kwargs
         A placeholder DatabricksNotebookActivity for any UnsupportedValue; Otherwise the input Activity
     """
     if isinstance(result, UnsupportedValue):
+        warnings.warn(
+            NotTranslatableWarning(
+                "activity",
+                f"Activity translated as /UNSUPPORTED_ADF_ACTIVITY placeholder: {result.message}",
+            ),
+            stacklevel=3,
+        )
         return get_placeholder_activity(base_kwargs)
 
     return result

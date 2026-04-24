@@ -1241,6 +1241,46 @@ def test_web_activity_missing_auth_type_returns_unsupported(web_activity_fixture
     assert fixture["expected_message"] in result.message
 
 
+def test_visit_activity_flattens_snake_case_type_properties() -> None:
+    """Nested activities arrive snake-cased after recursive_camel_to_snake;
+    visit_activity must flatten ``type_properties`` (not just ``typeProperties``)
+    so per-type translators see url/method/authentication at the root.
+
+    Regression for Gap 2.1: WebActivities inside IfCondition if_true_activities
+    branches were returning UnsupportedValue("Missing value 'url'") because
+    _normalize_activity only handled the camelCase key."""
+    nested_web_activity = {
+        "name": "nested_web",
+        "type": "WebActivity",
+        "type_properties": {
+            "url": "https://api.example.com/nested",
+            "method": "GET",
+        },
+    }
+    result = translate_activity(nested_web_activity, is_conditional_task=True)
+
+    assert isinstance(result, WebActivity)
+    assert result.url == "https://api.example.com/nested"
+    assert result.method == "GET"
+
+
+def test_normalize_translated_result_emits_warning_on_downgrade() -> None:
+    """When a translator returns UnsupportedValue and the normalizer substitutes
+    /UNSUPPORTED_ADF_ACTIVITY, a NotTranslatableWarning must be emitted so the
+    downgrade reason lands in the run's unsupported record.
+
+    Regression for Gap 2.3: silent downgrades made the grant_permission
+    body-Expression failure invisible in unsupported.json."""
+    activity = {
+        "name": "no_url_activity",
+        "type": "WebActivity",
+        "method": "GET",  # url deliberately missing -> UnsupportedValue -> placeholder
+    }
+    with pytest.warns(NotTranslatableWarning, match="UNSUPPORTED_ADF_ACTIVITY"):
+        result = translate_activity(activity)
+    assert result.notebook_path == "/UNSUPPORTED_ADF_ACTIVITY"
+
+
 def test_set_variable_static_string(set_variable_activity_fixtures: list[dict]) -> None:
     """Test SetVariable with a static string value."""
     fixture = get_fixture(set_variable_activity_fixtures, "static_string_value")
